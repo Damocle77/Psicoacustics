@@ -1,256 +1,225 @@
 #!/usr/bin/env bash
-
-#================================================================================================
-# CONVERTI_EAC3-AC3_SONAR.sh - [ARCHITETTURA DINAMICA PER HOME CINEMA]
-# ===============================================================================================
+# ╔════════════════════════════════════════════════════════════════════════╗
+# ║  converti_2AC3_sonar_v5.sh                                             ║
+# ║  Edizione Nerd: Voce “sartoriale” ITA + LFE pulito + Surround tunable  ║
+# ╚════════════════════════════════════════════════════════════════════════╝
+# Sandro edition — basato sulla tua “stele di rosetta” (old) + fix moderni
 #
-# DESCRIZIONE:
-# Script ottimizzato per conversioni EAC3/AC3/DTS → AC3 640k (5.1), con filtri intelligenti e
-# calibrazione dinamica per uniformare il loudness e la percezione spaziale (Upfiring).
-#
-# CARATTERISTICHE PRINCIPALI:
-# • OPT: Nomenclatura preset standardizzata (eac37, eac36).
-# • OPT: Calibrazione finale Voce/LFE per uniformità percepita (non matematica).
-# • CALIBRAZIONE DINAMICA (Voce/LFE): I parametri sono variabili per compensare le differenze 
-#   intrinseche di dinamica tra i master (Atmos, EAC3, DTS, AC3).
-# • UPFIRING FOCALIZZATO (Modalità SONAR): Filtri Echo/Delay asimmetrici per simulare l'altezza,
-#   con effetto uniforme su tutti i codec.
-# ===============================================================================================
+# • Voce: EQ minimale a 4.2 kHz (Q 1.4, +1.2 dB) + boost preset-specifico.
+#   Niente compressori sulla voce → addio metallicità/gracchi.
+# • LFE: SOLO high-pass 25 Hz + (facoltativo) attenuazione volume + limiter.
+#   Niente EQ sul sub per coerenza col crossover dell’AVR.
+# • Surround: modalità "sonar" (upfiring psicoacustico) o "clean" (neutro)
+#   con boost di default: sonar +0.9 dB, clean +0.6 dB (override: SUR_DB).
+# • Merge 5.1 robusto: aformat per i 6 ingressi + channelmap=5.1 → no warning.
+# • Batch intelligente (se non passi il file) + copia video/sub + AC3 out.
 
-# Colori terminale (Minimali per output clean)
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-GREEN='\033[0;32m'
-NC='\033[0m'
+set -euo pipefail
 
-# Funzione per output minimo e controllo errori
-info(){ echo -e "${CYAN}[Info]${NC} $*"; }
-warn(){ echo -e "${YELLOW}[Warning]${NC} $*"; }
-err(){ echo -e "${RED}[Error]${NC} $*"; }
-ok(){ echo -e "${GREEN}[OK]${NC} $*"; }
-cleanup_and_exit() {
-    if [ $? -ne 0 ]; then
-        err "Errore irreversibile. Uscita."
-    fi
-    exit 1
-}
-trap cleanup_and_exit INT TERM
+# ──────────────────────────────────────────────
+# 🎨 Colori
+# ──────────────────────────────────────────────
+C_INFO="\033[0;36m[INFO]\033[0m"; C_OK="\033[1;32m[OK]\033[0m"; C_ERR="\033[1;31m[ERROR]\033[0m"; C_WARN="\033[1;33m[WARNING]\033[0m"
+info(){ echo -e "$C_INFO $*"; } ; ok(){ echo -e "$C_OK $*"; } ; err(){ echo -e "$C_ERR $*"; } ; warn(){ echo -e "$C_WARN $*"; }
 
-# Summary comandi
-if [ "$#" -lt 2 ]; then
-cat <<'USAGE'
+# ──────────────────────────────────────────────
+# 📜 Guida
+# ──────────────────────────────────────────────
+show_help(){ cat <<'USAGE'
 ============================================================================================
 UTILIZZO:
-  ./script.sh <sonar|nosonar> <si|no> [file.mkv] [preset]
+  ./converti_2AC3_sonar.sh <sonar|clean> <si|no> [file.mkv] [preset] [bitrate]
 
 Parametri:
-  - Primo:  "sonar"   → Attiva Height/Surround Boost Asimmetrico (Remastering Kenwood)
-            "nosonar" → Conversione Clean con Boost minimo
-  - Secondo: "si"     → Mantiene l'audio originale nel file output | "no" → Solo AC3
-  - Terzo:   [file.mkv] Singolo o lascia vuoto per Batch su tutti i file MKV.
-  - Quarto:  [preset] (opzionale) → "atmos" | "eac37" | "eac36" | "ac3" | "auto" (default)
+  - Primo:   "sonar"    → EQ Voce Sartoriale + Filtro Upfiring Surround (+0.9 dB surround)
+             "clean"    → EQ Voce Sartoriale + Surround Pulito (+0.6 dB surround)
+  - Secondo: "si"       → Mantiene audio originale | "no" → Solo AC3
+  - Terzo:   [file.mkv] → Singolo o lascia vuoto per Batch.
+  - Quarto:  [preset]   → "atmos" | "dts" | "eac37" | "eac36" | "ac3" | "auto" (default)
+  - Quinto:  [bitrate]  → "448k", "640k" (default), ecc.
 
-Preset Dinamici (Target Loudness e Filtri Canale per Uniformità Funzionale):
-  atmos   → Forza EAC3 Atmos/Alta Dinamica (Globale +3.8dB, LFE -3.6dB, Voce +2.5dB)
-  eac37   → Forza EAC3/DTS 768k High-Fidelity (Globale +2.5dB, LFE -2.0dB, Voce +1.8dB)
-  eac36   → Forza EAC3 640k Standard (Globale +1.2dB, LFE -1.2dB, Voce +1.2dB)
-  ac3     → Forza AC3 Standard (Globale +0.0dB, LFE 0dB, Voce +1.0dB)
+Preset audio (boost voce / LFE):
+  atmos → +1.1 dB / -2.0 dB
+  dts   → +1.0 dB / -2.3 dB
+  eac37 → +0.9 dB / -1.2 dB
+  eac36 → +0.8 dB /  0.0 dB
+  ac3   → +0.7 dB /  0.0 dB
+  auto  → rilevamento dal nome file ("atmos", "dts", "768", "640")
 
-Batch:       
-  ./converti_2AC3_sonar.sh <MODALITÀ SONAR> <MANTIENI ORIGINALE>
+Note:
+  - Surround boost di default: +0.9 dB (sonar) | +0.6 dB (clean)
+  - Puoi forzare il boost surround con SUR_DB, es.: SUR_DB=1.2 ./converti_2AC3_sonar.sh ...
 ============================================================================================
 USAGE
-exit 1
-fi
+exit 0 ; }
 
-# Parsing parametri
-SONAR_MODE=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-KEEP_ORIG=$(echo "$2" | tr '[:upper:]' '[:lower:]')
-INPUT_FILE="$3"
-PRESET=$(echo "$4" | tr '[:upper:]' '[:lower:]') 
+# ──────────────────────────────────────────────
+# 📥 Parametri + validazioni
+# ──────────────────────────────────────────────
+if [ "$#" -lt 2 ]; then show_help; fi
+SONAR_MODE=$(echo "${1}" | tr '[:upper:]' '[:lower:]')   # sonar | clean
+KEEP_ORIG=$(echo "${2}" | tr '[:upper:]' '[:lower:]')     # si | no
+INPUT_FILE="${3:-}"                                      # opzionale → batch
+PRESET=$(echo "${4:-auto}" | tr '[:upper:]' '[:lower:]')  # atmos|dts|eac37|eac36|ac3|auto
+BITRATE="${5:-640k}"
+case "$SONAR_MODE" in sonar|clean) ;; *) err "Modalità non valida: $SONAR_MODE"; exit 1;; esac
+case "$KEEP_ORIG" in si|no) ;; *) err "Parametro (si|no) non valido: $KEEP_ORIG"; exit 1;; esac
+case "$PRESET" in atmos|dts|eac37|eac36|ac3|auto) ;; *) err "Preset non valido: $PRESET"; exit 1;; esac
+case "$BITRATE" in *k) ;; *) err "Bitrate non valido (es. 448k, 640k): $BITRATE"; exit 1;; esac
 
-# Validazione parametri
-case "$PRESET" in ""|auto|atmos|eac37|eac36|ac3) ;; *) err "Preset non valido: $PRESET"; exit 1;; esac
-case "$SONAR_MODE" in sonar|nosonar) ;; *) err "Modalità non valida: $SONAR_MODE (usa: sonar o nosonar)"; exit 1;; esac
-case "$KEEP_ORIG" in si|no) ;; *) err "Parametro keep non valido: $KEEP_ORIG (usa: si o no)"; exit 1;; esac
-
-# Build file list
+# Lista file
 if [ -n "$INPUT_FILE" ]; then
-    FILES=("$INPUT_FILE")
+  FILES=("$INPUT_FILE")
 else
-    mapfile -d $'\0' -t FILES < <(find . -maxdepth 1 -name "*.mkv" ! -name "*_AC3*.mkv" -print0)
-    if [ -z "${FILES[-1]}" ]; then unset 'FILES[${#FILES[@]}-1]'; fi
-    [ ${#FILES[@]} -eq 0 ] && { info "Nessun file MKV trovato nella cartella"; exit 0; }
-    info "Trovati ${#FILES[@]} file MKV da processare"
+  mapfile -d $'\0' -t FILES < <(find . -maxdepth 1 -type f -iname "*.mkv" ! -iname "*_AC3_*.mkv" -print0)
+  [ ${#FILES[@]} -eq 0 ] && { info "Nessun MKV da processare"; exit 0; }
+  info "Batch: trovati ${#FILES[@]} file"
 fi
 
-# ===============================================================================================
-# FUNZIONI FILTRI AUDIO INTELLIGENTI
-# ===============================================================================================
+# ──────────────────────────────────────────────
+# 🔧 Opzioni globali
+# ──────────────────────────────────────────────
+: "${SUR_DB:=auto}"
+if [ "$SUR_DB" = "auto" ]; then
+  if [ "$SONAR_MODE" = "sonar" ]; then SUR_GAIN="+0.9dB"; else SUR_GAIN="+0.6dB"; fi
+else
+  SUR_GAIN="$(printf '%+0.1fdB' "$SUR_DB")"
+fi
 
-# Funzione per rilevare codec e bitrate
-get_audio_info() {
-    # Rileva codec e bitrate del primo stream audio
-    local file="$1"
-    local info_string=$(ffprobe -v quiet -select_streams a:0 -show_entries stream=codec_name,bit_rate -of csv=p=0:nk=1 "$file" 2>/dev/null)
-    if [ -z "$info_string" ]; then echo "unknown,600000"; else echo "$info_string"; fi
+# ──────────────────────────────────────────────
+# 🧠 Preset voce/LFE normalizzati
+# ──────────────────────────────────────────────
+get_dynamic_values(){
+  local preset="$1"; local boost_voce lfe_vol
+  case "$preset" in
+    atmos) boost_voce="1.1"; lfe_vol="-2.0" ;;
+    dts)   boost_voce="1.0"; lfe_vol="-2.3" ;;
+    eac37) boost_voce="0.9"; lfe_vol="-1.2" ;;
+    eac36) boost_voce="0.8"; lfe_vol="0.0"  ;;
+    ac3)   boost_voce="0.7"; lfe_vol="0.0"  ;;
+    auto|*)
+      if   [[ "$CUR_FILE" == *"atmos"* ]] ; then boost_voce="1.1"; lfe_vol="-2.0"
+      elif [[ "$CUR_FILE" == *"dts"*   ]] ; then boost_voce="1.0"; lfe_vol="-2.3"
+      elif [[ "$CUR_FILE" == *"768"*   ]] ; then boost_voce="0.9"; lfe_vol="-1.2"
+      elif [[ "$CUR_FILE" == *"640"*   ]] ; then boost_voce="0.8"; lfe_vol="0.0"
+      else                                       boost_voce="0.7"; lfe_vol="0.0"; fi ;;
+  esac
+  echo "${boost_voce},${lfe_vol}"
 }
 
-# Funzione per determinare i valori di compensazione dinamica (Loudness, Voce, LFE)
-get_dynamic_values() {
-    local type="$1"; local br="$2"; local preset="$3"
-    local boost_global; local boost_voce; local lfe_vol; local lfe_comp_filter
-    
-    # 1. LOGICA PRESET MANUALE (Override)
-    if [ "$preset" = "atmos" ]; then
-        boost_global=3.8; boost_voce=2.5; lfe_vol=-3.6; lfe_comp_filter="acompressor=threshold=0.30:ratio=2.8:attack=12:release=90";
-    elif [ "$preset" = "eac37" ]; then
-        boost_global=2.5; boost_voce=1.8; lfe_vol=-2.0; lfe_comp_filter="";
-    elif [ "$preset" = "eac36" ]; then
-        boost_global=1.2; boost_voce=1.2; lfe_vol=-1.2; lfe_comp_filter="";
-    elif [ "$preset" = "ac3" ]; then
-        boost_global=0.0; boost_voce=1.0; lfe_vol=0.0; lfe_comp_filter="";
-    
-    # 2. LOGICA RILEVAMENTO AUTOMATICO (Default)
-    elif [ "$type" = "eac3" ]; then
-        if [ "$br" -gt 700000 ]; then
-            boost_global=3.8; boost_voce=2.5; lfe_vol=-3.6; lfe_comp_filter="acompressor=threshold=0.30:ratio=2.8:attack=12:release=90";
-            info "Rilevato EAC3 Atmos potenziale (${br} bps) → Loudness +3.8dB, Voce +2.5dB, LFE -3.6dB (compresso)";
-        else
-            boost_global=1.2; boost_voce=1.2; lfe_vol=-1.2; lfe_comp_filter="";
-            info "Rilevato EAC3 Standard (${br} bps) → Loudness +1.2dB, Voce +1.2dB, LFE -1.2dB";
-        fi
-    elif [ "$type" = "dts" ] || [ "$type" = "dts_hd" ]; then
-        if [ "$br" -gt 700000 ]; then
-            boost_global=2.5; boost_voce=1.8; lfe_vol=-2.0; lfe_comp_filter="";
-            info "Rilevato DTS/DTS-HD High-Fidelity (${br} bps) → Loudness +2.5dB, Voce +1.8dB, LFE -2.0dB";
-        else
-            boost_global=1.2; boost_voce=1.2; lfe_vol=-1.2; lfe_comp_filter="";
-            info "Rilevato DTS Standard (${br} bps) → Loudness +1.2dB, Voce +1.2dB, LFE -1.2dB";
-        fi
-    else # AC3 o altro (fallback)
-        boost_global=0.0; boost_voce=1.0; lfe_vol=0.0; lfe_comp_filter="";
-        info "Rilevato Audio $type (${br} bps) → Loudness +0.0dB, Voce +1.0dB, LFE 0dB (Riferimento)";
-    fi
-    
-    # Output dei valori in formato CSV
-    echo "${boost_global},${boost_voce},${lfe_vol},${lfe_comp_filter}"
+# ──────────────────────────────────────────────
+# 🗣️ Voice filter — EQ sartoriale ITA
+# ──────────────────────────────────────────────
+get_voice_filter(){
+  local voce_boost="$1"
+  echo "[FC]equalizer=f=4200:t=q:w=1.4:g=1.2,volume=${voce_boost}dB[FC_plus];"
 }
 
-# should_overwrite (Invariato)
+# ──────────────────────────────────────────────
+# 🌀 LFE filter
+# ──────────────────────────────────────────────
+get_lfe_filter(){
+  local lfe_vol_db="$1"
+  local f="[LFE]highpass=f=25"
+  [ "$lfe_vol_db" != "0.0" ] && f+=",volume=${lfe_vol_db}dB"
+  f+=",alimiter=limit=0.90[LFE_clean];"
+  echo "$f"
+}
+
+# ──────────────────────────────────────────────
+# 🛰️ Surround sonar (upfiring psicoacustico)
+# ──────────────────────────────────────────────
+# 🛰️ Surround sonar (one-liner, senza here-doc)
+get_sonar_surround(){
+  echo "[SL]equalizer=f=2400:t=q:w=1.4:g=2.1, equalizer=f=6000:t=q:w=1.6:g=1.7, aecho=0.78:0.86:18:0.28, aecho=0.70:0.88:22:0.24, aecho=0.60:0.90:90:0.20, aecho=0.60:0.90:16:0.35, volume=${SUR_GAIN},alimiter=limit=0.97[SL_boost];[SR]equalizer=f=2400:t=q:w=1.4:g=2.1, equalizer=f=6000:t=q:w=1.6:g=1.7, aecho=0.78:0.86:20:0.28, aecho=0.70:0.88:24:0.24, aecho=0.60:0.90:92:0.20, aecho=0.60:0.90:18:0.32, volume=${SUR_GAIN},alimiter=limit=0.97[SR_boost];"
+}
+
+
+# ──────────────────────────────────────────────
+# 🧼 Surround clean (neutro, solo gain)
+# ──────────────────────────────────────────────
+get_clean_surround(){
+  echo "[SL]volume=${SUR_GAIN}[SL_boost];[SR]volume=${SUR_GAIN}[SR_boost];"
+}
+
+# ──────────────────────────────────────────────
+# 📝 Controllo esistenza file output
+# ──────────────────────────────────────────────
 should_overwrite() {
-    local file="$1"
-    if [ -f "$file" ]; then
-        while true; do
-            read -p "$(echo -e "${YELLOW}[Warning]${NC}") Il file di output esiste già. Sovrascrivere? [s/n] " CONFIRM
-            case "$CONFIRM" in
-                [sS]) return 0;;
-                [nN]) info "Output saltato per $file"; return 1;;
-                *) echo "Rispondi 's' per sì, 'n' per no.";;
-            esac
-        done
-    fi
-    return 0
-}
+  local f="$1"
+  OVERWRITE_FLAG=""
 
-# Modalità SONAR (V5.5): Integrazione EQ HRTF + Altezza FOCALIZZATA (Solo filtri standard)
-get_sonar_filter_upfiring() {
-    # Ritardo massimo uniforme su tutti i codec per massimizzare l'illusione
-    local delay_ms=30; local delay_ms_r=35 
-    
-    # EQ HRTF (PINNA) + Effetto Riverbero/Eco Asimmetrico (Solo filtri standard: 'aecho' e 'adelay' integrato)
-    echo "[SL]equalizer=f=2700:t=q:w=1.1:g=2.5,equalizer=f=3300:t=q:w=1.5:g=2.2,equalizer=f=4100:t=q:w=1.2:g=1.7,aecho=0.8:0.88:40:0.4,adelay=${delay_ms}|${delay_ms}:all=1,volume=3.7dB[SL_boost];\
-    [SR]equalizer=f=2700:t=q:w=1.1:g=2.5,equalizer=f=3300:t=q:w=1.5:g=2.2,equalizer=f=4100:t=q:w=1.2:g=1.7,aecho=0.8:0.88:40:0.4,adelay=${delay_ms_r}|${delay_ms_r}:all=1,volume=3.4dB[SR_boost];"
-}
-
-# Clean: boost bilanciato con correzione asimmetria SL/SR minima
-get_boost_clean() {
-    echo "[SL]equalizer=f=2800:t=q:w=1.4:g=2.2,volume=3.5dB[SL_boost];[SR]equalizer=f=2800:t=q:w=1.4:g=2.2,volume=3.2dB[SR_boost];"
-}
-
-# ===============================================================================================
-# MAIN PROCESSING LOOP
-# ===============================================================================================
-
-for IN in "${FILES[@]}"; do
-    BAS=$(basename "$IN" .mkv); echo ""; info "Elaborazione: ${BAS}.mkv"
-    AUDIO_INFO=$(get_audio_info "$IN"); AUDIO_TYPE=$(echo "$AUDIO_INFO" | cut -d',' -f1); AUDIO_BR=$(echo "$AUDIO_INFO" | cut -d',' -f2)
-    if ! [[ "$AUDIO_BR" =~ ^[0-9]+$ ]]; then warn "Bitrate non rilevabile, assumo valore standard per filtro LFE."; AUDIO_BR=600000; fi
-    
-    # 1. CALCOLO VALORI DINAMICI E LFE
-    DYN_VALS=$(get_dynamic_values "$AUDIO_TYPE" "$AUDIO_BR" "$PRESET")
-    GLOBAL_BOOST_DB=$(echo "$DYN_VALS" | cut -d',' -f1)
-    VOCE_BOOST_DB=$(echo "$DYN_VALS" | cut -d',' -f2)
-    LFE_VOL_DB=$(echo "$DYN_VALS" | cut -d',' -f3)
-    LFE_COMP_FILT=$(echo "$DYN_VALS" | cut -d',' -f4)
-
-    # 2. Genera filtri surround/height
-    if [ "$SONAR_MODE" = "sonar" ]; then 
-        SURF=$(get_sonar_filter_upfiring); SUFFIX="_Sonar"
-        info "Modalità SONAR: Height HRTF MAX ON + Ritardo Asimmetrico (30/35ms)"
-    else 
-        SURF=$(get_boost_clean); SUFFIX="_Clean"
-        info "Modalità Clean: Boost surround bilanciato"
-    fi
-    
-    # 3. File output e controllo sovrascrittura
-    OUT="${BAS}_AC3${SUFFIX}.mkv"
-    if ! should_overwrite "$OUT"; then continue; fi
-    info "Conversione → AC3 640k: $OUT"
-    
-    # 4. Pipeline filter_complex
-    
-    # FIltraggio LFE
-    if [ -n "$LFE_COMP_FILT" ]; then
-        # Se c'è un filtro di compressione, lo eseguiamo prima del volume e del limiter, separati dalla virgola.
-        LFE_FILT="[LFE]highpass=f=25,${LFE_COMP_FILT},volume=${LFE_VOL_DB}dB,alimiter=limit=0.90[LFE_clean];"
-        LFE_OUT="[LFE_clean]"
-    elif [ "$LFE_VOL_DB" != "0.0" ]; then
-        # Se c'è solo un volume non nullo (ma nessuna compressione)
-        LFE_FILT="[LFE]highpass=f=25,volume=${LFE_VOL_DB}dB,alimiter=limit=0.90[LFE_clean];"
-        LFE_OUT="[LFE_clean]"
+  if [[ -f "$f" ]]; then
+    echo -e "${C_WARN} Il file di destinazione \033[1;33m'$f'\033[0m esiste già."
+    read -p "Sovrascrivere? [s/N] " answer
+    if [[ "$answer" =~ ^([sS]|[yY])$ ]]; then
+      OVERWRITE_FLAG="-y"
+      info "➡  Sovrascrittura abilitata."
     else
-        # Caso base (AC3): solo highpass e output diretto
-        LFE_FILT="[LFE]highpass=f=25[LFE_clean];"
-        LFE_OUT="[LFE_clean]"
+      warn "Skip: $f"
+      return 1
     fi
+  fi
+  return 0
+}
 
-    # Costruzione del filtro completo
-    FILTER="[0:a:0]channelsplit=channel_layout=5.1[FL][FR][FC][LFE][SL][SR];\
-            ${LFE_FILT}\
-            ${SURF}\
-            [FC]volume=${VOCE_BOOST_DB}dB[FC_boost];\
-            [FL][FR][FC_boost]${LFE_OUT}[SL_boost][SR_boost]amerge=inputs=6,volume=${GLOBAL_BOOST_DB}dB,\
-            aresample=resampler=soxr:precision=28:dither_method=triangular,alimiter=limit=0.92[aout]"
+# ──────────────────────────────────────────────
+# 🔁 Loop file
+# ──────────────────────────────────────────────
+for CUR_FILE in "${FILES[@]}"; do
+  BASENAME=$(basename "$CUR_FILE" .mkv)
+  OUT_SUFFIX=$([ "$SONAR_MODE" = sonar ] && echo "Sonar" || echo "Clean")
+  OUT_FILE="${BASENAME}_AC3_${OUT_SUFFIX}.mkv"
 
-    # 5. Esecuzione conversione (Costruzione dell'array CMD)
-    CMD=(ffmpeg -y -nostdin -loglevel error -stats -hide_banner -hwaccel auto -threads 0 -i "$IN" -filter_complex "$FILTER" -map 0:v -c:v copy -map "[aout]" -c:a ac3 -b:a 640k -ar 48000 -ac 6)
-    
-    if [ "$KEEP_ORIG" = "si" ]; then 
-        CMD+=(-map 0:a:0 -c:a:1 copy -metadata:s:a:1 title="Original Audio" -disposition:a:1 0)
-        info "Traccia originale mantenuta"
-    fi
-    
-    # Mappa sottotitoli se esistono
-    if ffprobe -v quiet -select_streams s -show_entries stream=index -of csv=p=0 "$IN" | grep -q .; then 
-        CMD+=(-map 0:s -c:s copy)
-    fi
-    
-    # Aggiungi i metadati finali e il file di output all'array
-    CMD+=(-metadata:s:a:0 title="AC3 5.1 Kenwood${SUFFIX}" -disposition:a:0 default)
-    CMD+=("$OUT")
-    
-    info "Avvio conversione FFmpeg....."
-    # Esecuzione dell'array
-    "${CMD[@]}"
-    
-    if [ $? -eq 0 ]; then ok "Conversione completata: $OUT"; else err "Errore durante conversione: $OUT"; fi
+  IFS=',' read -r VOICE_BOOST LFE_VOL <<< "$(get_dynamic_values "$PRESET")"
+  VOICE_FILTER="$(get_voice_filter "$VOICE_BOOST")"
+  LFE_FILTER="$(get_lfe_filter "$LFE_VOL")"
+  if [ "$SONAR_MODE" = sonar ]; then
+    SUR_FILTERS="$(get_sonar_surround)"
+  else
+    SUR_FILTERS="$(get_clean_surround)"
+  fi
+
+  info "============================================================================"
+  info "➡  Input:  $CUR_FILE"
+  info "➡  Output: $OUT_FILE"
+  info "➡  Preset: $PRESET  |  Boost voce: ${VOICE_BOOST} dB  |  LFE: ${LFE_VOL} dB"
+  info "➡  Surround gain: ${SUR_GAIN}  |  Modalità: ${SONAR_MODE}"
+  info "============================================================================"
+
+  FILTER_COMPLEX="[0:a:0]aformat=channel_layouts=5.1,channelsplit=channel_layout=5.1[FL][FR][FC][LFE][SL][SR];\
+  ${VOICE_FILTER}${LFE_FILTER}${SUR_FILTERS}\
+  [FL]aformat=channel_layouts=FL[FLf];[FR]aformat=channel_layouts=FR[FRf];\
+  [FC_plus]aformat=channel_layouts=FC[FCf];[LFE_clean]aformat=channel_layouts=LFE[LFEf];\
+  [SL_boost]aformat=channel_layouts=SL[SLf];[SR_boost]aformat=channel_layouts=SR[SRf];\
+  [FLf][FRf][FCf][LFEf][SLf][SRf]amerge=inputs=6,channelmap=channel_layout=5.1,\
+  aresample=resampler=soxr:precision=28:dither_method=triangular,alimiter=limit=0.96[aout]"
+
+  # Prompt overwrite + run
+  if ! should_overwrite "$OUT_FILE"; then
+    continue
+  fi
+
+  CMD=(ffmpeg $OVERWRITE_FLAG -hide_banner -nostdin -stats -loglevel warning \
+       -i "$CUR_FILE" -filter_complex "$FILTER_COMPLEX" \
+       -map 0:v:0 -c:v copy -map "[aout]" -c:a ac3 -b:a "$BITRATE" -ar 48000 -ac 6)
+
+  # Mantieni sottotitoli se presenti
+  if ffprobe -v quiet -select_streams s -show_entries stream=index -of csv=p=0 "$CUR_FILE" | grep -q .; then
+    CMD+=(-map 0:s -c:s copy)
+  fi
+
+  # Mantieni audio originale?
+  if [ "$KEEP_ORIG" = "si" ]; then
+    CMD+=(-map 0:a:0 -c:a:1 copy -metadata:s:a:1 title="Original Audio" -disposition:a:1 0)
+  fi
+
+  CMD+=(-metadata:s:a:0 title="AC3 5.1 ${OUT_SUFFIX}" -disposition:a:0 default "$OUT_FILE")
+
+  info "➡  Avvio conversione → AC3 $BITRATE"
+  "${CMD[@]}" && ok "Completato: $OUT_FILE" || err "Error: $OUT_FILE"
+
 done
 
-# Report finale
-ok "Batch completato! Processati ${#FILES[@]} file"
-echo "====================================================================================="
-echo "Conversione AC3 640k ottimizzata per AVR Kenwood RV600 + KS1-300HT + SW40HT"
-echo "======================================================================================"
+ok "Batch concluso — AC3 ottimizzato per Kenwood RV6000 + KS1-300HT + SW40HT"
 
