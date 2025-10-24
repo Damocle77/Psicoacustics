@@ -19,7 +19,6 @@ Questo script la riporta al centro della scena senza stravolgere il mix.
 - **EQ a 4.2 kHz** → evidenzia **sibilanti e armoniche superiori**, migliorando la **chiarezza** a basso volume.
 - **Volume dinamico** → ogni preset applica un boost differente (0.5–0.7 dB), adattandosi al tipo di sorgente (Atmos, DTS, EAC3, AC3).
 - **Limiter finale** → protegge da clipping dopo l’equalizzazione.
-- ❌ Niente compressione dinamica → la voce resta naturale e ariosa, senza “effetto radio FM”.
 
 > 🎧 Risultato: dialoghi intellegibili anche a volumi moderati, **senza schiacciare la colonna sonora**.
 
