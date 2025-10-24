@@ -1,4 +1,4 @@
-# 🛠️ converti_2AC3_sonar.sh
+# 🛠️ Convert 2 AC3 Sonar
 
 Script Bash per la **conversione audio multicanale in AC3 5.1**, con:
 - EQ vocale sartoriale ottimizzata per lingua italiana 🇮🇹  
