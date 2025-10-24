@@ -1,94 +1,154 @@
-🚀 SONAR: La Trasmutazione Audio EAC3/AC3 5.1
+# 🛠️ converti_2AC3_sonar.sh
 
-> “L’audio perfetto non è solo udibile... è percepibile come un eco nel Vuoto Spaziale.”
+Script Bash per la **conversione audio multicanale in AC3 5.1**, con:
+- EQ vocale sartoriale ottimizzata per lingua italiana 🇮🇹  
+- filtro surround **psicoacustico upfiring virtuale** (simulazione Atmos / Neural:X)  
+- gestione batch intelligente e logging leggibile a colori 🌈
 
-**converti_2AC3_sonar.sh** è uno script Bash avanzato per la conversione di tracce audio **Atmos, EAC3, DTS** in **AC3 5.1 a 640kbps**, con filtri psicoacustici dinamici che simulano il suono spaziale 3D (Upfiring) ottimizzati per impianti AVR Classici (Ottimizzato su **Kenwood RV-6000 + KC-1 300HT + SW-40HT)**.  
-Questa pipeline ffmpeg garantisce uniformità spaziale e compensazione dinamica chirurgica su **canali vocali e LFE**, offrendo una resa sonora da vero Jedi 5.1.
-
----
-
-## ⚙️ Caratteristiche principali
-
-- **Compatibilità Garantita**: utilizza solo filtri FFmpeg standard (`aecho`, `adelay`, `equalizer`).  
-- **🌊 Modalità SONAR (Height Emulation)**  
-  - Upfiring focalizzato sui canali surround (SL/SR).  
-  - Illusioni HRTF (pinna) e ritardo asimmetrico (30ms/35ms) per simulare altezza.  
-  - Effetto spaziale uniforme su tutti i codec.  
-- **🎚️ Preset Dinamici e Nomenclatura Bitrate**  
-  - Calibrazione voce/LFE variabile per uniformare il volume percepito.
+> ⚡ Perfetto per sistemi home theatre AVR 5.1 classici.
 
 ---
 
-## 🧩 Tabella Calibrazione Dinamica
+## ✨ Funzionalità principali
 
-| Preset    | Sorgente                  | Loudness Globale | Boost Voce (FC) | Filtro LFE           |
-|-----------|--------------------------|----------------|----------------|--------------------|
-| atmos     | EAC3 > 700k (Atmos core)     | +3.8 dB        | +2.5 dB        | -3.6 dB + Compressor |
-| eac37     | EAC3/DTS 768k (High-Fidelity)| +2.5 dB        | +1.8 dB        | -2.0 dB            |
-| eac36     | EAC3 640k (Standard)         | +1.2 dB        | +1.2 dB        | -1.2 dB            |
-| ac3       | AC3 (Legacy Riferimento)     | +0.0 dB        | +1.0 dB        | +0.0 dB            |
+### 🎤 Voce “Sartoriale”
+La voce nei mix cinematografici è spesso **sepolta** sotto FX, score e ambienti.  
+Questo script la riporta al centro della scena senza stravolgere il mix.
 
----
+- **EQ a 2.5 kHz** → agisce sulle **formanti principali** della voce umana italiana, aumentando la **presenza** e la definizione senza rendere il suono “nasale”.
+- **EQ a 4.2 kHz** → evidenzia **sibilanti e armoniche superiori**, migliorando la **chiarezza** a basso volume.
+- **Volume dinamico** → ogni preset applica un boost differente (0.5–0.7 dB), adattandosi al tipo di sorgente (Atmos, DTS, EAC3, AC3).
+- **Limiter finale** → protegge da clipping dopo l’equalizzazione.
+- ❌ Niente compressione dinamica → la voce resta naturale e ariosa, senza “effetto radio FM”.
 
-## 🧩 Requisiti
-
-- Linux / macOS /Windows con ambiente Bash (WSL/Gitbash) 
-- **FFmpeg** (con `ffprobe`)  
-- Nessun filtro esterno richiesto (no `libsoxr` o `areverb`)  
+> 🎧 Risultato: dialoghi intellegibili anche a volumi moderati, **senza schiacciare la colonna sonora**.
 
 ---
 
-## 🚀 Utilizzo
+### 🌀 LFE / Subwoofer
+- High-pass a 25 Hz per eliminare rimbombi infrasonici non udibili.
+- Attenuazione opzionale per bilanciare i sub nei preset “cinematografici”.
+- Limiter dedicato → protegge woofer e amplificatori da picchi imprevisti.
+- Nessun EQ aggiuntivo: lascia lavorare il crossover dell’AVR.
+
+---
+
+### 🛰️ Surround Sonar — Upfiring Virtuale
+Molti impianti 5.1 **non supportano Atmos nativamente**, ma ciò non significa rinunciare alla spazialità.  
+Il filtro *sonar* utilizza **ritardi psicoacustici ed enfatizzazione spettrale** per creare un effetto percepito “dall’alto” — come i diffusori upfiring.
+
+- **Delay corti e medi (14–92 ms)** → simulano riflessioni verticali sulle pareti/soffitto.
+- **Boost sulle medie-alte** + **highshelf sopra gli 8 kHz** → dona “aria” e direzionalità.
+- **Asimmetria L/R** → genera profondità spaziale e cue binaurali (effetto HRTF).
+- **Limiter finale** → mantiene il mix controllato e coerente con i canali frontali.
+
+📡 L’obiettivo non è creare un Atmos falso, ma simulare la **percezione verticale e spaziale** con sistemi tradizionali.
+
+---
+
+## 🧰 Pipeline robusta
+- `channelsplit` → elaborazione canale per canale → `amerge` + `channelmap=5.1`
+- Voice / LFE / Surround processati in modo indipendente.
+- Prompt di sovrascrittura interattivo.
+- Preservazione sottotitoli e traccia audio originale opzionale.
+- Conversione singola o batch automatica.
+
+---
+
+## 🧪 Sintassi base
 
 ```bash
-./converti_2AC3_sonar.sh <sonar|nosonar> <si|no> [file.mkv] [preset]
+./converti_2AC3_sonar.sh <modalità> <si|no> [file.mkv] [preset] [bitrate]
 ```
 
-### Parametri
+| Pos. | Parametro      | Opzioni                                              | Descrizione |
+|------|---------------|------------------------------------------------------|-------------|
+| 1    | modalità       | `sonar` / `clean`                                    | Tipo di surround |
+| 2    | keep original  | `si` / `no`                                          | Mantiene o meno la traccia originale |
+| 3    | file input     | nome file .mkv (opzionale)                           | Se omesso → batch |
+| 4    | preset         | `atmos` `dts` `eac37` `eac36` `ac3` `auto` *(default)* | EQ voce / LFE dinamici |
+| 5    | bitrate        | `448k` / `640k` *(default)*                          | Bitrate AC3 |
 
-| Parametro | Descrizione |
-|-----------|------------|
-| 1°        | `sonar` → Attiva Upfiring/Surround Boost Asimmetrico (Remastering Kenwood) <br> `nosonar` → Conversione clean con boost minimo |
-| 2°        | `si` → Mantiene audio originale <br> `no` → Solo AC3 nel file finale |
-| 3°        | `[file.mkv]` → File singolo o lascia vuoto per batch |
-| 4° (opz.) | `atmos`, `eac37`, `eac36`, `ac3` → Seleziona preset di conversione |
+---
 
-### Esempi
+## 🧠 Preset Audio
 
-- **File Singolo Atmos (Calibrazione massima, elimina originale)**
+| Preset | Boost Voce | LFE Volume |
+|--------|------------|------------|
+| atmos  | +0.7 dB    | −2.0 dB    |
+| dts    | +0.7 dB    | −2.3 dB    |
+| eac37  | +0.5 dB    | −1.2 dB    |
+| eac36  | +0.5 dB    |  0.0 dB    |
+| ac3    | +0.5 dB    |  0.0 dB    |
+| auto   | rilevamento automatico dal nome file (`atmos`, `dts`, `768`, `640`) |
 
+👉 È possibile forzare manualmente il boost surround:
 ```bash
-./converti_2AC3_sonar.sh sonar no "Fountain Of Youth.mkv" atmos
-```
-
-- **Conversione Batch (Sonar, mantiene originale, auto-rilevamento)**
-
-```bash
-./converti_2AC3_sonar.sh sonar si
-```
-
-- **Conversione Pulita (Solo Loudness, mantiene originale, forzando 768k)**
-
-```bash
-./converti_2AC3_sonar.sh nosonar si "Film_768k.mkv" eac37
+SUR_DB=1.2 ./converti_2AC3_sonar.sh sonar si file.mkv
 ```
 
 ---
 
-## 🧠 Note Tecniche
+## 🧭 Esempi pratici
 
-L’algoritmo SONAR combina aecho, adelay e equalizer per manipolare tempo e fase sui canali surround.
-LFE e voce sono bilanciati per evitare saturazione (alimiter=0.92) e mantenere dialoghi chiari anche nei picchi dei master ad alta dinamica.
-Implementa compensazione psicoacustica sui canali laterali per migliorare la percezione spaziale dei suoni di effetto.
-Applicazione di ritardi asimmetrici tra i canali surround per simulare riflessi naturali e profondità verticale.
-Filtri vocali ottimizzati per preservare l'intelligibilità dei dialoghi anche con effetti sonori molto dinamici.
-Supporto a tutti i bitrate EAC3/AC3/DTS standard fino a 768k senza perdita di uniformità sonora.
-Gestione automatica della loudness globale per evitare squilibri tra tracce diverse nello stesso progetto.
+### 🎧 Conversione singolo file con profilo sonar:
+```bash
+./converti_2AC3_sonar.sh sonar si "Il_Signore_degli_Anelli.mkv"
+```
+
+### 🧼 Conversione batch in modalità clean:
+```bash
+./converti_2AC3_sonar.sh clean no
+```
+
+### 🎯 Forzare preset DTS + bitrate personalizzato:
+```bash
+./converti_2AC3_sonar.sh sonar si film.mkv dts 448k
+```
 
 ---
 
-> “Se puoi sentirlo davvero, complimenti: hai appena sbloccato il livello segreto del surround. Che la forza del bit sia con te, giovane Jedi dell'audio.”
+## 🛡️ Gestione segnali e sicurezza
 
-## 📜 Licenza
-MIT License
+- Interruzione manuale con **CTRL+C** → lo script mostra un messaggio pulito e termina con codice 130.  
+- Prompt interattivo per evitare sovrascritture accidentali.  
+- Limiter finale su tutti i canali → niente clipping selvaggio 😎
 
+---
+
+## 🧩 Pipeline Audio (schema semplificato)
+
+```
+[INPUT 5.1]
+   │
+   ├── Voice (FC) → EQ sartoriale 2.5 + 4.2 kHz + Boost dinamico
+   ├── LFE        → High-pass 25 Hz + attenuazione + limiter
+   ├── Surround   → sonar (aecho psicoacustico upfiring) / clean
+   └── FL/FR      → pass-through
+   ▼
+[MERGE 5.1 + channelmap + limiter finale]
+   ▼
+[AC3 5.1 OUTPUT]
+```
+
+---
+
+## 📝 Licenza
+
+MIT License © Sandro “D@mocle77” Sabbioni  
+Puoi usarlo, modificarlo e migliorarlo liberamente.  
+Le uniche cose che **non sono ammesse**: clip digitali e surround piatti. 😄
+
+---
+
+## 💬 Note finali
+
+> 🎙️ *«La voce non dev’essere solo sentita, dev’essere capita.»*  
+> ☁️ *«E se il tuo sistema non supporta Atmos, fallo credere al tuo cervello.»*
+
+Questo script nasce per:
+- migliorare **l’intelligibilità** dei dialoghi nei film italiani e doppiaggi,  
+- simulare **profondità e altezza sonora** su impianti consumer,  
+- preservare la dinamica originale senza compressione aggressiva.
+
+🪐 «Non è magia… è psicoacustica. E se non puoi permetterti l’Atmos… fallo credere al cervello.»
