@@ -3,15 +3,13 @@
 # ║  converti_2AC3_sonar_v5.sh                                             ║
 # ║  Edizione Nerd: Voce “sartoriale” ITA + LFE pulito + Surround tunable  ║
 # ╚════════════════════════════════════════════════════════════════════════╝
-# Sandro edition — basato sulla tua “stele di rosetta” (old) + fix moderni
-#
 # • Voce: EQ minimale a 4.2 kHz (Q 1.4, +1.2 dB) + boost preset-specifico.
 #   Niente compressori sulla voce → addio metallicità/gracchi.
 # • LFE: SOLO high-pass 25 Hz + (facoltativo) attenuazione volume + limiter.
 #   Niente EQ sul sub per coerenza col crossover dell’AVR.
 # • Surround: modalità "sonar" (upfiring psicoacustico) o "clean" (neutro)
 #   con boost di default: sonar +0.9 dB, clean +0.6 dB (override: SUR_DB).
-# • Merge 5.1 robusto: aformat per i 6 ingressi + channelmap=5.1 → no warning.
+# • Merge 5.1 robusto: aformat per i 6 ingressi + channelmap=5.1.
 # • Batch intelligente (se non passi il file) + copia video/sub + AC3 out.
 
 set -euo pipefail
