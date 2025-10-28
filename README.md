@@ -1,7 +1,7 @@
 # Convert 2AC3 Sonar - Virtual upfiring + EQ Voce sartoriale
 
 > "Non tutti i supereroi indossano il mantello…alcuni usano filter_complex per salvare il mondo del 5.1!"  
-> — Un maniaco del suono con la passione per i cinecomic  
+> - Un maniaco del suono con la passione per i cinecomic -    
 
 Questo repository contiene **uno script unico** che ricodifica l’audio di un file **5.1** in **AC3 5.1** con due focus primari:  
 1) **EQ “sartoriale” della voce** sempre attiva su **FL/FR/FC** per massima intelligibilità.  
