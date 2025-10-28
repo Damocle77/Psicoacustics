@@ -1,4 +1,4 @@
-# Convert 2AC3 Sonar - Virtual upfiring + EQ Voce sartoriale
+# Sonar AC3D - Virtual upfiring + EQ Voce sartoriale
 
 > "Non tutti i supereroi indossano il mantello…alcuni usano filter_complex per salvare il mondo del 5.1!"  
 > "Da un maniaco del suono con la passione per i cinecomic"      
