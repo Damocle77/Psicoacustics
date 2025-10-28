@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # -----------------------------------------------------------------------------------------------
-# converti_2ac3_sonar.sh - TUTTO-IN-UNO - FFmpeg virtual upfiring
+# converti_2ac3_sonar_2x.sh - TUTTO-IN-UNO - FFmpeg virtual upfiring
 # -----------------------------------------------------------------------------------------------
 # USO (posizionali):
 #   ./converti_2ac3_sonar.sh <sonar|clean|dualx> <si|no> <file.mkv> [bitrate] [neuralx|atmosx]
