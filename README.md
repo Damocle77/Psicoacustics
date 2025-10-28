@@ -24,10 +24,11 @@ Questo repository contiene **una suite bash peculiare** che ricodifica l’audio
 
 ## Uso rapido
 ```bash
-./converti_2ac3_sonar.sh <sonar|clean> <si|no> <file.mkv> [bitrate] [neuralx|atmosx]
+./converti_2ac3_sonar_2x.sh <sonar|clean|dualx> <si|no> <file.mkv> [bitrate] [neuralx|atmosx]
 ```
 - `sonar` = applica **virtual upfiring** solo a SL/SR  
 - `clean` = **no upfiring**, solo boost controllato sui surround  
+- `dualx` = crea due tracce audio, la prima con neurox sonar e la seconda con atmosx sonar
 - `si|no` = **conserva o meno la traccia audio originale** nel container  
 - `bitrate` (opz.): `320k|448k|640k` (default `640k`)  
 - `neuralx|atmosx` (opz., solo con `sonar`): **voicing** della cupola
@@ -35,13 +36,13 @@ Questo repository contiene **una suite bash peculiare** che ricodifica l’audio
 **Esempi**
 ```bash
 # Sonar NeuralX (non conserva l'originale)
-./converti_2ac3_sonar.sh sonar no "Avengers.mkv" 640k neuralx
+./converti_2ac3_sonar_2x.sh sonar no "Avengers.mkv" 640k neuralx
 
 # Sonar AtmosX (conserva l'originale)
-./converti_2ac3_sonar.sh sonar si "Alien.mkv" 640k atmosx
+./converti_2ac3_sonar_2x.sh sonar si "Alien.mkv" 640k atmosx
 
 # Clean (nessun upfiring), default 640k
-./converti_2ac3_sonar.sh clean no "Terminator.mkv"
+./converti_2ac3_sonar_2x.sh clean no "Terminator.mkv"
 ```
 
 Se lanci senza argomenti o con `--help`, lo script stampa la **guida iniziale**.
@@ -83,11 +84,11 @@ La **traccia AC3 5.1** è sempre **48 kHz**, video **copiato** (`-c:v copy`), **
 ## Installazione / Setup
 - Metti lo script in una cartella del progetto (es. `tools/`) e rendilo eseguibile:
   ```bash
-  chmod +x converti_2ac3_sonar.sh
+  chmod +x converti_2ac3_sonar_2x.sh
   ```
 - Funziona su **Linux/macOS** e **Windows 11 con Git Bash**. Su Windows, se l’editor introduce CRLF:
   ```bash
-  sed -i 's/\r$//' converti_2ac3_sonar.sh
+  sed -i 's/\r$//' converti_2ac3_sonar_2x.sh
   ```
 
 ---
@@ -141,16 +142,18 @@ git clone https://github.com/Damocle77/Sonar_AC3D.git
 cd Sonar_AC3D
 
 # Rendi eseguibile lo script
-chmod +x converti_2ac3_sonar.sh
+chmod +x converti_2ac3_sonar_2x.sh
 
 # Uso rapido
-./converti_2ac3_sonar.sh <sonar|clean> <si|no> <file.mkv> [bitrate] [neuralx|atmosx]
+./converti_2ac3_sonar_2x.sh <sonar|clean|dualx> <si|no> <file.mkv> [bitrate] [neuralx|atmosx]
 ```
 Esempi:
 ```bash
-./converti_2ac3_sonar.sh sonar no "Avengers.mkv" 640k neuralx
-./converti_2ac3_sonar.sh sonar si "Alien.mkv" 640k atmosx
-./converti_2ac3_sonar.sh clean no "Terminator.mkv"
+./converti_2ac3_sonar_2x.sh sonar no "Avengers.mkv" 640k neuralx
+./converti_2ac3_sonar_2x.sh sonar si "Alien.mkv" 640k atmosx
+./converti_2ac3_sonar_2x.sh clean no "Terminator.mkv" 
+./converti_2ac3_sonar_2x.sh dualx no "Fast & Furious"
+
 ```
 
 ## Troubleshooting veloce
@@ -188,15 +191,15 @@ Piccolo tool da linea di comando per **elencare le tracce audio** di un file `.m
 ```
 Output ordinato, una scheda per traccia. (Vedi script nel repo.)
 
-### `convert_2AC3_sonar_batch.sh`
+### `convert_2AC3_sonar_2x_batch.sh`
 Launcher batch che richiama `convert_2AC3_sonar.sh` su **tutti i file `.mkv` nella cartella corrente** (o su un singolo file passato come quinto argomento). Stampa progressi e tempo totale.  
 **Uso tipico:**
 ```bash
 # Esempio: modalità sonar, non conservare originale, preset e bitrate
-./convert_2AC3_sonar_batch.sh sonar no eac36 640k
+./convert_2AC3_sonar_2x_batch.sh sonar no eac36 640k
 
 # Esempio su singolo file specifico
-./convert_2AC3_sonar_batch.sh sonar no eac36 640k "/percorso/Film.mkv"
+./convert_2AC3_sonar_2x_batch.sh sonar no eac36 640k "/percorso/Film.mkv"
 ```
 Il batch verifica la presenza dello script principale prima di partire e scansiona la directory corrente per i `.mkv`. (Vedi script nel repo.)
 
