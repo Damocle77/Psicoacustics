@@ -5,7 +5,7 @@
 
 Questo repository contiene **una suite bash peculiare** che ricodifica l’audio **5.1** in **AC‑3 5.1** con due focus primari:
 1) **EQ “sartoriale” della voce** sempre attiva su **FL/FR/FC** per massima intelligibilità.  
-2) **Upfiring virtuale** **solo** sui surround **SL/SR** quando richiesto, con due “voicing” ispirati a **NeuralX** (cupola ampia) e **Atmos** (verticalità precisa).
+2) **Upfiring virtuale** sui surround **SL/SR** quando richiesto, con due “voicing” ispirati a **NeuralX** (cupola ampia) e **Atmos** (verticalità precisa).
 
 ---
 
