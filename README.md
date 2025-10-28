@@ -1,153 +1,222 @@
-# 🛠️ Convert 2 AC3 Sonar
+# converti_2ac3_sonar — Virtual upfiring + EQ voce sartoriale
 
-Script Bash per la **conversione audio multicanale in AC3 5.1**, con:
-- EQ vocale sartoriale ottimizzata per lingua italiana 🇮🇹  
-- filtro surround **psicoacustico upfiring virtuale** (simulazione Atmos / Neural:X)  
-- gestione batch intelligente e logging leggibile a colori 🌈
+> “Non tutti i supereroi usano il `mantello`...a volte hanno un `filter_complex`.”  
+> — Un maniaco del suono con la passione per i cinecomic
 
-> ⚡ Perfetto per sistemi home theatre AVR 5.1 classici.
-
----
-
-## ✨ Funzionalità principali
-
-### 🎤 Voce “Sartoriale”
-La voce nei mix cinematografici è spesso **sepolta** sotto FX, score e ambienti.  
-Questo script la riporta al centro della scena senza stravolgere il mix.
-
-- **EQ a 2.5 kHz** → agisce sulle **formanti principali** della voce umana italiana, aumentando la **presenza** e la definizione senza rendere il suono “nasale”.
-- **EQ a 4.2 kHz** → evidenzia **sibilanti e armoniche superiori**, migliorando la **chiarezza** a basso volume.
-- **Volume dinamico** → ogni preset applica un boost differente (0.5–0.7 dB), adattandosi al tipo di sorgente (Atmos, DTS, EAC3, AC3).
-- **Limiter finale** → protegge da clipping dopo l’equalizzazione.
-
-> 🎧 Risultato: dialoghi intellegibili anche a volumi moderati, **senza schiacciare la colonna sonora**.
+Questo repository contiene **uno script unico** che ricodifica l’audio di un file **5.1** in **AC3 5.1** con due focus primari:  
+1) **EQ “sartoriale” della voce** sempre attiva su **FL/FR/FC** per massima intelligibilità.  
+2) **Upfiring virtuale** **solo** sui surround **SL/SR** quando richiesto.
 
 ---
 
-### 🌀 LFE / Subwoofer
-- High-pass a 25 Hz per eliminare rimbombi infrasonici non udibili.
-- Attenuazione opzionale per bilanciare i sub nei preset “cinematografici”.
-- Limiter dedicato → protegge woofer e amplificatori da picchi imprevisti.
-- Nessun EQ aggiuntivo: lascia lavorare il crossover dell’AVR.
+## Perché questo script?
+- Per *spingere verso l’alto* l’informazione spaziale dei surround in stanze senza canali Height, con un effetto **AtmosX/NeuralX-like** ma riproducibile ovunque.
+- Per **non toccare** la colonna portante del mix (frontali e centro), a parte un **micro-boost chirurgico** della voce (FC **+0,6 dB**, FL/FR **+0,3 dB** attorno ai **2,4 kHz**).
+- Per **mantenere il video intatto** e **copiare i sottotitoli** senza complicazioni.
 
 ---
 
-### 🛰️ Surround Sonar — Upfiring Virtuale
-Molti impianti 5.1 **non supportano Atmos nativamente**, ma ciò non significa rinunciare alla spazialità.  
-Il filtro *sonar* utilizza **ritardi psicoacustici ed enfatizzazione spettrale** per creare un effetto percepito “dall’alto” — come i diffusori upfiring.
-
-- **Delay corti e medi (14–92 ms)** → simulano riflessioni verticali sulle pareti/soffitto.
-- **Boost sulle medie-alte** + **highshelf sopra gli 8 kHz** → dona “aria” e direzionalità.
-- **Asimmetria L/R** → genera profondità spaziale e cue binaurali (effetto HRTF).
-- **Limiter finale** → mantiene il mix controllato e coerente con i canali frontali.
-
-📡 L’obiettivo non è creare un Atmos falso, ma simulare la **percezione verticale e spaziale** con sistemi tradizionali.
+## Requisiti
+- **FFmpeg** e **FFprobe** nel `PATH`. Lo script verifica le dipendenze all’avvio.
+- Sorgente con **prima traccia audio 5.1** (side o back; in quest’ultimo caso viene **normalizzata a 5.1(side)**).
 
 ---
 
-## 🧰 Pipeline robusta
-- `channelsplit` → elaborazione canale per canale → `amerge` + `channelmap=5.1`
-- Voice / LFE / Surround processati in modo indipendente.
-- Prompt di sovrascrittura interattivo.
-- Preservazione sottotitoli e traccia audio originale opzionale.
-- Conversione singola o batch automatica.
+## Uso rapido
+```bash
+./converti_2ac3_sonar.sh <sonar|clean> <si|no> <file.mkv> [bitrate] [neuralx|atmosx]
+```
+- `sonar` = applica **virtual upfiring** solo a SL/SR  
+- `clean` = **no upfiring**, solo boost controllato sui surround  
+- `si|no` = **conserva o meno la traccia audio originale** nel container  
+- `bitrate` (opz.): `320k|448k|640k` (default `640k`)  
+- `neuralx|atmosx` (opz., solo con `sonar`): **voicing** della cupola
+
+**Esempi**
+```bash
+# Sonar NeuralX (non conserva l'originale)
+./converti_2ac3_sonar.sh sonar no "Avengers.mkv" 640k neuralx
+
+# Sonar AtmosX (conserva l'originale)
+./converti_2ac3_sonar.sh sonar si "Alien.mkv" 640k atmosx
+
+# Clean (nessun upfiring), default 640k
+./converti_2ac3_sonar.sh clean no "Terminator.mkv"
+```
+
+Se lanci senza argomenti o con `--help`, lo script stampa la **guida iniziale**.
 
 ---
 
-## 🧪 Sintassi base
+## Naming d’uscita (fisso)
+- `sonar + neuralx` → `<nome>_AC3_sonar_neuralx.mkv`  
+- `sonar + atmosx`  → `<nome>_AC3_sonar_atmosx.mkv`  
+- `clean`           → `<nome>_AC3_clean.mkv`
+
+La **traccia AC3 5.1** è sempre **48 kHz**, video **copiato** (`-c:v copy`), **sottotitoli copiati** quando presenti.
+
+---
+
+## Quando scegliere NeuralX o AtmosX?
+
+| Voicing  | Carattere sonoro                  | Contenuti consigliati                                          |
+|----------|-----------------------------------|----------------------------------------------------------------|
+| NeuralX  | Cupola **ampia** e spettacolare   | Action / space-opera / cinecomic: *Star Wars*, MCU, *Transformers*, *Fast & Furious*, *Pacific Rim* |
+| AtmosX   | Cupola **focalizzata** e precisa  | Noir / thriller / horror / sci-fi atmosferico: *Alien*, *Blade Runner 2049*, *Dune*, *The Batman*, *Tenet* |
+
+> Mini-nota da nerd: entrambi implementano **ritardi early/late**, **passa-banda** nella regione **1,5–5 kHz**, **allpass** per una HRTF “gentile” e un **mix a pesi fissi**; **limiter** in uscita per evitare clip. Il tutto solo sui **surround**; i **front/center** restano sostanzialmente “sacri”.
+
+---
+
+## Come funziona (alto livello)
+1. **Rilevamento layout** e, se necessario, **normalizzazione** a 5.1(side).  
+2. **Split dei canali** → `[FL][FR][FC][LFE][SL][SR]`.  
+3. **Voice-EQ** su FL/FR/FC con un *presence boost* attorno a **2,4 kHz**.  
+4. **LFE**: **HPF 22 Hz** sempre attivo (anti-rumble).  
+5. **Surround**:  
+   - `sonar` → **NeuralX/AtmosX** con *early reflections*, *upfiring bandpass + allpass (HRTF light)*, *late energy* e **boost +3,2 dB**; **limiter** in coda.  
+   - `clean` → nessun upfiring, solo **boost +2,9 dB** e **limiter**.  
+6. **Merge** a 5.1(side) + resampling **soxr** alta precisione + **dither triangolare**.
+
+---
+
+## Installazione / Setup
+- Metti lo script in una cartella del progetto (es. `tools/`) e rendilo eseguibile:
+  ```bash
+  chmod +x converti_2ac3_sonar.sh
+  ```
+- Funziona su **Linux/macOS** e **Windows 11 con Git Bash**. Su Windows, se l’editor introduce CRLF:
+  ```bash
+  sed -i 's/\r$//' converti_2ac3_sonar.sh
+  ```
+
+---
+
+## Installazione FFmpeg
+
+### Windows (Win10/11)
+- **Winget** (consigliato, nativo):
+  ```powershell
+  winget install --id Gyan.FFmpeg -e
+  # poi chiudi e riapri il terminale
+  ffmpeg -version
+  ```
+- **Chocolatey**:
+  ```powershell
+  choco install ffmpeg
+  ```
+- **Scoop**:
+  ```powershell
+  scoop install ffmpeg
+  ```
+> In alternativa puoi scaricare gli zip “full” da build note (Gyan/BtbN), scompattare e aggiungere la cartella `bin` al `PATH` di Windows.
+
+### Linux
+- **Debian/Ubuntu/derivate**:
+  ```bash
+  sudo apt update && sudo apt install -y ffmpeg
+  ```
+- **Fedora** (consigliato attivare RPM Fusion):
+  ```bash
+  sudo dnf install -y https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
+  sudo dnf install -y ffmpeg
+  ```
+- **Arch/Manjaro**:
+  ```bash
+  sudo pacman -Syu ffmpeg
+  ```
+Verifica sempre con:
+```bash
+ffmpeg -version
+ffprobe -version
+```
+Se i filtri `equalizer`, `allpass`, `aecho`, `alimiter`, `asplit` non compaiono, aggiorna FFmpeg.
+
+---
+
+## Clonare il repository e lanciare lo script
 
 ```bash
-./converti_2AC3_sonar.sh <modalità> <si|no> [file.mkv] [preset] [bitrate]
+git clone https://github.com/Damocle77/Sonar_AC3D.git
+cd Sonar_AC3D
+
+# Rendi eseguibile lo script
+chmod +x converti_2ac3_sonar.sh
+
+# Uso rapido
+./converti_2ac3_sonar.sh <sonar|clean> <si|no> <file.mkv> [bitrate] [neuralx|atmosx]
 ```
-
-| Pos. | Parametro      | Opzioni                                              | Descrizione |
-|------|---------------|------------------------------------------------------|-------------|
-| 1    | modalità       | `sonar` / `clean`                                    | Tipo di surround |
-| 2    | keep original  | `si` / `no`                                          | Mantiene o meno la traccia originale |
-| 3    | file input     | nome file .mkv (opzionale)                           | Se omesso → batch |
-| 4    | preset         | `atmos` `dts` `eac37` `eac36` `ac3` `auto` *(default)* | EQ voce / LFE dinamici |
-| 5    | bitrate        | `448k` / `640k` *(default)*                          | Bitrate AC3 |
-
----
-
-## 🧠 Preset Audio
-
-| Preset | Boost Voce | LFE Volume |
-|--------|------------|------------|
-| atmos  | +0.7 dB    | −2.0 dB    |
-| dts    | +0.7 dB    | −2.3 dB    |
-| eac37  | +0.5 dB    | −1.2 dB    |
-| eac36  | +0.5 dB    |  0.0 dB    |
-| ac3    | +0.5 dB    |  0.0 dB    |
-| auto   | rilevamento automatico dal nome file (`atmos`, `dts`, `768`, `640`) |
-
-👉 È possibile forzare manualmente il boost surround:
+Esempi:
 ```bash
-SUR_DB=1.2 ./converti_2AC3_sonar.sh sonar si file.mkv
+./converti_2ac3_sonar.sh sonar no "Avengers.mkv" 640k neuralx
+./converti_2ac3_sonar.sh sonar si "Alien.mkv" 640k atmosx
+./converti_2ac3_sonar.sh clean no "Terminator.mkv"
 ```
+
+## Troubleshooting veloce
+- **Errore “La prima traccia non è 5.1”** → verifica che l’audio sorgente sia 5.1 e sia la traccia `a:0`.  
+- **Filtri non trovati** → aggiorna FFmpeg (serve `equalizer`, `allpass`, `alimiter`, `aecho`, `asplit`).  
+- **Clip/distorsione** → i limiter sono inseriti, ma se il materiale è già hot potresti ridurre il gain globale.
 
 ---
 
-## 🧭 Esempi pratici
+## Limitazioni note
+- Non trasforma un mix 5.1 in oggettuale: simula **altezza percepita** con ritardi/filtri sui surround.  
+- Si aspetta **6 canali** sulla prima traccia audio; stereo/mono non sono gestiti.  
+- Output in **AC3** per compatibilità ampia. Per E-AC3/DTS, apri una issue/PR.
 
-### 🎧 Conversione singolo file con profilo sonar:
+---
+
+## Licenza
+MIT. Usa, remix, proietta. Se ti va, lascia una ⭐ e raccontami come suona la *Kessel Run* nel tuo salotto.
+
+---
+
+## Ringraziamenti
+Per riportare ordine nel caos della Forza sonora non servono spade laser: basta un terminale e questo script… **questa è la via**.
+
+---
+
+## Che preset scegliere in un colpo d’occhio
+
+| Tipo contenuto                               | Preset consigliato   | Perché                                           |
+|----------------------------------------------|----------------------|--------------------------------------------------|
+| Action “continua” (Fast & Furious, supereroi)| **sonar + neuralx**  | Cupola ampia, ambienze e score respirano         |
+| Fantasy/avventura “cinematografica”          | **sonar + neuralx**  | Ampiezza e verticalità avvolgente                |
+| Thriller/Noir/Horror “chirurgici”            | **sonar + atmosx**   | Verticalità più netta, dettagli scolpiti         |
+| Serie molto dialogate                        | **clean**            | Niente upfiring, dialoghi comunque top           |
+
+---
+
+## Altri script inclusi nel progetto
+
+### `convert_2AC3_audiocheck.sh`
+Piccolo tool da linea di comando per **elencare le tracce audio** di un file `.mkv`: codec, canali, layout, bitrate, sample rate, lingua e `title`. Utile per verificare rapidamente che la **prima traccia sia 5.1** prima di lanciare la conversione.  
+**Uso:**
 ```bash
-./converti_2AC3_sonar.sh sonar si "Il_Signore_degli_Anelli.mkv"
+./convert_2AC3_audiocheck.sh <file.mkv>
 ```
+Output ordinato, una scheda per traccia. (Vedi script nel repo.)
 
-### 🧼 Conversione batch in modalità clean:
+### `convert_2AC3_sonar_batch.sh`
+Launcher batch che richiama `convert_2AC3_sonar.sh` su **tutti i file `.mkv` nella cartella corrente** (o su un singolo file passato come quinto argomento). Stampa progressi e tempo totale.  
+**Uso tipico:**
 ```bash
-./converti_2AC3_sonar.sh clean no
-```
+# Esempio: modalità sonar, non conservare originale, preset e bitrate
+./convert_2AC3_sonar_batch.sh sonar no eac36 640k
 
-### 🎯 Forzare preset DTS + bitrate personalizzato:
-```bash
-./converti_2AC3_sonar.sh sonar si film.mkv dts 448k
+# Esempio su singolo file specifico
+./convert_2AC3_sonar_batch.sh sonar no eac36 640k "/percorso/Film.mkv"
 ```
+Il batch verifica la presenza dello script principale prima di partire e scansiona la directory corrente per i `.mkv`. (Vedi script nel repo.)
+
 
 ---
 
-## 🛡️ Gestione segnali e sicurezza
-
-- Interruzione manuale con **CTRL+C** → lo script mostra un messaggio pulito e termina con codice 130.  
-- Prompt interattivo per evitare sovrascritture accidentali.  
-- Limiter finale su tutti i canali → niente clipping selvaggio 😎
+## Licenza
+MIT. Usa, remix, proietta. Se ti va, lascia una ⭐ e raccontami come suona la *Kessel Run* nel tuo salotto.
 
 ---
 
-## 🧩 Pipeline Audio (schema semplificato)
-
-```
-[INPUT 5.1]
-   │
-   ├── Voice (FC) → EQ sartoriale 2.5 + 4.2 kHz + Boost dinamico
-   ├── LFE        → High-pass 25 Hz + attenuazione + limiter
-   ├── Surround   → sonar (aecho psicoacustico upfiring) / clean
-   └── FL/FR      → pass-through
-   ▼
-[MERGE 5.1 + channelmap + limiter finale]
-   ▼
-[AC3 5.1 OUTPUT]
-```
-
----
-
-## 📝 Licenza
-
-MIT License © Sandro “D@mocle77” Sabbioni  
-Puoi usarlo, modificarlo e migliorarlo liberamente.  
-Le uniche cose che **non sono ammesse**: clip digitali e surround piatti. 😄
-
----
-
-## 💬 Note finali
-
-> 🎙️ *«La voce non dev’essere solo sentita, dev’essere capita.»*  
-> ☁️ *«E se il tuo sistema non supporta Atmos, fallo credere al tuo cervello.»*
-
-Questo script nasce per:
-- migliorare **l’intelligibilità** dei dialoghi nei film italiani e doppiaggi,  
-- simulare **profondità e altezza sonora** su impianti consumer,  
-- preservare la dinamica originale senza compressione aggressiva.
-
-🪐 «Non è magia… è psicoacustica. E se non puoi permetterti l’Atmos… fallo credere al cervello.»
+## Ringraziamenti
+Per riportare ordine nel caos della Forza sonora non servono spade laser: basta un terminale e questo script… **questa è la via**.
