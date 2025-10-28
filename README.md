@@ -1,6 +1,6 @@
 # converti_2ac3_sonar - Virtual upfiring + EQ voce sartoriale
 
-> “Non tutti i supereroi usano il `mantello`...a volte hanno un `filter_complex`.”  
+> "Non tutti i supereroi indossano il mantello… alcuni usano filter_complex per salvare il mondo del 5.1!"
 > — Un maniaco del suono con la passione per i cinecomic
 
 Questo repository contiene **uno script unico** che ricodifica l’audio di un file **5.1** in **AC3 5.1** con due focus primari:  
@@ -163,17 +163,7 @@ Esempi:
 ## Limitazioni note
 - Non trasforma un mix 5.1 in oggettuale: simula **altezza percepita** con ritardi/filtri sui surround.  
 - Si aspetta **6 canali** sulla prima traccia audio; stereo/mono non sono gestiti.  
-- Output in **AC3** per compatibilità ampia. Per E-AC3/DTS, apri una issue/PR.
-
----
-
-## Licenza
-MIT. Usa, remix, proietta. Se ti va, lascia una ⭐ e raccontami come suona la *Kessel Run* nel tuo salotto.
-
----
-
-## Ringraziamenti
-Per riportare ordine nel caos della Forza sonora non servono spade laser: basta un terminale e questo script… **questa è la via**.
+- Output in **AC3** per compatibilità ampia.
 
 ---
 
@@ -209,7 +199,6 @@ Launcher batch che richiama `convert_2AC3_sonar.sh` su **tutti i file `.mkv` nel
 ./convert_2AC3_sonar_batch.sh sonar no eac36 640k "/percorso/Film.mkv"
 ```
 Il batch verifica la presenza dello script principale prima di partire e scansiona la directory corrente per i `.mkv`. (Vedi script nel repo.)
-
 
 ---
 
