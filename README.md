@@ -29,7 +29,7 @@ Questo repository contiene **una suite bash peculiare** che ricodifica l’audio
   - Fedora: `sudo dnf install -y ffmpeg`  
   - Arch: `sudo pacman -S ffmpeg`
 
-### Clonare questo repo (esempio)
+### Clonare questo repo
 ```bash
 git clone https://github.com/Damocle77/Sonar_AC3D.git
 cd Sonar_AC3D
