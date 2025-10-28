@@ -3,7 +3,7 @@
 > "Non tutti i supereroi indossano il mantello…alcuni usano filter_complex per salvare il mondo del 5.1!"  
 > "Da un maniaco del suono con la passione per i cinecomic"      
 
-Questo repository contiene **uno script unico** che ricodifica l’audio di un file **5.1** in **AC3 5.1** con due focus primari:  
+Questo repository contiene **una suite bash peculiare** che ricodifica l’audio di un file **5.1** in **AC3 5.1** con due focus primari:  
 1) **EQ “sartoriale” della voce** sempre attiva su **FL/FR/FC** per massima intelligibilità.  
 2) **Upfiring virtuale** **solo** sui surround **SL/SR** quando richiesto.
 
