@@ -1,6 +1,6 @@
 # Sonar AC3D 2x - Virtual upfiring + EQ voce sartoriale
 
-> “Non tutti i supereroi hanno un mantello: a volte hanno un `filter_complex`.”  
+> “Non tutti i supereroi indossano un `mantello`...a volte usano `filter_complex` per salvare il modno del 5.1”  
 > " Da un maniaco del suono con la passione per i cinecomic"
 
 Questo repository contiene **uno script unico** che ricodifica l’audio **5.1** in **AC‑3 5.1** con due focus primari:
