@@ -1,4 +1,4 @@
-# converti_2ac3_sonar — Virtual upfiring + EQ voce sartoriale (edizione **2x**)
+# Sonar AC3D 2x - Virtual upfiring + EQ voce sartoriale
 
 > “Non tutti i supereroi hanno un mantello: a volte hanno un `filter_complex`.”  
 > " Da un maniaco del suono con la passione per i cinecomic"
