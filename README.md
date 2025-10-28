@@ -208,4 +208,5 @@ MIT. Usa, remix, proietta. Se ti va, lascia una ⭐ e raccontami come suona la *
 ---
 
 ## Ringraziamenti
-Per riportare ordine nel caos della Forza sonora non servono spade laser: basta un terminale e questo script… **questa è la via**.
+Per riportare ordine nel caos della Forza sonora non servono spade laser: basta un terminale e questo script…     
+**Questa è la via!**
