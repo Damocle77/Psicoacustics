@@ -134,11 +134,11 @@ Launcher batch che richiama `converti_2ac3_sonar_2x.sh` su **tutti i `.mkv` nell
 ## Limitazioni note
 - Non trasforma un mix 5.1 in un vero mix **oggettuale**: simula **altezza percepita** con ritardi/filtri sui surround.  
 - Si aspetta **6 canali** sulla prima traccia audio; stereo/mono non sono gestite.
-- Output forzato in **AC‑3** per compatibilità ampia. Se serve E‑AC‑3/DTS, apri una PR.
+- Output forzato in **AC‑3** per compatibilità ampia.
 
 ---
 
-## FAQ da sala di proiezione
+## FAQ
 **Perdo dettaglio sui frontali?** No: l’EQ è **delicata** e solo in *presence region*; niente bleed sui surround.  
 **Il sub esplode?** Tranquillo: **HPF 22 Hz** sempre ON; nessun boost LFE indiscriminato.  
 **Posso conservare la traccia originale?** Sì: `arg2=si` la copia come traccia non‑default.
