@@ -4,7 +4,7 @@ set -euo pipefail
 # converti_2ac3_sonar_2x.sh - TUTTO-IN-UNO - FFmpeg virtual upfiring
 # -----------------------------------------------------------------------------------------------
 # USO (posizionali):
-#   ./converti_2ac3_sonar.sh <sonar|clean|dualx> <si|no> <file.mkv> [bitrate] [neuralx|atmosx]
+#   ./converti_2ac3_sonar_2x.sh <sonar|clean|dualx> <si|no> <file.mkv> [bitrate] [neuralx|atmosx]
 #
 # SIGNIFICATO
 #   arg1 = modalità:
@@ -63,11 +63,11 @@ OUTPUT
   • dualx           → <nome>_AC3_sonar_dualx.mkv   (NeuralX default + AtmosX)
 
 ESEMPI
-  ./converti_2ac3_sonar.sh sonar no   "Avengers.mkv" 640k neuralx
-  ./converti_2ac3_sonar.sh sonar si   "Alien.mkv"    640k atmosx
-  ./converti_2ac3_sonar.sh clean no   "Terminator.mkv"
-  ./converti_2ac3_sonar.sh dualx no   "Fast_X.mkv"   640k
-  ./converti_2ac3_sonar.sh dualx si   "Dune.mkv"     640k
+  ./converti_2ac3_sonar_2x.sh sonar no   "Avengers.mkv" 640k neuralx
+  ./converti_2ac3_sonar_2x.sh sonar si   "Alien.mkv"    640k atmosx
+  ./converti_2ac3_sonar_2x.sh clean no   "Terminator.mkv"
+  ./converti_2ac3_sonar_2x.sh dualx no   "Fast_X.mkv"   640k
+  ./converti_2ac3_sonar_2x.sh dualx si   "Dune.mkv"     640k
 
 NOTE
   - Video e sottotitoli vengono copiati.
