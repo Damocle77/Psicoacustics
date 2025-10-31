@@ -1,7 +1,7 @@
 # 🎧 Sonar AC3D Suite — Virtual Upfiring + EQ Voce Sartoriale
 
 > “Non tutti i supereroi indossano un mantello... a volte usano `filter_complex` per salvare il mondo del 5.1.”  
-> * ⚡by Sandro "D@mocle77" Sabbioni — Keeper of the Sonic Force ⚡*
+> ⚡by Sandro "D@mocle77" Sabbioni — Keeper of the Sonic Force ⚡
 
 ---
 
@@ -128,7 +128,7 @@ Il risultato sarà **equilibrato, chiaro e naturale**, con:
 
 L’immagine seguente rappresenta la disposizione consigliata con preset **Sonar**.
 
-<p align="center">
+<p align="left">
   <img src="Sonar_Room_Layout.png" width="600" alt="Schema stanza Sonar 5.1">
 </p>
 
