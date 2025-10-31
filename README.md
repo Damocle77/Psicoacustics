@@ -126,8 +126,7 @@ Il risultato sarà **equilibrato, chiaro e naturale**, con:
 
 ## 🗺️ Schema stanza di ascolto (Sonar Room 4×5×4.1 m)
 
-L’immagine seguente rappresenta la disposizione consigliata per l’ascolto ottimale
-con preset **Sonar**: campo sonoro coerente, dialoghi centrati e sub equilibrato.
+L’immagine seguente rappresenta la disposizione consigliata con preset **Sonar**.
 
 <p align="center">
   <img src="Sonar_Room_Layout.png" width="600" alt="Schema stanza Sonar 5.1">
