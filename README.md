@@ -1,28 +1,29 @@
 # 🎧 Sonar AC3D Suite — Virtual Upfiring + EQ Voce Sartoriale
 
 > “Non tutti i supereroi indossano un mantello... a volte usano `filter_complex` per salvare il mondo del 5.1.”  
-> *— Sandro "D@mocle77" Sabbioni*
+> *by Sandro "D@mocle77" Sabbioni*
 
 ---
 
 ## 🚀 Descrizione
 
-**Sonar AC3D** è una collezione di script Bash basati su **FFmpeg**, progettata per rifinire l’audio 5.1 con:
-- **EQ sartoriale della voce** per massima intelligibilità (FC +0.6 dB / FL‑FR +0.3 dB @ 2.4 kHz)  
-- **Virtual upfiring** in stile **AtmosX/NeuralX** per creare una *cupola sonora* anche senza canali Height  
-- **LFE gestito con cura**: nella versione _1x_ è puro **passthrough**, nella _2x_ è applicato **HPF 22 Hz**  
-- Compatibilità totale: il video e i sottotitoli vengono **copiati 1:1**
+**Sonar AC3D** è una pipeline Bash basata su **FFmpeg**, progettata per rifinire e normalizzare l’audio 5.1
+con un approccio **cinematografico e naturale**, ottimizzato per soundbar e home theater compatti.
+
+L’obiettivo è ottenere un ascolto equilibrato e coinvolgente grazie a:
+- **EQ sartoriale della voce** per massima intelligibilità (FC +1.5 dB / FL-FR +1.1 dB @ 2.4 kHz)  
+- **Virtual upfiring** in stile **AtmosX/NeuralX** per creare una *cupola sonora virtuale* anche senza speaker Height  
+- **LFE in passthrough totale**, senza tagli o compressione: sub naturale e coerente  
+- **Limiter trasparente (0.97)** e **resampling SoX** ad alta precisione  
+- Compatibilità completa: video e sottotitoli vengono sempre copiati 1:1  
 
 ---
 
-## 🧩 Versioni incluse
+## 🧩 Script incluso
 
 | Script | Descrizione | Note principali |
 |--------|--------------|----------------|
-| **`converti_2ac3_sonar_2x.sh`** | Versione completa (AtmosX, NeuralX, DualX) | Include HPF 22 Hz su LFE e opzione *dualx* |
-| **`convert_2AC3_sonar1.sh`** | Versione snella basata su _2x_ | EQ voce + upfiring AtmosX, **no LFE mitigation**, **batch integrato** |
-| **`convert_2AC3_sonar_2x_batch.sh`** | Launcher per `_2x` | Applica lo script principale a tutti i `.mkv` della cartella |
-| **`convert_2AC3_audiocheck.sh`** | Utility diagnostica | Elenca codec, layout, bitrate, lingua, titolo delle tracce audio |
+| **`convert_2ac3_sonar.sh`** | Versione unificata (v0.88) con LFE passthrough, voce +1 dB e surround realistico | Compatibile con pipeline ffMediaMaster, include supporto batch |
 
 ---
 
@@ -43,97 +44,117 @@ chmod +x *.sh
 
 ## ⚙️ Uso rapido
 
-### 🟦 `convert_2AC3_sonar1.sh` (versione leggera)
 ```bash
-./convert_2AC3_sonar1.sh <sonar|clean> <si|no> [file.mkv] [bitrate]
+./convert_2ac3_sonar.sh <sonar|clean> <si|no> [file.mkv/.mp4] [bitrate]
 ```
 
 | Parametro | Significato |
 |------------|-------------|
-| `sonar` | Surround con virtual upfiring AtmosX (+3.2 dB) |
-| `clean` | Surround pulito, senza upfiring (+2.9 dB) |
-| `si|no` | Mantiene o meno la traccia audio originale |
-| `[file.mkv]` | File singolo o `""` per batch |
-| `[bitrate]` | 320k / 448k / 640k (default 640k) |
+| `sonar` | Surround con virtual upfiring AtmosX-style (+3.6 dB) |
+| `clean` | Surround neutro, senza upfiring (+3.3 dB) |
+| `si|no` | Mantiene o meno la traccia originale |
+| `[file]` | File singolo o `""` per elaborazione batch |
+| `[bitrate]` | 256k – 640k (default = 640k) |
 
 **Esempi**
 ```bash
-# 1️⃣ Singolo file con upfiring AtmosX
-./convert_2AC3_sonar1.sh sonar si "Dune.mkv"
+# 1️⃣ Singolo film con effetto upfiring
+./convert_2ac3_sonar.sh sonar no "Dune.mkv" 640k
 
-# 2️⃣ Tutti i file .mkv della cartella (batch)
-./convert_2AC3_sonar1.sh sonar no ""
+# 2️⃣ Tutti i file .mkv nella cartella
+./convert_2ac3_sonar.sh sonar no ""
 
-# 3️⃣ Versione clean, senza upfiring
-./convert_2AC3_sonar1.sh clean no "Tenet.mkv" 448k
+# 3️⃣ Mix più neutro, conserva la traccia originale
+./convert_2ac3_sonar.sh clean si "Tenet.mkv" 448k
 ```
 
 ---
 
-### 🟩 `converti_2ac3_sonar_2x.sh` (versione avanzata)
+## 🧠 Pre-processing consigliato (ffMediaMaster o equivalenti)
+
+> Questa fase serve a linearizzare il mix sorgente (DTS, EAC3, Atmos, Core) prima della conversione.
+
+| Impostazione | Valore consigliato |
+|---------------|--------------------|
+| **Perform Audio Peak Normalization** | −2 dBFS (oppure −1 dB se già AC3/EAC3 640k) |
+| **Dynamic Normalization** | ON |
+| **Target Peak Value** | 92 |
+| **Max Gain** | 10 |
+| **RMS / Compress** | 0 / 0 |
+| **Channel Coupling** | ON |
+| **Gaussian Filter Window** | 31 |
+| **Output** | AC3 5.1 @ 640 kbps / 48 kHz |
+| **Loudness extra** | Nessuno |
+
+📄 Dopo l’esportazione, esegui:
 ```bash
-./converti_2ac3_sonar_2x.sh <sonar|clean|dualx> <si|no> <file.mkv> [bitrate] [neuralx|atmosx]
+./convert_2ac3_sonar.sh sonar no "Film_AC3_640k.mkv" 640k
 ```
-- `dualx` genera **due tracce** (NeuralX + AtmosX) nello stesso MKV.  
-- Preserva il video e copia eventuali sottotitoli.
 
-**Esempi**
-```bash
-# NeuralX dinamico
-./converti_2ac3_sonar_2x.sh sonar no "Avengers.mkv" 640k neuralx
-
-# AtmosX con traccia originale conservata
-./converti_2ac3_sonar_2x.sh sonar si "Alien.mkv" 640k atmosx
-
-# DualX: entrambe le versioni nello stesso file
-./converti_2ac3_sonar_2x.sh dualx si "Dune.mkv" 640k
-```
+Il risultato sarà **equilibrato, chiaro e naturale**, con:
+- voci più leggibili anche a basso volume  
+- subwoofer arioso e coerente  
+- surround ampio e immersivo  
 
 ---
 
-## 🔁 Modalità batch
-Entrambe le versioni supportano il batch nativamente.
+## 🔊 Parametri tecnici chiave (v0.88)
 
-| Modalità | Script | Comando |
-|-----------|---------|---------|
-| Batch semplice | `convert_2AC3_sonar1.sh` | `./convert_2AC3_sonar1.sh sonar no ""` |
-| Batch completo | `convert_2AC3_sonar_2x_batch.sh` | `./convert_2AC3_sonar_2x_batch.sh sonar no 640k atmosx` |
-
----
-
-## 🔊 Parametri tecnici chiave (_2x / 1x_)
 | Sezione | Parametri | Descrizione |
 |----------|------------|-------------|
-| EQ voce | FC +0.6 dB, FL/FR +0.3 dB @ 2.4 kHz (Q=1.0) | Chiarezza dialoghi |
-| Upfiring AtmosX | Delay 17–40 ms · Bandpass 4.4–5.4 kHz · Weights 1 0.35 0.35 0.55 0.25 | Verticalità realistica |
-| Surround boost | +3.2 dB (Sonar) · +2.9 dB (Clean) | Ampiezza controllata |
-| LFE | HPF 22 Hz (_2x_) · Passthrough (_1x_) | Stabilità e controllo bassi |
-| Output | AC-3 5.1 · 48 kHz · soxr resampling | Massima compatibilità |
+| EQ Voce | FC +1.5 dB / FL-FR +1.1 dB @ 2.4 kHz (Q 1.0) | Chiarezza e presenza |
+| Upfiring Sonar | Delay 24–28 ms · Bandpass 6.5 kHz (+3 dB) / 11 kHz (−2 dB) | Cupola sonora virtuale |
+| Surround boost | +3.6 dB (Sonar) / +3.3 dB (Clean) | Ampiezza controllata |
+| LFE | Passthrough puro (nessun filtro) | Sub naturale |
+| Output | AC-3 5.1 · 48 kHz · Limiter 0.97 · soxr precision 28 | Alta compatibilità |
 
 ---
 
-## 🏠 Ambiente di riferimento (ottimale)
-| Parametro | Valore consigliato |
-|------------|--------------------|
+## 🏠 Ambiente di riferimento
+
+| Parametro | Valore |
+|------------|--------|
 | Stanza | 4 × 5 m |
 | Altezza soffitto | 4.1 m |
-| Distanza ascoltatore–TV | 3.6 m |
+| Distanza ascoltatore-TV | 3.6 m |
+| Altezza centrale | 140 cm |
 | Altezza frontali | 60–70 cm |
-| Altezza centrale | 140 cm (inclinato ~6° verso il basso) |
-| Altezza surround | 120 cm, ~1 m dietro l’ascoltatore |
-| Risultato | Cupola sonora ampia e coerente con percezione “cinema” |
+| Altezza surround | 120 cm (~1 m dietro l’ascoltatore) |
+| Risultato | Cupola sonora coerente e immersiva |
+
+---
+
+## 🗺️ Schema stanza di ascolto (Sonar Room 4×5×4.1 m)
+
+L’immagine seguente rappresenta la disposizione consigliata per l’ascolto ottimale
+con preset **Sonar**: campo sonoro coerente, dialoghi centrati e sub equilibrato.
+
+<p align="center">
+  <img src="A_2D_digital_diagram_illustrates_a_home_theater_sp.png" width="600" alt="Schema stanza Sonar 5.1">
+</p>
+
+**Legenda**
+- Altoparlante centrale: sopra la TV (≈140 cm)
+- Frontali L/R: 60–70 cm da terra
+- Surround L/R: 120 cm di altezza, ~1 m dietro l’ascoltatore
+- Subwoofer: centrato o leggermente decentrato a sinistra
+- Angoli: 60° frontali / 110° posteriori
+
+🟩 *Ottimizzato per stanza 4 m (prof.) × 5 m (largh.) × 4.1 m (h)*
 
 ---
 
 ## 🧪 Utility diagnostica
+
 ```bash
 ./convert_2AC3_audiocheck.sh <file.mkv>
 ```
-Mostra codec, canali, bitrate, lingua e tag di ciascuna traccia audio.
+Mostra codec, canali, bitrate, lingua e titolo delle tracce audio.
 
 ---
 
 ## 🪶 Licenza
-MIT — usa, modifica, condividi.  
-Se ti piace come suona la *Kessel Run* nel tuo salotto, lascia una ⭐ su GitHub.  
+
+MIT — usa, modifica e condividi liberamente.  
+Se la tua soundbar vibra come un X-Wing al decollo, lascia una ⭐ su GitHub.  
 **Questa è la via.**
