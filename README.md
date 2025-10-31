@@ -130,7 +130,7 @@ L’immagine seguente rappresenta la disposizione consigliata per l’ascolto ot
 con preset **Sonar**: campo sonoro coerente, dialoghi centrati e sub equilibrato.
 
 <p align="center">
-  <img src="A_2D_digital_diagram_illustrates_a_home_theater_sp.png" width="600" alt="Schema stanza Sonar 5.1">
+  <img src="Sonar_Room_Layout.png" width="600" alt="Schema stanza Sonar 5.1">
 </p>
 
 **Legenda**
