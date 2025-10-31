@@ -23,7 +23,7 @@ L’obiettivo è ottenere un ascolto equilibrato e coinvolgente grazie a:
 
 | Script | Descrizione | Note principali |
 |--------|--------------|----------------|
-| **`convert_2ac3_sonar.sh`** | LFE passthrough, voce +1.5 dB e surround 3D upfiring realistico | Compatibile con pipeline ffMediaMaster, include supporto batch |
+| **`convert_2ac3_sonar.sh`** | LFE passthrough (HPF 24Hz), Voce EQ Sartoriale +1.5 dB e Surround A3D upfiring | Compatibile con pipeline ffMediaMaster, include supporto batch |
 
 ---
 
