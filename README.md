@@ -29,7 +29,7 @@ L’obiettivo è ottenere un ascolto equilibrato e coinvolgente grazie a:
 
 ## 🧠 Requisiti
 
-- **FFmpeg** ≥ 5.0 e **FFprobe** nel `PATH`
+- **FFmpeg** ≥ 7.0 e **FFprobe** nel `PATH`
 - Input con **prima traccia audio 5.1** (`side` o `back`)
 - Ambiente consigliato: **Git Bash su Windows**, o **Bash Linux**
 
