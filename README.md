@@ -155,5 +155,6 @@ Mostra codec, canali, bitrate, lingua e titolo delle tracce audio.
 ## 🪶 Licenza
 
 MIT — usa, modifica e condividi liberamente.  
-Se la tua soundbar vibra come un X-Wing al decollo, lascia una ⭐ su GitHub.  
-**Questa è la via.**
+
+Per riportare ordine nella Forza sonora serve solo Bash...e questo script. **Questa è la via.**
+
