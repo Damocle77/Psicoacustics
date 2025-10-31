@@ -156,5 +156,5 @@ Mostra codec, canali, bitrate, lingua e titolo delle tracce audio.
 
 MIT - Usa, modifica & condividi liberamente.  
 
-`Per riportare ordine nella Forza sonora serve solo Bash...e questo script. **Questa è la via.**`
+`Per riportare ordine nella Forza sonora serve solo Bash...e questo script...questa è la via!`
 
