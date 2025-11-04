@@ -1,7 +1,7 @@
 # 🎧 Sonar AC3D Suite - Virtual Upfiring + EQ Voce Sartoriale
 
 > “Non tutti i supereroi indossano un mantello... a volte usano `filter_complex` per salvare il mondo del 5.1.”  
-> ⚡by Sandro "D@mocle77" Sabbioni — Keeper of the Sonic Force ⚡
+> ⚡by Sandro "D@mocle77" Sabbioni - Keeper of the Sonic Force ⚡
 
 ---
 
