@@ -1,4 +1,4 @@
-# 🎧 Sonar AC3D Suite - Virtual Upfiring + EQ Voce Sartoriale
+# 🎧 Sonar AC3D Suite — Virtual Upfiring + EQ Voce Sartoriale
 
 > “Non tutti i supereroi indossano un mantello... a volte usano `filter_complex` per salvare il mondo del 5.1.”  
 > ⚡by Sandro "D@mocle77" Sabbioni — Keeper of the Sonic Force ⚡
@@ -19,11 +19,12 @@ L’obiettivo è ottenere un ascolto equilibrato e coinvolgente grazie a:
 
 ---
 
-## 🧩 Script incluso
+## 🧩 Script inclusi
 
 | Script | Descrizione | Note principali |
 |--------|--------------|----------------|
-| **`convert_2ac3_sonar.sh`** | LFE passthrough (HPF 24Hz), Voce EQ Sartoriale +1.5 dB e Surround A3D upfiring | Compatibile con pipeline ffMediaMaster, include supporto batch |
+| **`convert_2ac3_sonar.sh`** | LFE passthrough, voce +1 dB e surround realistico | Compatibile con pipeline ffMediaMaster, include supporto batch |
+| **`convert_2ac3_dual.sh`** | Nuova modalità “DualX”: genera entrambe le tracce (Sonar + Clean) nello stesso file MKV | Mantiene compatibilità piena con video e sottotitoli |
 
 ---
 
@@ -50,7 +51,7 @@ chmod +x *.sh
 
 | Parametro | Significato |
 |------------|-------------|
-| `sonar` | Surround con virtual upfiring AtmosX-style (+3.6 dB) |
+| `sonar` | Surround con virtual upfiring AtmosX-style (+3.5 dB) |
 | `clean` | Surround neutro, senza upfiring (+3.3 dB) |
 | `si|no` | Mantiene o meno la traccia originale |
 | `[file]` | File singolo o `""` per elaborazione batch |
@@ -59,14 +60,46 @@ chmod +x *.sh
 **Esempi**
 ```bash
 # 1️⃣ Singolo film con effetto upfiring
-./convert_2ac3_sonar.sh sonar no "Dune.mkv" 640k
+./convert_2ac3_sonar.sh sonar no "Film.mkv" 640k
 
 # 2️⃣ Tutti i file .mkv nella cartella
 ./convert_2ac3_sonar.sh sonar no ""
 
 # 3️⃣ Mix più neutro, conserva la traccia originale
-./convert_2ac3_sonar.sh clean si "Tenet.mkv" 448k
+./convert_2ac3_sonar.sh clean si "Film.mkv" 448k
 ```
+
+---
+
+## 🔀 Modalità DualX (Sonar + Clean nello stesso file)
+
+> Nuova funzione introdotta nello script `convert_2ac3_dual.sh`.
+
+La modalità `dual` genera **due tracce audio AC3 5.1** nello stesso MKV:
+1. **Traccia 1 — Sonar**: con effetto upfiring, EQ voce, surround virtuale (+3.5 dB)  
+2. **Traccia 2 — Clean**: mix pulito, senza upfiring (+3.3 dB)  
+
+Puoi mantenere o meno la traccia originale (`si` o `no`), e tutte le tracce video/sottotitoli vengono preservate.
+
+**Sintassi**
+```bash
+./convert_2ac3_dual.sh dual <si|no> [file.mkv/.mp4] [bitrate]
+```
+
+**Esempi**
+```bash
+# 🎬 Crea un file con due tracce audio (Sonar + Clean)
+./convert_2ac3_dual.sh dual no "Blade Runner 2049.mkv" 640k
+
+# 📦 Batch su tutti i file della cartella
+./convert_2ac3_dual.sh dual si ""
+```
+
+**Output**
+- Traccia 1 → `AC3 5.1 Sonar` (default playback)
+- Traccia 2 → `AC3 5.1 Clean`
+- Eventuale Traccia 3 → Audio originale (se `si`)
+- Video e sottotitoli invariati
 
 ---
 
@@ -88,7 +121,7 @@ chmod +x *.sh
 
 📄 Dopo l’esportazione, esegui:
 ```bash
-./convert_2ac3_sonar.sh sonar no "Film_AC3_640k.mkv" 640k
+./convert_2ac3_dual.sh dual no "Film_AC3_640k.mkv" 640k
 ```
 
 Il risultato sarà **equilibrato, chiaro e naturale**, con:
@@ -98,15 +131,16 @@ Il risultato sarà **equilibrato, chiaro e naturale**, con:
 
 ---
 
-## 🔊 Parametri tecnici chiave (v0.88)
+## 🔊 Parametri tecnici chiave (v0.88 DualX)
 
 | Sezione | Parametri | Descrizione |
 |----------|------------|-------------|
-| EQ Voce | FC +1.5 dB / FL-FR +1.1 dB @ 2.4 kHz (Q 1.0) | Chiarezza e presenza |
+| EQ Voce | FC +1.8 dB / FL-FR +1.2 dB @ 2.4 kHz (Q 1.0) | Chiarezza e presenza |
 | Upfiring Sonar | Delay 24–28 ms · Bandpass 6.5 kHz (+3 dB) / 11 kHz (−2 dB) | Cupola sonora virtuale |
-| Surround boost | +3.6 dB (Sonar) / +3.3 dB (Clean) | Ampiezza controllata |
-| LFE | Passthrough puro (nessun filtro) | Sub naturale |
+| Surround boost | +3.5 dB (Sonar) / +3.3 dB (Clean) | Ampiezza controllata |
+| LFE | Passthrough puro (nessun filtro o attenuazione) | Sub naturale |
 | Output | AC-3 5.1 · 48 kHz · Limiter 0.97 · soxr precision 28 | Alta compatibilità |
+| Dual Mode | Due tracce nel file (Sonar + Clean) | Default Sonar |
 
 ---
 
@@ -154,7 +188,6 @@ Mostra codec, canali, bitrate, lingua e titolo delle tracce audio.
 
 ## 🪶 Licenza
 
-*MIT - Usa, modifica & condividi liberamente.*  
+MIT — usa, modifica e condividi liberamente.  
 
-`Per riportare ordine nella Forza sonora serve solo Bash...e questo script...questa è la via!`
-
+Per riportare ordine nella Forza sonora serve solo Bash...e questo script. **Questa è la via.**
