@@ -84,7 +84,7 @@ PARAMETRI:
 
 NOTE:
   • EQ Voce: 2.4 kHz, +1.5 dB su FC e +1.1 dB su FL/FR.
-  • Boost Surround: +3.5 dB (Sonar), +3.3 dB (Clean).
+  • Boost Surround: Sonar SL +3.6 / SR +3.5 dB, Clean SL +3.4 / SR +3.3 dB.
   • LFE passthrough: nessun filtro o attenuazione.
 ────────────────────────────────────────────────────────────────────────────────
 USAGE
@@ -126,11 +126,11 @@ fi
 # EQ voce Sartoriale (EQ su 2.4kHz, high-shelf su 1.8Hz)
 get_voice_filter() {
   if [ "$SONAR_MODE" = "sonar" ]; then
-    cat <<'EOF'
+cat <<'EOF'
 [FC]highshelf=f=1800:g=1.0:t=q:w=0.8,equalizer=f=2400:t=q:w=0.9:g=1.2,volume=+1.8dB[FC_eq];
 EOF
   else
-    cat <<'EOF'
+cat <<'EOF'
 [FC]highshelf=f=1800:g=0.6:t=q:w=0.8,equalizer=f=2400:t=q:w=1.1:g=1.5,volume=+0.8dB[FC_eq];
 EOF
   fi
@@ -138,11 +138,11 @@ EOF
 
 # Surround Sonar: (tuned 4x5x4m room, upfiring virtuale)
 get_sonar_atmosx(){
-  cat <<'EOF'
+cat <<'EOF'
 [SL]asplit=3[SLm][SLv_in][SLlate_in];
-[SLv_in]adelay=24|24,highpass=f=1600,equalizer=f=6500:t=q:w=1.2:g=+3.0,equalizer=f=11000:t=q:w=1.0:g=-2.0[SLv];
+[SLv_in]adelay=24|24,highpass=f=1600,equalizer=f=6500:t=q:w=1.2:g=+3.2,equalizer=f=11000:t=q:w=1.0:g=-2.0[SLv];
 [SLlate_in]adelay=58|58,lowpass=f=1500,volume=-3dB[SLlate];
-[SLm][SLv][SLlate]amix=inputs=3:weights='1 0.75 0.45':normalize=0,volume=+3.5dB,alimiter=limit=0.97[SL_out];
+[SLm][SLv][SLlate]amix=inputs=3:weights='1 0.75 0.45':normalize=0,volume=+3.6dB,alimiter=limit=0.97[SL_out];
 [SR]asplit=3[SRm][SRv_in][SRlate_in];
 [SRv_in]adelay=28|28,highpass=f=1600,equalizer=f=6600:t=q:w=1.2:g=+3.0,equalizer=f=11000:t=q:w=1.0:g=-2.0[SRv];
 [SRlate_in]adelay=62|62,lowpass=f=1500,volume=-3dB[SRlate];
@@ -152,8 +152,8 @@ EOF
 
 # Surround Clean: (solo boost +3.3dB, nessun upfiring)
 get_clean_surround(){
-  cat <<'EOF'
-[SL]volume=+3.3dB,alimiter=limit=0.97[SL_out];
+cat <<'EOF'
+[SL]volume=+3.4dB,alimiter=limit=0.97[SL_out];
 [SR]volume=+3.3dB,alimiter=limit=0.97[SR_out];
 EOF
 }
@@ -185,9 +185,9 @@ for CUR_FILE in "${FILES[@]}"; do
   info "File In Input:  $CUR_FILE"
   info "File In Output: $OUT_FILE"
   if [[ "$SONAR_MODE" = "dual" ]]; then
-    BOOST="Sonar +3.5 dB / Clean +3.3 dB"
+    BOOST="Sonar SL +3.6 dB / SR +3.5 dB  |  Clean SL +3.4 dB / SR +3.3 dB"
   else
-    BOOST=$( [ "$SONAR_MODE" = "sonar" ] && echo '+3.5 dB' || echo '+3.3 dB' )
+    BOOST=$( [ "$SONAR_MODE" = "sonar" ] && echo 'Sonar SL +3.6 dB / SR +3.5 dB' || echo 'Clean SL +3.4 dB / SR +3.3 dB' )
   fi
   info "Effetto Surround: \033[0;31m${SONAR_MODE}\033[0m | Boost: \033[0;36m${BOOST}\033[0m"
   info "EQ Sartoriale: \033[0;33m1.8 + 2.4 kHz\033[0m | LFE: \033[0;32mpassthrough\033[0m"
@@ -195,27 +195,27 @@ for CUR_FILE in "${FILES[@]}"; do
   
   # Costruzione filter complex + mapping
   if [[ "$SONAR_MODE" = "dual" ]]; then
-    FILTER_COMPLEX="[0:a:0]asplit=2[aS][aC];\
-[aS]channelsplit=channel_layout=5.1[FL_S][FR_S][FC_S][LFE_S][SL_S][SR_S];\
-[FC_S]highshelf=f=1800:g=1.0:t=q:w=0.8,equalizer=f=2400:t=q:w=0.9:g=1.2,volume=+1.8dB[FC_S_eq];\
-[SL_S]asplit=3[SLm_S][SLv_in_S][SLlate_in_S];\
-[SLv_in_S]adelay=24|24,highpass=f=1600,equalizer=f=6500:t=q:w=1.2:g=+3.0,equalizer=f=11000:t=q:w=1.0:g=-2.0[SLv_S];\
-[SLlate_in_S]adelay=58|58,lowpass=f=1500,volume=-3dB[SLlate_S];\
-[SLm_S][SLv_S][SLlate_S]amix=inputs=3:weights='1 0.75 0.45':normalize=0,volume=+3.5dB,alimiter=limit=0.97[SL_out_S];\
-[SR_S]asplit=3[SRm_S][SRv_in_S][SRlate_in_S];\
-[SRv_in_S]adelay=28|28,highpass=f=1600,equalizer=f=6600:t=q:w=1.2:g=+3.0,equalizer=f=11000:t=q:w=1.0:g=-2.0[SRv_S];\
-[SRlate_in_S]adelay=62|62,lowpass=f=1500,volume=-3dB[SRlate_S];\
-[SRm_S][SRv_S][SRlate_S]amix=inputs=3:weights='1 0.75 0.45':normalize=0,volume=+3.5dB,alimiter=limit=0.97[SR_out_S];\
-[FC_S_eq]aformat=channel_layouts=FC[FC_Sf];[LFE_S]aformat=channel_layouts=LFE[LFE_Sf];\
-[SL_out_S]aformat=channel_layouts=SL[SL_Sf];[SR_out_S]aformat=channel_layouts=SR[SR_Sf];\
-[FL_S][FR_S][FC_Sf][LFE_Sf][SL_Sf][SR_Sf]amerge=inputs=6,channelmap=channel_layout=5.1,volume=-0.5dB,alimiter=limit=0.97,aresample=resampler=soxr:precision=28:dither_method=triangular[aout_sonar];\
-[aC]channelsplit=channel_layout=5.1[FL_C][FR_C][FC_C][LFE_C][SL_C][SR_C];\
-[FC_C]highshelf=f=1800:g=0.6:t=q:w=0.8,equalizer=f=2400:t=q:w=1.1:g=1.5,volume=0.8dB[FC_C_eq];\
-[SL_C]volume=+3.3dB,alimiter=limit=0.97[SL_out_C];\
-[SR_C]volume=+3.3dB,alimiter=limit=0.97[SR_out_C];\
-[FC_C_eq]aformat=channel_layouts=FC[FC_Cf];[LFE_C]aformat=channel_layouts=LFE[LFE_Cf];\
-[SL_out_C]aformat=channel_layouts=SL[SL_Cf];[SR_out_C]aformat=channel_layouts=SR[SR_Cf];\
-[FL_C][FR_C][FC_Cf][LFE_Cf][SL_Cf][SR_Cf]amerge=inputs=6,channelmap=channel_layout=5.1,volume=-0.5dB,alimiter=limit=0.97,aresample=resampler=soxr:precision=28:dither_method=triangular[aout_clean]"
+  FILTER_COMPLEX="[0:a:0]asplit=2[aS][aC];\
+  [aS]channelsplit=channel_layout=5.1[FL_S][FR_S][FC_S][LFE_S][SL_S][SR_S];\
+  [FC_S]highshelf=f=1800:g=1.0:t=q:w=0.8,equalizer=f=2400:t=q:w=0.9:g=1.2,volume=+1.8dB[FC_S_eq];\
+  [SL_S]asplit=3[SLm_S][SLv_in_S][SLlate_in_S];\
+  [SLv_in_S]adelay=24|24,highpass=f=1600,equalizer=f=6500:t=q:w=1.2:g=+3.2,equalizer=f=11000:t=q:w=1.0:g=-2.0[SLv_S];\
+  [SLlate_in_S]adelay=58|58,lowpass=f=1500,volume=-3dB[SLlate_S];\
+  [SLm_S][SLv_S][SLlate_S]amix=inputs=3:weights='1 0.75 0.45':normalize=0,volume=+3.6dB,alimiter=limit=0.97[SL_out_S];\
+  [SR_S]asplit=3[SRm_S][SRv_in_S][SRlate_in_S];\
+  [SRv_in_S]adelay=28|28,highpass=f=1600,equalizer=f=6600:t=q:w=1.2:g=+3.0,equalizer=f=11000:t=q:w=1.0:g=-2.0[SRv_S];\
+  [SRlate_in_S]adelay=62|62,lowpass=f=1500,volume=-3dB[SRlate_S];\
+  [SRm_S][SRv_S][SRlate_S]amix=inputs=3:weights='1 0.75 0.45':normalize=0,volume=+3.5dB,alimiter=limit=0.97[SR_out_S];\
+  [FC_S_eq]aformat=channel_layouts=FC[FC_Sf];[LFE_S]aformat=channel_layouts=LFE[LFE_Sf];\
+  [SL_out_S]aformat=channel_layouts=SL[SL_Sf];[SR_out_S]aformat=channel_layouts=SR[SR_Sf];\
+  [FL_S][FR_S][FC_Sf][LFE_Sf][SL_Sf][SR_Sf]amerge=inputs=6,channelmap=channel_layout=5.1,volume=-0.5dB,alimiter=limit=0.97,aresample=resampler=soxr:precision=28:dither_method=triangular[aout_sonar];\
+  [aC]channelsplit=channel_layout=5.1[FL_C][FR_C][FC_C][LFE_C][SL_C][SR_C];\
+  [FC_C]highshelf=f=1800:g=0.6:t=q:w=0.8,equalizer=f=2400:t=q:w=1.1:g=1.5,volume=0.8dB[FC_C_eq];\
+  [SL_C]volume=+3.4dB,alimiter=limit=0.97[SL_out_C];\
+  [SR_C]volume=+3.3dB,alimiter=limit=0.97[SR_out_C];\
+  [FC_C_eq]aformat=channel_layouts=FC[FC_Cf];[LFE_C]aformat=channel_layouts=LFE[LFE_Cf];\
+  [SL_out_C]aformat=channel_layouts=SL[SL_Cf];[SR_out_C]aformat=channel_layouts=SR[SR_Cf];\
+  [FL_C][FR_C][FC_Cf][LFE_Cf][SL_Cf][SR_Cf]amerge=inputs=6,channelmap=channel_layout=5.1,volume=-0.5dB,alimiter=limit=0.97,aresample=resampler=soxr:precision=28:dither_method=triangular[aout_clean]"
 
     CMD=(ffmpeg -y -hide_banner -nostdin -stats -loglevel warning \
          -i "$CUR_FILE" -filter_complex "$FILTER_COMPLEX" \
@@ -250,9 +250,9 @@ for CUR_FILE in "${FILES[@]}"; do
     fi
 
     FILTER_COMPLEX="[0:a:0]channelsplit=channel_layout=5.1[FL][FR][FC][LFE][SL][SR];${VOICE_FILTER}${SUR_FILTERS}\
-  [FC_eq]aformat=channel_layouts=FC[FCf];[LFE]aformat=channel_layouts=LFE[LFEf];\
-  [SL_out]aformat=channel_layouts=SL[SLf];[SR_out]aformat=channel_layouts=SR[SRf];\
-  [FL][FR][FCf][LFEf][SLf][SRf]amerge=inputs=6,channelmap=channel_layout=5.1,volume=-0.5dB,alimiter=limit=0.97,aresample=resampler=soxr:precision=28:dither_method=triangular[aout]"
+    [FC_eq]aformat=channel_layouts=FC[FCf];[LFE]aformat=channel_layouts=LFE[LFEf];\
+    [SL_out]aformat=channel_layouts=SL[SLf];[SR_out]aformat=channel_layouts=SR[SRf];\
+    [FL][FR][FCf][LFEf][SLf][SRf]amerge=inputs=6,channelmap=channel_layout=5.1,volume=-0.5dB,alimiter=limit=0.97,aresample=resampler=soxr:precision=28:dither_method=triangular[aout]"
 
     CMD=(ffmpeg -y -hide_banner -nostdin -stats -loglevel warning
          -i "$CUR_FILE" -filter_complex "$FILTER_COMPLEX"

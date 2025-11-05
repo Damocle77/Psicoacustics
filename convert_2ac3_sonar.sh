@@ -83,7 +83,7 @@ PARAMETRI:
 
 NOTE:
   • EQ Voce: 2.4 kHz, +1.5 dB su FC e +1.1 dB su FL/FR.
-  • Boost Surround: +3.6 dB (Sonar), +3.3 dB (Clean).
+  • Boost Surround: Sonar SL +3.6 / SR +3.5 dB, Clean SL +3.4 / SR +3.3 dB.
   • LFE passthrough: nessun filtro o attenuazione.
 ────────────────────────────────────────────────────────────────────────────────
 USAGE
@@ -125,11 +125,11 @@ fi
 # EQ voce Sartoriale (EQ su 2.4kHz, high-shelf su 1.8Hz)
 get_voice_filter() {
   if [ "$SONAR_MODE" = "sonar" ]; then
-    cat <<'EOF'
+cat <<'EOF'
 [FC]highshelf=f=1800:g=1.0:t=q:w=0.8,equalizer=f=2400:t=q:w=0.9:g=1.2,volume=+1.8dB[FC_eq];
 EOF
   else
-    cat <<'EOF'
+cat <<'EOF'
 [FC]highshelf=f=1800:g=0.6:t=q:w=0.8,equalizer=f=2400:t=q:w=1.1:g=1.5,volume=+0.8dB[FC_eq];
 EOF
   fi
@@ -137,13 +137,13 @@ EOF
 
 # Surround Sonar: (tuned 4x5x4m room, upfiring realistico)
 get_sonar_atmosx(){
-  cat <<'EOF'
+cat <<'EOF'
 [SL]asplit=3[SLm][SLv_in][SLlate_in];
-[SLv_in]adelay=24,highpass=f=1800,equalizer=f=6500:t=q:w=1.0:g=+3.0,equalizer=f=11000:t=q:w=1.0:g=-2.0[SLv];
+[SLv_in]adelay=24,highpass=f=1600,equalizer=f=6500:t=q:w=1.2:g=+3.2,equalizer=f=11000:t=q:w=1.0:g=-2.0[SLv];
 [SLlate_in]adelay=58,lowpass=f=1500,volume=-3dB[SLlate];
-[SLm][SLv][SLlate]amix=inputs=3:weights='1 0.75 0.45':normalize=0,volume=+3.5dB,alimiter=limit=0.97[SL_out];
+[SLm][SLv][SLlate]amix=inputs=3:weights='1 0.75 0.45':normalize=0,volume=+3.6dB,alimiter=limit=0.97[SL_out];
 [SR]asplit=3[SRm][SRv_in][SRlate_in];
-[SRv_in]adelay=28,highpass=f=1800,equalizer=f=6600:t=q:w=1.0:g=+3.0,equalizer=f=11000:t=q:w=1.0:g=-2.0[SRv];
+[SRv_in]adelay=28,highpass=f=1600,equalizer=f=6600:t=q:w=1.2:g=+3.0,equalizer=f=11000:t=q:w=1.0:g=-2.0[SRv];
 [SRlate_in]adelay=62,lowpass=f=1500,volume=-3dB[SRlate];
 [SRm][SRv][SRlate]amix=inputs=3:weights='1 0.75 0.45':normalize=0,volume=+3.5dB,alimiter=limit=0.97[SR_out];
 EOF
@@ -151,8 +151,8 @@ EOF
 
 # Surround Clean: (solo boost +3.3dB, nessun upfiring)
 get_clean_surround(){
-  cat <<'EOF'
-[SL]volume=+3.3dB,alimiter=limit=0.97[SL_out];
+cat <<'EOF'
+[SL]volume=+3.4dB,alimiter=limit=0.97[SL_out];
 [SR]volume=+3.3dB,alimiter=limit=0.97[SR_out];
 EOF
 }
@@ -185,7 +185,7 @@ for CUR_FILE in "${FILES[@]}"; do
   echo "───────────────────────────────────────────────────────────────────────────"
   info "File In Input:  $CUR_FILE"
   info "File In Output: $OUT_FILE"
-  BOOST=$( [ "$SONAR_MODE" = "sonar" ] && echo '+3.5 dB' || echo '+3.3 dB' )
+  BOOST=$( [ "$SONAR_MODE" = "sonar" ] && echo 'Sonar SL +3.6 dB / SR +3.5 dB' || echo 'Clean SL +3.4 dB / SR +3.3 dB' )
   info "Effetto Surround: \033[0;31m${SONAR_MODE}\033[0m | Boost: \033[0;36m${BOOST}\033[0m"
   info "EQ Sartoriale: \033[0;33m1.8 + 2.4 kHz\033[0m | LFE: \033[0;32mpassthrough\033[0m"
   echo "───────────────────────────────────────────────────────────────────────────"
