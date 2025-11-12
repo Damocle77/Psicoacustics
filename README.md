@@ -51,8 +51,8 @@ chmod +x *.sh
 
 | Parametro | Significato |
 |------------|-------------|
-| `sonar` | Surround con virtual upfiring AtmosX-style (+3.5 dB) |
-| `clean` | Surround neutro, senza upfiring (+3.3 dB) |
+| `sonar` | Surround con virtual upfiring AtmosX-style (SL +3.0 / SR +2.6 dB) |
+| `clean` | Surround neutro, senza upfiring (SL +2.5 / SR +2.1 dB) |
 | `si|no` | Mantiene o meno la traccia originale |
 | `[file]` | File singolo o `""` per elaborazione batch |
 | `[bitrate]` | 256k – 640k (default = 640k) |
@@ -76,8 +76,8 @@ chmod +x *.sh
 > Nuova funzione introdotta nello script `convert_2ac3_dual.sh`.
 
 La modalità `dual` genera **due tracce audio AC3 5.1** nello stesso MKV:
-1. **Traccia 1 — Sonar**: con effetto upfiring, EQ voce, surround virtuale (+3.5 dB)  
-2. **Traccia 2 — Clean**: mix pulito, senza upfiring (+3.3 dB)  
+1. Traccia 1 — Sonar: SL +3.0 dB / SR +2.6 dB
+2. Traccia 2 — Clean: SL +2.5 dB / SR +2.1 dB
 
 Puoi mantenere o meno la traccia originale (`si` o `no`), e tutte le tracce video/sottotitoli vengono preservate.
 
@@ -137,7 +137,7 @@ Il risultato sarà **equilibrato, chiaro e naturale**, con:
 |----------|------------|-------------|
 | EQ Voce | FC +1.8 dB / FL-FR +1.2 dB @ 2.4 kHz (Q 1.0) | Chiarezza e presenza |
 | Upfiring Sonar | Delay 24–28 ms · Bandpass 6.5 kHz (+3 dB) / 11 kHz (−2 dB) | Cupola sonora virtuale |
-| Surround boost | +3.5 dB (Sonar) / +3.3 dB (Clean) | Ampiezza controllata |
+| Surround boost | Sonar SL +3.0 / SR +2.6 dB · Clean SL +2.5 / SR +2.1 dB | Ampiezza controllata |
 | LFE | Passthrough puro (nessun filtro o attenuazione) | Sub naturale |
 | Output | AC-3 5.1 · 48 kHz · Limiter 0.97 · soxr precision 28 | Alta compatibilità |
 | Dual Mode | Due tracce nel file (Sonar + Clean) | Default Sonar |

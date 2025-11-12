@@ -142,19 +142,19 @@ cat <<'EOF'
 [SL]asplit=3[SLm][SLv_in][SLlate_in];
 [SLv_in]adelay=24|24,highpass=f=1600,equalizer=f=6500:t=q:w=1.2:g=+3.2,equalizer=f=11000:t=q:w=1.0:g=-2.0[SLv];
 [SLlate_in]adelay=58|58,lowpass=f=1500,volume=-3dB[SLlate];
-[SLm][SLv][SLlate]amix=inputs=3:weights='1 0.75 0.45':normalize=0,volume=+3.6dB,alimiter=limit=0.97[SL_out];
+[SLm][SLv][SLlate]amix=inputs=3:weights='1 0.75 0.45':normalize=0,volume=+3.0dB,alimiter=limit=0.97[SL_out];
 [SR]asplit=3[SRm][SRv_in][SRlate_in];
 [SRv_in]adelay=28|28,highpass=f=1600,equalizer=f=6600:t=q:w=1.2:g=+3.0,equalizer=f=11000:t=q:w=1.0:g=-2.0[SRv];
 [SRlate_in]adelay=62|62,lowpass=f=1500,volume=-3dB[SRlate];
-[SRm][SRv][SRlate]amix=inputs=3:weights='1 0.75 0.45':normalize=0,volume=+3.5dB,alimiter=limit=0.97[SR_out];
+[SRm][SRv][SRlate]amix=inputs=3:weights='1 0.75 0.45':normalize=0,volume=+2.6dB,alimiter=limit=0.97[SR_out];
 EOF
 }
 
 # Surround Clean: (solo boost +3.3dB, nessun upfiring)
 get_clean_surround(){
 cat <<'EOF'
-[SL]volume=+3.4dB,alimiter=limit=0.97[SL_out];
-[SR]volume=+3.3dB,alimiter=limit=0.97[SR_out];
+[SL]volume=+2.5dB,alimiter=limit=0.97[SL_out];
+[SR]volume=+2.1dB,alimiter=limit=0.97[SR_out];
 EOF
 }
 
