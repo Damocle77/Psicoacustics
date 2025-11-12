@@ -22,8 +22,8 @@ set -euo pipefail
 # │    • EQ voce: +1.5 dB @ 2.4 kHz (centrale) | +1.1 dB (frontali)              │
 # │    • Coda “late” LPF 1.5 kHz (−3 dB)                                         │
 # │    • Mix: main 1.00 / up 0.75 / late 0.45                                    │
-# │    • Boost Clean:  SL +2.5 dB / SR +2.1 dB                                   │ 
-# │    • Boost Sonar: SL +3.0 dB / SR +2.6 dB                                    │
+# │    • Boost Clean:  SL +2.3 dB / SR +2.3 dB                                   │ 
+# │    • Boost Sonar: SL +2.8 dB / SR +2.8 dB                                    │
 # │    • Limiter: 0.97 (headroom di sicurezza)                                   │
 # │    • LFE: passthrough totale (nessun filtro o attenuazione)                  │
 # │                                                                              │
@@ -84,7 +84,7 @@ PARAMETRI:
 
 NOTE:
   • EQ Voce: 2.4 kHz, +1.5 dB su FC e +1.1 dB su FL/FR.
-  • Boost Surround: Sonar SL +3.6 / SR +3.5 dB, Clean SL +3.4 / SR +3.3 dB.
+  • Boost Surround: Sonar SL +2.8 / SR +2.8 dB, Clean SL +2.3 / SR +2.3 dB.
   • LFE passthrough: nessun filtro o attenuazione.
 ────────────────────────────────────────────────────────────────────────────────
 USAGE
@@ -153,8 +153,8 @@ EOF
 # Surround Clean: (solo boost +3.3dB, nessun upfiring)
 get_clean_surround(){
 cat <<'EOF'
-[SL]volume=+2.5dB,alimiter=limit=0.97[SL_out];
-[SR]volume=+2.1dB,alimiter=limit=0.97[SR_out];
+[SL]volume=+2.3dB,alimiter=limit=0.97[SL_out];
+[SR]volume=+2.3dB,alimiter=limit=0.97[SR_out];
 EOF
 }
 
@@ -186,7 +186,7 @@ for CUR_FILE in "${FILES[@]}"; do
   echo "───────────────────────────────────────────────────────────────────────────"
   info "File In Input:  $CUR_FILE"
   info "File In Output: $OUT_FILE"
-  BOOST=$( [ "$SONAR_MODE" = "sonar" ] && echo 'Sonar SL +3.0 dB / SR +2.6 dB' || echo 'Clean SL +2.5 dB / SR +2.1 dB' )
+  BOOST=$( [ "$SONAR_MODE" = "sonar" ] && echo 'Sonar SL +2.8 dB / SR +2.8 dB' || echo 'Clean SL +2.3 dB / SR +2.3 dB' )
   info "Effetto Surround: \033[0;31m${SONAR_MODE}\033[0m | Boost: \033[0;36m${BOOST}\033[0m"
   info "EQ Sartoriale: \033[0;33m1.8 + 2.4 kHz\033[0m | LFE: \033[0;32mpassthrough\033[0m"
   echo "───────────────────────────────────────────────────────────────────────────"
