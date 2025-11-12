@@ -53,7 +53,7 @@ chmod +x *.sh
 |------------|-------------|
 | `sonar` | Surround con virtual upfiring AtmosX-style (SL +3.0 / SR +2.6 dB) |
 | `clean` | Surround neutro, senza upfiring (SL +2.5 / SR +2.1 dB) |
-| `si|no` | Mantiene o meno la traccia originale |
+| `si\|no` | Mantiene o meno la traccia originale |
 | `[file]` | File singolo o `""` per elaborazione batch |
 | `[bitrate]` | 256k – 640k (default = 640k) |
 
