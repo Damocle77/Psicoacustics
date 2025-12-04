@@ -1,17 +1,17 @@
-<p align="center">
+<p align="left">
   <img src="sonary_logo.png" width="600" alt="Sonary Suite Logo">
 </p>
 
 # 🎧 Sonary Suite – Yamaha V4A Edition  
 DSP avanzato per tracce 5.1 con Surround **Clean** e **Sonar** Upfiring  
-Ottimizzato per **Yamaha RX‑V4A** in modalità *Straight*.
+Testato ed ottimizzato su AVR **Yamaha RX‑V4A** in modalità *Straight*.
 
 ---
 
 # ✅ Requisiti
 
 ### Software necessari
-- **FFmpeg** 4.4+ con supporto SOXR  
+- **FFmpeg** 7+ con supporto SOXR  
 - **Bash** 4.x+  
 - **MKVToolNix** *(opzionale, per gestione tracce)*  
 
@@ -19,7 +19,7 @@ Ottimizzato per **Yamaha RX‑V4A** in modalità *Straight*.
 - Linux / macOS  
 - Windows tramite **WSL2** o Git‑Bash  
 
-### Hardware consigliato
+### Hardware di riferimento
 - Yamaha **RX‑V4A**  
 - Impianto **5.1** con surround simmetrici  
 - Distanza ascolto 3–4 m  
@@ -29,7 +29,7 @@ Ottimizzato per **Yamaha RX‑V4A** in modalità *Straight*.
 
 # 🚀 Installazione
 
-## 1️⃣ Clona la repository
+## 1️⃣ Clona il repository
 ```
 git clone https://github.com/Damocle77/Sonar_AC3D.git
 ```
@@ -67,7 +67,7 @@ Estratto:
 # 🔊 Modalità Surround
 
 ## **1) Clean**
-Look arioso, naturale, non invasivo.
+Effetto arioso, ampio ma non invasivo.
 
 ```
 High-shelf 3.5 kHz
@@ -105,7 +105,7 @@ Estratto:
 
 # 📐 Speaker Layout Consigliato
 
-<p align="center">
+<p align="left">
   <img src="Sonar_Room_Layout.png" width="650" alt="Sonary Room Layout">
 </p>
 
@@ -136,9 +136,9 @@ Lo script include automaticamente:
 
 # 🎥 Compatibilità AVR
 
-- Progettato per **Yamaha V4A**  
+- Progettato e testato su AVR **Yamaha V4A**  
 - Massima resa in modalità **Straight**  
-- Nessun conflitto con YPAO  
+- Nessun conflitto con analizzatore YPAO  
 - LFE invariato  
 
 ---
@@ -146,8 +146,4 @@ Lo script include automaticamente:
 # 📄 Licenza
 MIT License.
 
----
-
-# ⚡ Chiusura mistica  
-**Per riportare ordine nella Forza sonora serve solo Bash… e questo script.  
-Questa è la via!**
+**Per riportare ordine nella Forza sonora serve solo uno script Bash...questa è la via!**
