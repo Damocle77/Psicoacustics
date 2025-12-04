@@ -55,14 +55,14 @@ Profilo dedicato al canale Centrale (FC), pensato per aumentare intelligibilità
 
 - +2.5 dB @ 1 kHz  
 - +3.5 dB @ 2.5 kHz  
-- +1.0 dB @ 6.3 kHz  
+- +0.5 dB @ 6.3 kHz  
 
 Estratto:
 
 ```
 [FC]equalizer=f=1000:t=q:w=1.0:g=2.5,
      equalizer=f=2500:t=q:w=1.0:g=3.5,
-     equalizer=f=6300:t=q:w=1.0:g=1.0[FCv];
+     equalizer=f=6300:t=q:w=1.0:g=0.5[FCv];
 ```
 
 ---
