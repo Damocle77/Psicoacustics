@@ -49,7 +49,7 @@ chmod +x convert_sonary.sh
 
 ---
 
-# ✨ EQ Voce
+# ✨ EQ Voce sartoriale
 
 Profilo dedicato al canale Centrale (FC), pensato per aumentare intelligibilità senza stravolgere il timbro:
 
