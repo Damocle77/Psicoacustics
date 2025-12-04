@@ -2,9 +2,12 @@
   <img src="sonary_logo.png" width="600" alt="Sonary Suite Logo">
 </p>
 
-# 🎧 Sonary Suite – Yamaha V4A Edition  
+# 🎧 Sonary Suite - Yamaha V4A Edition  
 DSP avanzato per tracce 5.1 con Surround **Clean** e **Sonar** Upfiring  
 Testato ed ottimizzato su AVR **Yamaha RX‑V4A** in modalità *Straight*.
+
+> “ Non tutti i supereroi indossano un mantello... a volte usano `filter_complex` per salvare il mondo del 5.1 ”  
+> ⚡by Sandro "D@mocle77" Sabbioni - Keeper of the Sonic Force⚡
 
 ---
 
@@ -67,7 +70,7 @@ Estratto:
 # 🔊 Modalità Surround
 
 ## **1) Clean**
-Effetto arioso, ampio ma non invasivo.
+Effetto arioso, ampio ma non invasivo (Widening).
 
 ```
 High-shelf 3.5 kHz
@@ -84,7 +87,7 @@ Estratto:
 ---
 
 ## **2) Sonar**
-Effetto “upfiring virtuale” che simula altezza sonora e profondità laterale.
+Effetto “upfiring virtuale” che simula altezza sonora (Atmos).
 
 ```
 Split triplo (base / verticale / late)
@@ -146,4 +149,4 @@ Lo script include automaticamente:
 # 📄 Licenza
 MIT License.
 
-**Per riportare ordine nella Forza sonora serve solo uno script Bash...questa è la via!**
+> “ Per riportare ordine nella Forza sonora serve solo uno script Bash...questa è la via! ” 
