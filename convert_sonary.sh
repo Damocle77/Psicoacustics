@@ -147,10 +147,10 @@ EOF
 
 
 # ────────────────────────────────────────────────────────────────────────────────
-# EQ Voce UNIVERSALE (FC) - VERSIONE CORRETTA SENZA volume=
+# EQ Voce sartoriale (FC)
 # ────────────────────────────────────────────────────────────────────────────────
 read -r -d '' VOICE_EQ_STANDARD <<'EOF' || true
-[FC]equalizer=f=1000:t=q:w=1.0:g=2.5,equalizer=f=2500:t=q:w=1.0:g=3.5,equalizer=f=6300:t=q:w=1.0:g=1.0[FCv];
+[FC]equalizer=f=1000:t=q:w=1.0:g=2.5,equalizer=f=2500:t=q:w=1.0:g=3.5,equalizer=f=6300:t=q:w=1.0:g=0.5[FCv];
 EOF
 
 
@@ -173,7 +173,7 @@ for CUR_FILE in "${FILES[@]}"; do
   info "Output: $OUT_FILE"
 
   if [[ -f "$OUT_FILE" ]]; then
-    warn "Il file esiste già. Sovrascrivere? [s/N] "
+    printf "%b" "${C_WARN} Il file esiste già. Sovrascrivere? [s/N] "
     read -r ans
     [[ "$ans" =~ ^[sS]$ ]] || continue
   fi
