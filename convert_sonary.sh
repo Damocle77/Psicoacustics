@@ -132,17 +132,17 @@ read -r -d '' SUR_FILTERS_SONAR <<'EOF' || true
 [SL]asplit=3[SLm][SLv_in][SLlate_in];
 [SLv_in]adelay=34,highpass=f=1600,equalizer=f=6500:t=q:w=1.2:g=3.5,equalizer=f=11000:t=q:w=1.0:g=-1.0[SLv];
 [SLlate_in]adelay=78,lowpass=f=1500,volume=0.79[SLlate];
-[SLm][SLv][SLlate]amix=inputs=3:weights='1 0.70 0.40':normalize=0,alimiter=limit=0.99,volume=1.45[SL_out];
+[SLm][SLv][SLlate]amix=inputs=3:weights='1 0.70 0.40':normalize=0,alimiter=limit=0.99,volume=1.40[SL_out];
 [SR]asplit=3[SRm][SRv_in][SRlate_in];
 [SRv_in]adelay=34,highpass=f=1600,equalizer=f=6500:t=q:w=1.2:g=3.5,equalizer=f=11000:t=q:w=1.0:g=-1.0[SRv];
 [SRlate_in]adelay=78,lowpass=f=1500,volume=0.79[SRlate];
-[SRm][SRv][SRlate]amix=inputs=3:weights='1 0.70 0.40':normalize=0,alimiter=limit=0.99,volume=1.45[SR_out];
+[SRm][SRv][SRlate]amix=inputs=3:weights='1 0.70 0.40':normalize=0,alimiter=limit=0.99,volume=1.40[SR_out];
 EOF
 
 # CLEAN → high-shelf + widening + Boost + limiter
 read -r -d '' SUR_FILTERS_CLEAN <<'EOF' || true
-[SL]adelay=3,highshelf=f=3500:g=0.8:t=q:w=0.8,volume=1.26,alimiter=limit=0.97[SL_out];
-[SR]adelay=0.003,highshelf=f=3500:g=0.8:t=q:w=0.8,volume=1.26,alimiter=limit=0.97[SR_out];
+[SL]adelay=3,highshelf=f=3500:g=0.8:t=q:w=0.8,volume=1.30,alimiter=limit=0.99[SL_out];
+[SR]adelay=3,highshelf=f=3500:g=0.8:t=q:w=0.8,volume=1.30,alimiter=limit=0.99[SR_out];
 EOF
 
 
@@ -150,7 +150,7 @@ EOF
 # EQ Voce sartoriale (FC)
 # ────────────────────────────────────────────────────────────────────────────────
 read -r -d '' VOICE_EQ_STANDARD <<'EOF' || true
-[FC]equalizer=f=1000:t=q:w=1.0:g=2.5,equalizer=f=2500:t=q:w=1.0:g=3.5,equalizer=f=6300:t=q:w=1.0:g=0.5[FCv];
+[FC]equalizer=f=1000:t=q:w=1.0:g=3.5,equalizer=f=2500:t=q:w=1.0:g=5.0,volume=1dB[FCv];
 EOF
 
 
@@ -199,7 +199,7 @@ ${VOICE_BLOCK}
 ${SUR_BLOCK}
 [SL_out]aformat=channel_layouts=SL[SLf];
 [SR_out]aformat=channel_layouts=SR[SRf];
-[FLf][FRf][FCf][LFEf][SLf][SRf]amerge=inputs=6,channelmap=channel_layout=5.1,volume=0.94,alimiter=limit=0.97,aresample=resampler=soxr:precision=28[aout]
+[FLf][FRf][FCf][LFEf][SLf][SRf]amerge=inputs=6,channelmap=channel_layout=5.1,volume=0.98,alimiter=limit=0.98,aresample=resampler=soxr:precision=28[aout]
 "
 
   # Comando finale FFmpeg
