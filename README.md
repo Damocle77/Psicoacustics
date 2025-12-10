@@ -6,7 +6,7 @@
 DSP avanzato per tracce 5.1 con modalità **Clean** e **Sonar** Upfiring  
 Ottimizzato per **Yamaha RX-V4A** in modalità *Straight*.
 
-> "Non tutti i supereroi indossano un mantello... a volte usano `filter_complex` per salvare il mondo del 5.1."  
+> "Non tutti i supereroi indossano un mantello... a volte usano `filter_complex` per salvare il 5.1."  
 > ⚡ by Sandro “D@mocle77” Sabbioni ⚡
 
 ---
