@@ -2,7 +2,7 @@
   <img src="sonary_logo.png" width="600" alt="Sonary Suite Logo">
 </p>
 
-# 🎧 sonarwide – Sonar & Wide Edition  
+# 🎧 Sonary Suite – Sonar & Wide Edition  
 DSP avanzato per tracce **5.1** con due modalità surround: **Sonar** (upfiring psicoacustico) e **Wide** (widening psicoacustico).  
 Pensato per AVR in modalità *Straight / Pure / Direct* (ottimizzato su Yamaha RX‑V4A).
 
