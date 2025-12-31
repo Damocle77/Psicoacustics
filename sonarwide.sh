@@ -149,7 +149,7 @@ EOF
 # CLEAN → widening + early + diffuse + limiter (SAFE)
 read -r -d '' SUR_FILTERS_WIDE <<'EOF' || true
 [SL]asplit=3[SLd_in][SLe_in][SLx_in];
-[SLd_in]adelay=0,volume=1.00[SLd];
+[SLd_in]adelay=0.8,volume=1.00[SLd];
 [SLe_in]adelay=9,highpass=f=300,lowpass=f=7000,allpass=f=1200:t=q:w=0.65,volume=0.42[SLe];
 [SLx_in]adelay=22,highpass=f=600,lowpass=f=5000,allpass=f=700:t=q:w=0.70,allpass=f=2600:t=q:w=0.70,volume=0.17[SLx];
 [SLd][SLe][SLx]amix=inputs=3:weights='1.00 0.90 0.80':normalize=0,lowshelf=f=180:g=0.6:t=q:w=0.7,highshelf=f=3500:g=0.1:t=q:w=0.8,volume=1.30,alimiter=limit=0.99[SL_out];
@@ -162,11 +162,34 @@ EOF
 
 
 # ────────────────────────────────────────────────────────────────────────────────
-# EQ Voce sartoriale (FC)
+# EQ Voce sartoriale (FC) — BASE + micro-delta per profilo (SONAR/WIDE)
+# Nota: la BASE termina con una virgola per consentire concatenazione col DELTA.
 # ────────────────────────────────────────────────────────────────────────────────
-read -r -d '' VOICE_EQ_STANDARD <<'EOF' || true
-[FC]equalizer=f=350:t=q:w=1.0:g=-1.2,equalizer=f=1000:t=q:w=1.0:g=2.2,equalizer=f=2500:t=q:w=1.0:g=2.6,equalizer=f=7200:t=q:w=1.1:g=-0.6,volume=0.9dB,alimiter=limit=0.99[FCv];
+
+# EQ base: centrata sulla chiarezza e naturalezza del parlato
+read -r -d '' VOICE_EQ_BASE <<'EOF' || true
+[FC]
+equalizer=f=230:t=q:w=1.4:g=-1.0,
+equalizer=f=350:t=q:w=1.0:g=-1.0,
+equalizer=f=900:t=q:w=3.0:g=-0.5,
+equalizer=f=1000:t=q:w=1.2:g=1.6,
+equalizer=f=2500:t=q:w=1.0:g=2.3,
+equalizer=f=7200:t=q:w=2.5:g=-1.0,
 EOF
+
+# SONAR: timbrica coerente, ascolto rilassato, massima leggibilità
+read -r -d '' VOICE_DELTA_SONAR <<'EOF' || true
+volume=0.2dB,
+alimiter=limit=0.99:attack=5:release=50[FCv];
+EOF
+
+# WIDE: scena ampia, ancoraggio centrale del parlato, intellegibilità
+read -r -d '' VOICE_DELTA_WIDE <<'EOF' || true
+volume=0.6dB,
+equalizer=f=2500:t=q:w=1.2:g=0.3,
+alimiter=limit=0.99:attack=5:release=50[FCv];
+EOF
+
 
 # ────────────────────────────────────────────────────────────────────────────────
 # Ciclo elaborazione file
@@ -200,8 +223,12 @@ for CUR_FILE in "${FILES[@]}"; do
     SUR_BLOCK="$SUR_FILTERS_WIDE"
   fi
 
-  # EQ Voce sempre attiva
-  VOICE_BLOCK="$VOICE_EQ_STANDARD"
+# EQ Voce sempre attiva (BASE + delta per profilo)
+if [[ "$SUR_MODE" = "sonar" ]]; then
+  VOICE_BLOCK="${VOICE_EQ_BASE}${VOICE_DELTA_SONAR}"
+else
+  VOICE_BLOCK="${VOICE_EQ_BASE}${VOICE_DELTA_WIDE}"
+fi
 
 FILTER_COMPLEX="
 [0:a:0]aformat=channel_layouts=5.1(side):sample_rates=48000:sample_fmts=fltp[base];
@@ -214,7 +241,7 @@ ${VOICE_BLOCK}
 ${SUR_BLOCK}
 [SL_out]aformat=channel_layouts=mono[SLf];
 [SR_out]aformat=channel_layouts=mono[SRf];
-[FLf][FRf][FCf][LFEf][SLf][SRf]join=inputs=6:channel_layout=5.1(side):map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR,aformat=channel_layouts=5.1(side):sample_rates=48000:sample_fmts=fltp,aresample=resampler=soxr:precision=28[aout]
+[FLf][FRf][FCf][LFEf][SLf][SRf]join=inputs=6:channel_layout=5.1(side):map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR,aformat=channel_layouts=5.1(side):sample_rates=48000:sample_fmts=fltp,aresample=resampler=soxr:precision=32[aout]
 "
 
   # Comando finale FFmpeg
