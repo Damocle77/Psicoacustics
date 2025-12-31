@@ -2,31 +2,49 @@
   <img src="sonary_logo.png" width="600" alt="Sonary Suite Logo">
 </p>
 
-# 🎧 Sonary Suite – Sonar & Wide Edition  
-DSP avanzato per tracce **5.1** con due modalità surround: **Sonar** (upfiring psicoacustico) e **Wide** (widening psicoacustico).  
-Pensato per AVR in modalità *Straight / Pure / Direct* (ottimizzato su Yamaha RX‑V4A).
+# 🎧 Sonary Suite – Sonar & Wide Edition
+
+DSP **offline** avanzato per tracce audio **5.1**, progettato per migliorare **intelligibilità del parlato**, **coerenza timbrica** e **spazialità surround** senza alterare il mix originale.
+
+Pensato per AVR utilizzati in modalità **Straight / Pure / Direct** (testato e ottimizzato su Yamaha RX-V4A), con piena compatibilità con sistemi di correzione ambientale come **YPAO**.
 
 > "Non tutti i supereroi indossano un mantello... a volte usano `-filter_complex` per salvare il mondo del 5.1."  
 > ⚡ D@mocle77 | Sandro Sabbioni | ∑(logic) ⚡
 
 ---
 
+## 🧠 Filosofia del progetto
+
+Sonary Suite nasce da un principio semplice ma rigoroso:
+
+> *correggere solo ciò che serve, dove serve, e nel modo meno invasivo possibile.*
+
+Per questo motivo:
+- l’elaborazione è **offline** (nessun DSP in tempo reale sull’AVR)
+- **FL / FR restano neutri**
+- **LFE non viene mai toccato**
+- il canale **Centrale (FC)** riceve una EQ dedicata e costante
+- i **Surround** sono l’unico elemento variabile (Sonar / Wide)
+
+Il risultato è un suono più leggibile, stabile e naturale, che **non combatte** né YPAO né il mix originale.
+
+---
+
 ## ✅ Requisiti
 
 ### Software
-- **FFmpeg 7+** (con resampler **SOXR** abilitato)
+- **FFmpeg 7+** (compilato con resampler **SOXR**)
 - **Bash 4.x+**
-- **MKVToolNix** *(opzionale, solo per operazioni extra sugli MKV)*
 
 ### Sistemi operativi
-- Linux / macOS  
-- Windows tramite **WSL2** o **Git‑Bash**
+- Linux
+- macOS
+- Windows tramite **WSL2** o **Git-Bash**
 
-### Hardware consigliato (ma non obbligatorio)
-- AVR (es. Yamaha **RX‑V4A**)  
-- Impianto **5.1** con surround simmetrici  
-- Distanza di ascolto: 3–4 m  
-- Stanza “media” tipo 4×5 m  
+### Hardware consigliato
+- AVR multicanale (5.1)
+- diffusori surround simmetrici
+- stanza domestica medio-grande (es. ~4 × 5 m)
 
 ---
 
@@ -40,92 +58,65 @@ chmod +x sonarwide.sh
 
 ---
 
-## 🧠 Cosa fa (in breve)
+## 🎚️ EQ Voce Sartoriale (Canale Centrale – FC)
 
-- Converte una traccia **5.1** (AC3/EAC3/DTS/TrueHD…) in **AC3** o **EAC3**
-- Applica DSP **solo sui surround** in modalità **Sonar** o **Wide**
-- Applica una **EQ Voce** sul canale **Centrale (FC)** *(sempre attiva)*
-- Mantiene **video** e **sottotitoli** in copia
-- **LFE invariato** • **FL/FR neutri**
+L’EQ Voce è **sempre attiva**, indipendentemente dalla modalità surround selezionata.
+È progettata specificamente per **parlato italiano**, con l’obiettivo di:
+- massima intelligibilità anche a basso volume
+- naturalezza timbrica
+- minima fatica d’ascolto nel lungo periodo
 
----
+### Curva attuale
+- **−1.0 dB @ 230 Hz** → alleggerimento del corpo vocale
+- **−1.0 dB @ 350 Hz** → riduzione boxiness
+- **−0.5 dB @ 900 Hz** → micro de-nasalizzazione
+- **+1.6 dB @ 1 kHz** → articolazione del parlato
+- **+2.3 dB @ 2.5 kHz** → presenza e intelligibilità
+- **−1.0 dB @ 7.2 kHz** → controllo delle sibilanti
+- **Limiter trasparente 0.99** con attack/release (anti-clipping)
 
-## 🎚️ EQ Voce Sartoriale (FC)
-
-L’EQ Voce è **sempre attiva** per massimizzare intelligibilità e presenza del dialogo senza “segare” troppo l’originale.
-
-Parametri attuali (come nello script):
-- **-1.2 dB @ 350 Hz**
-- **+2.2 dB @ 1 kHz**
-- **+2.6 dB @ 2.5 kHz**
-- **-0.6 dB @ 7.2 kHz**
-- **Gain finale: +0.9 dB**
-- **Limiter: 0.99**
-
-Estratto:
-
-```bash
-[FC]equalizer=f=350:t=q:w=1.0:g=-1.2,
-     equalizer=f=1000:t=q:w=1.0:g=2.2,
-     equalizer=f=2500:t=q:w=1.0:g=2.6,
-     equalizer=f=7200:t=q:w=1.1:g=-0.6,
-     volume=0.9dB,
-     alimiter=limit=0.99[FCv];
-```
+Questa EQ è **identica** per Sonar e Wide, così da mantenere coerenza timbrica del dialogo.
 
 ---
 
 ## 🔊 Modalità Surround
 
-### 1️⃣ Wide (widening/ariosità controllata)
-Obiettivo: surround più **ampi** e **avvolgenti**, senza “vetro” e senza rubare la scena ai frontali.
+### 1️⃣ Wide — Widening controllato
 
-Come funziona (schema):
-- **Direct** (0 ms) + **Early** (≈9–10 ms) + **Diffuse** (≈22–24 ms)
-- Bandi di lavoro controllate (highpass/lowpass) + **allpass** per diffusione
-- Shelving leggero: **+0.6 dB @ 180 Hz** e **+0.1 dB @ 3.5 kHz**
-- **Limiter 0.99** (anti-clipping)
+Modalità pensata per aumentare **ampiezza e avvolgimento** dei surround senza arretrare il centro.
 
-Estratto (SL, SR analogo):
+Caratteristiche principali:
+- struttura **Direct + Early + Diffuse**
+- bande di lavoro controllate (HPF / LPF + allpass)
+- shelving leggero per equilibrio tonale
+- **Limiter 0.99** di sicurezza
 
-```bash
-[SL]asplit=3[SLd_in][SLe_in][SLx_in];
-[SLd_in]adelay=0,volume=1.00[SLd];
-[SLe_in]adelay=9,highpass=f=300,lowpass=f=7000,allpass=f=1200:t=q:w=0.65,volume=0.42[SLe];
-[SLx_in]adelay=22,highpass=f=600,lowpass=f=5000,allpass=f=700:t=q:w=0.70,allpass=f=2600:t=q:w=0.70,volume=0.17[SLx];
-[SLd][SLe][SLx]amix=inputs=3:weights='1.00 0.90 0.80':normalize=0,
-  lowshelf=f=180:g=0.6:t=q:w=0.7,
-  highshelf=f=3500:g=0.1:t=q:w=0.8,
-  volume=1.30,alimiter=limit=0.99[SL_out];
-```
+#### Compensazione asimmetria stanza
+
+In ambienti non perfettamente simmetrici (es. lato destro più largo):
+- viene applicato un **micro-delay (~0.8 ms)** al surround sinistro
+- l’intervento è puramente **psicoacustico**
+- agisce **solo sui surround**
+- **non interferisce con YPAO**, perché avviene offline
+
+Effetto:
+- centro più stabile
+- scena più coerente
+- nessun eco o sfasamento percepibile
 
 ---
 
-### 2️⃣ Sonar (upfiring psicoacustico)
-Obiettivo: creare un “accenno di altezza” stile upfiring/height **senza toccare i frontali**, usando split, micro‑ritardi e shaping in alta frequenza.
+### 2️⃣ Sonar — Upfiring psicoacustico
 
-Come funziona (schema):
-- **Direct** + layer “presence/height” + layer “high diffuse” + **late tail**
-- Micro‑ritardi tipici: **14 ms**, **28 ms**, **85 ms**
-- HPF su layer “height” (≈1.5 kHz / 2.5 kHz), LPF su late tail (≈1.5 kHz)
-- **Limiter 0.99**
+Modalità orientata alla **coerenza e profondità verticale**, ispirata ai sistemi upfiring, ma senza canali height reali.
 
-Estratto (SL, SR analogo):
+Caratteristiche principali:
+- layer **Direct + Presence + High-Diffuse + Late Tail**
+- micro-ritardi tipici: **14 ms / 28 ms / 85 ms**
+- lavoro concentrato sulle medio-alte
+- scena stabile e rilassata, ideale per ascolti prolungati
 
-```bash
-[SL]asplit=4[SLd_in][SLp_in][SLh_in][SLlate_in];
-[SLd_in]adelay=0,volume=0.95[SLd];
-[SLp_in]adelay=14,highpass=f=1500,
-  equalizer=f=6500:t=q:w=1.2:g=2.0,
-  equalizer=f=11000:t=q:w=1.0:g=-1.2,volume=1.00[SLp];
-[SLh_in]adelay=28,highpass=f=2500,lowpass=f=14000,
-  allpass=f=900:t=q:w=0.70,allpass=f=2200:t=q:w=0.70,
-  equalizer=f=8000:t=q:w=3.0:g=-3.0,
-  equalizer=f=11000:t=q:w=1.2:g=1.0,volume=0.60[SLh];
-[SLlate_in]adelay=85,lowpass=f=1500,volume=0.65[SLlate];
-[SLd][SLp][SLh][SLlate]amix=inputs=4:weights='1.10 0.85 0.80 0.55':normalize=0,
-  volume=1.35,alimiter=limit=0.99[SL_out];
-```
+Sonar privilegia la **credibilità spaziale** rispetto all’effetto spettacolare.
 
 ---
 
@@ -138,9 +129,8 @@ Estratto (SL, SR analogo):
 ### Parametri
 - **Codec output:** `ac3` | `eac3`
 - **Mantieni traccia originale:** `si` | `no`
-- **File:** un file specifico, oppure `""` per batch nella cartella
-- **Bitrate:** es. `640k`, `768k`  
-  - Default: **640k per AC3** • **768k per EAC3**
+- **File:** nome file oppure `""` per elaborazione batch
+- **Bitrate:** es. `640k`, `768k`
 - **Modalità surround:** `sonar` | `wide`
 
 ### Esempi
@@ -151,39 +141,27 @@ Estratto (SL, SR analogo):
 
 ---
 
-## 🔁 Elaborazione batch
-
-Lascia vuoto il parametro file per convertire tutti i video nella cartella:
-
-```bash
-./sonarwide.sh eac3 no "" 768k sonar
-```
-
-File supportati: `*.mkv *.mp4 *.m2ts`
-
----
-
-## 📐 Layout consigliato
-
-<p align="left">
-  <img src="Sonar_Room_Layout.png" width="650" alt="Sonary Room Layout">
-</p>
-
-- Surround a 110–120°  
-- Altezza Center 130–150 cm  
-- Distanza 3–4 m  
-
----
-
 ## 🎥 Compatibilità AVR
 
-- Ottimizzato per **Yamaha RX‑V4A**, ma funziona con qualunque AVR in modalità *Straight/Pure/Direct*
-- Nessuna interferenza con YPAO (lavori “a valle” della correzione, se preferisci)
-- **LFE invariato**
+- Ottimizzato per **Yamaha RX-V4A**
+- Compatibile con qualsiasi AVR in modalità *Straight / Pure / Direct*
+- Nessuna interferenza con YPAO o sistemi equivalenti
+- Nessun DSP AVR richiesto
+
+---
+
+## 🚫 Cosa questo script NON fa
+
+- non applica dialog enhancer artificiali
+- non comprime aggressivamente la dinamica
+- non modifica i frontali
+- non equalizza l’LFE
+- non sostituisce la calibrazione ambientale
 
 ---
 
 ## 📄 Licenza
+
 MIT License.
 
-> "Per riportare ordine nella Forza Sonora serve solo uno script Bash… questa è la via."
+> *Per riportare ordine nella Forza Sonora serve solo uno script Bash… questa è la via.*
