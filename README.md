@@ -9,7 +9,8 @@ DSP **offline** avanzato per tracce audio **5.1**, progettato per migliorare **i
 Pensato per AVR utilizzati in modalità **Straight / Pure / Direct** (testato e ottimizzato su Yamaha RX-V4A), con piena compatibilità con sistemi di correzione ambientale come **YPAO**.
 
 > "Non tutti i supereroi indossano un mantello...basta un `-filter_complex` per salvare il mondo del 5.1."  
-> ⚡ D@mocle77 | Sandro Sabbioni | ∑(logic) ⚡
+> ⚡Sandro (D@mocle77) Sabbioni ⚡
+perception follows physics...
 
 ---
 
