@@ -44,7 +44,7 @@ Il risultato è un suono più leggibile, stabile e naturale, che **non combatte*
 ### Hardware consigliato
 - AVR multicanale (5.1)
 - diffusori surround simmetrici
-- stanza domestica medio-grande (es. ~4 × 5 m)
+- stanza domestica medio-grande (es. ~4 × 5 x 4 m)
 
 ---
 
@@ -61,7 +61,7 @@ chmod +x sonarwide.sh
 ## 🎚️ EQ Voce Sartoriale (Canale Centrale – FC)
 
 L’EQ Voce è **sempre attiva**, indipendentemente dalla modalità surround selezionata.
-È progettata specificamente per **parlato italiano**, con l’obiettivo di:
+È progettata per esaltare il **parlato italiano**, con l’obiettivo di ottenere:
 - massima intelligibilità anche a basso volume
 - naturalezza timbrica
 - minima fatica d’ascolto nel lungo periodo
@@ -71,6 +71,7 @@ L’EQ Voce è **sempre attiva**, indipendentemente dalla modalità surround sel
 - **−1.0 dB @ 350 Hz** → riduzione boxiness
 - **−0.5 dB @ 900 Hz** → micro de-nasalizzazione
 - **+1.6 dB @ 1 kHz** → articolazione del parlato
+- **+0.4 dB @ 1.8 kHz** → chiodo psicoacustico frontale
 - **+2.3 dB @ 2.5 kHz** → presenza e intelligibilità
 - **−1.0 dB @ 7.2 kHz** → controllo delle sibilanti
 - **Limiter trasparente 0.99** con attack/release (anti-clipping)
@@ -90,21 +91,6 @@ Caratteristiche principali:
 - bande di lavoro controllate (HPF / LPF + allpass)
 - shelving leggero per equilibrio tonale
 - **Limiter 0.99** di sicurezza
-
-#### Compensazione asimmetria stanza
-
-In ambienti non perfettamente simmetrici (es. lato destro più largo):
-- viene applicato un **micro-delay (~0.8 ms)** al surround sinistro
-- l’intervento è puramente **psicoacustico**
-- agisce **solo sui surround**
-- **non interferisce con YPAO**, perché avviene offline
-
-Effetto:
-- centro più stabile
-- scena più coerente
-- nessun eco o sfasamento percepibile
-
----
 
 ### 2️⃣ Sonar — Upfiring psicoacustico
 
