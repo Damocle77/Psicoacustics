@@ -10,7 +10,7 @@ Pensato per AVR utilizzati in modalità **Straight / Pure / Direct** (testato e 
 
 > "Non tutti i supereroi indossano un mantello...basta un `-filter_complex` per salvare il mondo del 5.1."  
 > ⚡Sandro (D@mocle77) Sabbioni ⚡
-perception follows physics...
+...perception follows physics...
 
 ---
 
@@ -68,12 +68,13 @@ L’EQ Voce è **sempre attiva**, indipendentemente dalla modalità surround sel
 - minima fatica d’ascolto nel lungo periodo
 
 ### Curva attuale
-- **−1.0 dB @ 230 Hz** → alleggerimento del corpo vocale
+- **−1.0 dB @ 230 Hz** → alleggerimento del corpo vocale (per lingua italiana)
 - **−1.0 dB @ 350 Hz** → riduzione boxiness (specifico per lingua italiana)
 - **−0.5 dB @ 900 Hz** → micro de-nasalizzazione (specifico per lingua italiana)
-- **+1.6 dB @ 1 kHz** → articolazione del parlato
+- **+1.6 dB @ 1.0 kHz** → articolazione del parlato (corpo, naso, prossimità)
 - **+0.4 dB @ 1.8 kHz** → chiodo frontale (posizione psicoacustica frontale)
-- **+2.3 dB @ 2.5 kHz** → presenza e intelligibilità
+- **+2.3 dB @ 2.5 kHz** → attacco consonantico vocale per italiano (T,K,S,F)
+- **+0.3 dB @ 3.2 kHz** → presenza e intelligibilità (riduzione sforzo cognitivo)
 - **−1.0 dB @ 7.2 kHz** → controllo delle sibilanti (effetto de-esser)
 
 Questa EQ è **identica** per Sonar e Wide, così da mantenere coerenza timbrica del dialogo.
