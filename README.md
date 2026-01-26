@@ -2,15 +2,15 @@
   <img src="sonary_logo.png" width="600" alt="Sonary Suite Logo">
 </p>
 
-# 🎧 Sonary Suite – Sonar & Wide Edition
+# 🎧 Sonary Suite – Sonar / Wide / Aegis / Voice
 
-DSP **offline** avanzato per tracce audio **5.1**, progettato per migliorare **intelligibilità del parlato**, **coerenza timbrica** e **spazialità surround** senza alterare il mix originale.
+DSP **offline** avanzato per tracce audio **5.1**, progettato per migliorare **intelligibilità del parlato**, **coerenza timbrica** e **spazialità surround** senza stravolgere il mix originale.
 
-Pensato per AVR utilizzati in modalità **Straight / Pure / Direct** (testato e ottimizzato su Yamaha RX-V4A), con piena compatibilità con sistemi di correzione ambientale come **YPAO**.
+Pensato per AVR usati in modalità **Straight / Pure / Direct** (testato e ottimizzato su Yamaha RX-V4A), e compatibile con sistemi di correzione ambientale come **YPAO**.
 
-> "Non tutti i Super indossano un mantello...basta un `filter_complex` per salvare il mondo del 5.1."  
-> ⚡Sandro (D@mocle77) Sabbioni ⚡
-perception follows physics...
+> "Non tutti i supereroi indossano un mantello… a volte basta un `-filter_complex` per salvare il mondo del 5.1."  
+> ⚡ Sandro (D@mocle77) Sabbioni ⚡  
+> …perception follows physics…
 
 ---
 
@@ -25,27 +25,24 @@ Per questo motivo:
 - **FL / FR restano neutri**
 - **LFE non viene mai toccato**
 - il canale **Centrale (FC)** riceve una EQ dedicata e costante
-- i **Surround** sono l’unico elemento variabile (Sonar / Wide)
+- i **Surround** sono l’unico elemento variabile (Sonar / Wide / Aegis / oppure bypass in Voice)
 
 Il risultato è un suono più leggibile, stabile e naturale, che **non combatte** né YPAO né il mix originale.
+
+> Nota “fisica non negoziabile”: **AC3 / E-AC3 si codificano sempre via CPU**. L’eventuale HW accel riguarda al massimo la *decodifica video*, non l’encoding audio.
 
 ---
 
 ## ✅ Requisiti
 
 ### Software
-- **FFmpeg 7+** (compilato con resampler **SOXR**)
+- **FFmpeg 7+** (consigliato con resampler **SOXR**)
 - **Bash 4.x+**
 
 ### Sistemi operativi
 - Linux
 - macOS
-- Windows **WSL2** , **Git-Bash** , **MYSYS2**
-
-### Hardware consigliato
-- AVR multicanale (5.1)
-- diffusori surround simmetrici
-- stanza domestica medio-grande (es. ~4 × 5 x 4 m)
+- Windows (**WSL2**, **Git-Bash**, **MSYS2**)
 
 ---
 
@@ -54,7 +51,40 @@ Il risultato è un suono più leggibile, stabile e naturale, che **non combatte*
 ```bash
 git clone https://github.com/Damocle77/Sonar_AC3D.git
 cd Sonar_AC3D
-chmod +x sonarwide.sh
+chmod +x aegis_sonar_wide_voice.sh
+```
+
+---
+
+## 🧩 Utilizzo (script aggiornato)
+
+```bash
+./aegis_sonar_wide_voice.sh <ac3|eac3> <si|no> [file|""] [bitrate] [sonar|wide|aegis|voice]
+```
+
+### Parametri
+- **codec**: `ac3` | `eac3`
+- **keep_orig**: `si` | `no` (mantiene o no anche la traccia originale)
+- **file**: `"film.mkv"` | `""` (batch: elabora tutti i file nella cartella)
+- **bitrate**: es. `448k`, `640k`, `768k` (default: `ac3=640k`, `eac3=768k`)
+- **mode**:
+  - `sonar` = “altezza” (simulazione psicoacustica 5.1.2 verticale)
+  - `wide`  = “ampiezza” (simulazione psicoacustica 7.1 orizzontale)
+  - `aegis` = “intermedia” (guardia dinamica + cupola più controllata)
+  - `voice` = **solo EQ Voce Sartoriale su FC** (surround pass-through)
+
+### Esempi (singolo file)
+```bash
+./aegis_sonar_wide_voice.sh eac3 no  "film.mkv" 768k sonar
+./aegis_sonar_wide_voice.sh ac3  si  "film.mkv" 640k wide
+./aegis_sonar_wide_voice.sh eac3 no  "serie.mkv" 448k aegis
+./aegis_sonar_wide_voice.sh ac3  si  "talkshow.mkv" 640k voice
+```
+
+### Esempi (batch cartella: file="")
+```bash
+./aegis_sonar_wide_voice.sh eac3 no "" 448k wide
+./aegis_sonar_wide_voice.sh ac3  si "" 640k sonar
 ```
 
 ---
@@ -68,119 +98,103 @@ L’EQ Voce è **sempre attiva**, indipendentemente dalla modalità surround sel
 - minima fatica d’ascolto nel lungo periodo
 
 ### Curva attuale
-- **−1.0 dB @ 230 Hz** → alleggerimento del corpo vocale (per lingua italiana)
-- **−1.0 dB @ 350 Hz** → riduzione boxiness (specifico per lingua italiana)
-- **−0.5 dB @ 900 Hz** → micro de-nasalizzazione (specifico per lingua italiana)
-- **+1.6 dB @ 1.0 kHz** → articolazione del parlato (corpo, naso, prossimità)
-- **+0.4 dB @ 1.8 kHz** → chiodo frontale (posizione psicoacustica frontale)
-- **+2.3 dB @ 2.5 kHz** → attacco consonantico vocale per italiano (T,K,S,F)
-- **+0.3 dB @ 3.2 kHz** → presenza e intelligibilità (riduzione sforzo cognitivo)
-- **−1.0 dB @ 7.2 kHz** → controllo delle sibilanti (effetto de-esser)
-
-Questa EQ è **identica** per Sonar e Wide, così da mantenere coerenza timbrica del dialogo.
+- **−1.0 dB @ 230 Hz** → alleggerimento del corpo vocale
+- **−1.0 dB @ 350 Hz** → riduzione “boxiness”
+- **−0.5 dB @ 900 Hz** → micro de-nasalizzazione
+- **+1.6 dB @ 1.0 kHz** → articolazione del parlato
+- **+0.4 dB @ 1.8 kHz** → “chiodo” frontale
+- **+2.3 dB @ 2.5 kHz** → attacco consonantico (T,K,S,F)
+- **+0.35 dB @ 3.2 kHz** → presenza / intelligibilità
+- **−1.0 dB @ 7.2 kHz** → controllo sibilanti
 
 ---
 
 ## 🔊 Modalità Surround – Architettura e bande di frequenza
 
-Le modalità **Wide** e **Sonar** utilizzano approcci psicoacustici differenti, ma condividono una filosofia comune:  
+Le modalità **Wide**, **Sonar** e **Aegis** usano approcci psicoacustici differenti, ma condividono una filosofia comune:  
 *modellare lo spazio attraverso tempo e spettro, non attraverso artifici invasivi*.
 
-Le frequenze vengono quindi trattate in modo **selettivo**, con bande dedicate a specifiche funzioni percettive.
+### 1️⃣ Wide — Widening psicoacustico controllato (simulazione 7.1 virtuale)
+Lavora sulla **dimensione orizzontale**: più ampiezza laterale e avvolgimento, senza arretrare il fronte né destabilizzare il centrale.
+
+### 2️⃣ Sonar — Upfiring psicoacustico coerente (simulazione 5.1.2 virtuale)
+Spinge su **profondità e verticalità percepita**, con micro-ritardi e stratificazioni sulle medio-alte per creare “altezza” credibile.
+
+### 3️⃣ Aegis — Guardiano dinamico (cupola controllata)
+Pensato quando vuoi “il meglio dei due mondi” ma con più disciplina: surround **meno invadente**, più **stabile** su contenuti rumorosi/affollati, e con una leggera **guardia dinamica**.
+
+### 4️⃣ Voice — Solo parlato (FC-only)
+Quando i surround sono inutili o dannosi (mix piatto, serie vecchie, dialoghi fragili): lascia i surround **così come sono** e applica solo l’EQ voce sul centrale.
 
 ---
 
-### 1️⃣ Wide - Widening psicoacustico controllato  
-*(Simulazione 7.1 virtuale)*
+## 🧪 Workflow consigliato: normalizzazione + analisi RMS + scelta profilo
 
-La modalità **Wide** lavora principalmente sulla **dimensione orizzontale della scena**, aumentando la percezione di ampiezza laterale e avvolgimento dei surround, senza arretrare il fronte sonoro né destabilizzare il canale centrale.
+Qui l’idea è *data-driven*, non “a naso”:
 
-#### Struttura percettiva
-- **Direct**  
-  Segnale surround diretto, con contributo pieno e non colorato.
-- **Early reflections virtuali**  
-  Componenti a breve ritardo per simulare riflessioni laterali.
-- **Diffuse layer**  
-  Energia decorrelata per aumentare larghezza e immersione.
+1) **Normalizzazione dinamica preventiva (FFMediaMaster)**  
+   Utile solo se la traccia ha una dinamica ingestibile (dialoghi troppo bassi, esplosioni che ti fanno saltare sul divano).  
+   In **FFMediaMaster** applica una **normalizzazione dinamica leggera** (tipo *Dynamic Audio Normalizer / dynaudnorm* oppure un *loudnorm* non aggressivo), esportando una copia “preparata” per l’elaborazione Sonary.
 
-#### Bande di frequenza (concettuali)
-- **Basse frequenze (≈ 300–600 Hz)**  
-  Presenti ma controllate, per dare corpo senza creare confusione o risonanze ambientali.
-- **Medie (≈ 600–5.000 Hz)**  
-  Zona chiave per la spazialità laterale: qui avviene la maggior parte del widening percettivo.
-- **Alte (≈ 5.000–7.000 Hz)**  
-  Utilizzate con moderazione per aggiungere aria e dettaglio, evitando asprezze.
+   Fallback CLI (se vuoi farlo a mano con FFmpeg, versione *gentile*):
+   ```bash
+   ffmpeg -i "input.mkv" -map 0 -c copy -c:a pcm_s16le -af "dynaudnorm=f=150:g=5:m=10" "prep_audio.wav"
+   ```
+   *(Poi userai il file originale per il mux finale; questa è solo una “diagnosi/prep”.)*
 
-Allpass e shelving leggeri vengono impiegati per **decorrelare senza colorare**, mantenendo una timbrica coerente con il mix originale.
+2) **Analisi RMS in Audacity (scelta profilo)**  
+   Apri la traccia 5.1 in Audacity (con FFmpeg installato), fai zoom su **2 finestre rappresentative** (scene action + scene dialogate), e misura RMS su:
+   - **Surround (SL/SR)** → indice primario di *envelopment/immersione*
+   - **Centrale (FC)** → priorità assoluta: **la voce deve stare sopra tutto**
 
-**Risultato percettivo:**  
-scena più larga, più cinematografica, con surround che “abbracciano” l’ascoltatore senza rubare attenzione ai dialoghi.
+3) **Applica lo schema decisionale (sotto)** per scegliere `wide / sonar / aegis / voice`.
 
----
+4) **Fine-tuning (Front + LFE)** solo per aggiustamenti: *non cambia il profilo base*, ma ti evita quei casi “ok tutto… però i bassi sono morti”.
 
-### 2️⃣ Sonar - Upfiring psicoacustico coerente  
-*(Simulazione 5.1.2 virtuale)*
-
-La modalità **Sonar** è orientata alla **profondità e alla verticalità percepita**, ispirata ai sistemi upfiring, pur operando su un impianto 5.1 tradizionale.
-
-Qui il tempo diventa il vero protagonista: piccoli ritardi e stratificazioni spettrali inducono il cervello a interpretare il suono come proveniente anche dall’alto.
-
-#### Struttura a layer
-- **Direct**  
-  Riferimento stabile e non alterato.
-- **Presence**  
-  Rinforzo controllato per aumentare la sensazione di elevazione.
-- **High-Diffuse**  
-  Diffusione decorrelata sulle medio-alte.
-- **Late Tail**  
-  Coda tardiva morbida che amplia la scena senza eco udibili.
-
-#### Micro-ritardi tipici
-- **~14 ms** → presenza e riflessioni precoci
-- **~28 ms** → diffusione verticale
-- **~85 ms** → ambiente tardivo
-
-#### Bande di frequenza (concettuali)
-- **Basse frequenze (< 1.500 Hz)**  
-  Deliberatamente ridotte: la verticalità non nasce dal basso.
-- **Medio-alte (≈ 1.500–8.000 Hz)**  
-  Cuore della modalità Sonar: il cervello associa queste bande a riflessioni elevate.
-- **Alte (> 8.000 Hz)**  
-  Smussate e controllate per evitare fatica d’ascolto.
-
-**Risultato percettivo:**  
-una scena più alta, più profonda e rilassata, con un senso di spazio tridimensionale credibile e naturale.
+> Suggerimento pratico: se Audacity non ti mostra chiaramente la 5.1 come canali separati, usa “Split to mono” (o esporta temporaneamente il 5.1 in WAV multicanale con FFmpeg) e analizza FC/SL/SR come tracce.
 
 ---
 
-### 🧭 Filosofia di scelta
+## 🧭 Flusso decisionale RMS (schema semplice)
 
-- **Wide** privilegia l’**ampiezza della scena** e l’impatto emotivo in stile cinema moderno
-- **Sonar** privilegia la **credibilità spaziale** e la stabilità percettiva della scena nel tempo.
+> Aggiungi questa immagine al repo (es. `docs/preset_schema.jpg`) e aggiorna il path se serve:
+<p align="left">
+  <img src="docs/preset_schema.jpg" width="900" alt="Flusso decisionale RMS – schema semplice">
+</p>
 
-Entrambe le modalità rispettano il mix originale e cooperano con la EQ Voce Sartoriale, senza mai interferire con LFE, frontali o sistemi di calibrazione ambientale.
+### 1) Guarda RMS Surround (primo indicatore di immersione)
+- **> −26 dB** → aggressivo → base: **WIDE**
+- **−26 … −30 dB** → bilanciato → base: **SONAR**
+- **−31 … −34 dB** → conservativo → base: **AEGIS**
+- **< −34 dB** → debole/inutile → **AEGIS** o **VOICE** (o **NONE** se prevedi preset “no DSP surround”)
 
+### 2) Guarda RMS FC / Centro (la voce comanda)
+- **> −20 dB** → voce molto forte → ok, mantieni base
+- **−21 … −24 dB** → voce buona → ok, mantieni base
+- **−25 … −28 dB** → voce medio-bassa → forza **AEGIS** + considera **+2…+5 dB** sul centro
+- **≤ −29 dB** → voce debole/scompare → forza **AEGIS** + **+3…+6 dB** sul centro (voice boost)
 
----
+Regola d’oro: se FC è basso → *downgrade profilo* (da **WIDE → SONAR/AEGIS**, da **SONAR → AEGIS**, ecc.)
 
-## 🧩 Utilizzo
+### 3) Conclusione profilo principale (surround + centro)
+- Surround **> −26** + FC **≥ −22** → **WIDE**
+- Surround **−26…−30** + FC **≥ −23** → **SONAR**
+- Surround **−31…−34** o FC **≤ −24** → **AEGIS**
+- Surround **< −34** o FC **≤ −28** → **AEGIS** (o **VOICE/NONE** se surround inutile)
 
-```bash
-./sonarwide.sh <ac3|eac3> <si|no> [file] [bitrate] [sonar|wide] [amd|nvidia|intel|cpu]
-```
+### 4) Verifica fine-tuning: Front + LFE (solo aggiustamenti)
+**Front L/R**
+- ≈ FC (±3 dB) → ok
+- Front > FC di **+4…+6 dB** → effetti front troppo forti → +1…+2 dB su FC se la voce fatica
+- Front molto bassi (< −26 dB) → scena front debole → +2…+4 dB su Front L/R
 
-### Parametri
-- **Codec output:** `ac3` | `eac3`
-- **Mantieni traccia originale:** `si` | `no`
-- **File:** nome file oppure `""` per elaborazione batch
-- **Bitrate:** es. `640k`, `768k`
-- **Modalità surround:** `sonar` | `wide`
+**LFE**
+- **> −18 dB** → bassi molto forti → perfetto (nessun boost)
+- **−19 … −22 dB** → bassi buoni → ok
+- **−23 … −26 dB** → bassi discreti → +3…+6 dB subwoofer
+- **< −26 dB** → bassi deboli → +6…+10 dB subwoofer (o più se action)
 
-### Esempi
-```bash
-./sonarwide.sh ac3 no "film.mkv" 640k sonar amd
-./sonarwide.sh eac3 si "" 768k wide cpu
-```
+**Risultato finale** = profilo del punto 3 + eventuali tweak del punto 4
 
 ---
 
@@ -195,8 +209,8 @@ Entrambe le modalità rispettano il mix originale e cooperano con la EQ Voce Sar
 
 ## 🚫 Cosa questo script NON fa
 
-- non applica dialog enhancer artificiali
-- non comprime aggressivamente la dinamica
+- non applica “dialog enhancer” artificiali
+- non comprime aggressivamente la dinamica (a parte la guardia leggera in Aegis)
 - non modifica i frontali
 - non equalizza l’LFE
 - non sostituisce la calibrazione ambientale
