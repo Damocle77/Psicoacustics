@@ -120,7 +120,7 @@ Lavora sulla **dimensione orizzontale**: più ampiezza laterale e avvolgimento, 
 ### 2️⃣ Sonar — Upfiring psicoacustico coerente (simulazione 5.1.2 virtuale)
 Spinge su **profondità e verticalità percepita**, con micro-ritardi e stratificazioni sulle medio-alte per creare “altezza” credibile.
 
-### 3️⃣ Aegis — Guardiano dinamico (cupola controllata)
+### 3️⃣ Aegis — Cupola psicoacustica (simulazione cupola virtuale)
 Pensato quando vuoi “il meglio dei due mondi” ma con più disciplina: surround **meno invadente**, più **stabile** su contenuti rumorosi/affollati, e con una leggera **guardia dinamica**.
 
 ### 4️⃣ Voice — Solo parlato (FC-only)
