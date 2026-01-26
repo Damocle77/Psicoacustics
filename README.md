@@ -70,7 +70,7 @@ chmod +x aegis_sonar_wide_voice.sh
 - **mode**:
   - `sonar` = “altezza” (simulazione psicoacustica 5.1.2 verticale)
   - `wide`  = “ampiezza” (simulazione psicoacustica 7.1 orizzontale)
-  - `aegis` = “intermedia” (guardia dinamica + cupola più controllata)
+  - `aegis` = “intermedia” (Simulazione psicoacustica cupola sonora)
   - `voice` = **solo EQ Voce Sartoriale su FC** (surround pass-through)
 
 ### Esempi (singolo file)
@@ -156,11 +156,6 @@ Qui l’idea è *data-driven*, non “a naso”:
 ---
 
 ## 🧭 Flusso decisionale RMS (schema semplice)
-
-> Aggiungi questa immagine al repo (es. `docs/preset_schema.jpg`) e aggiorna il path se serve:
-<p align="left">
-  <img src="docs/preset_schema.jpg" width="900" alt="Flusso decisionale RMS – schema semplice">
-</p>
 
 ### 1) Guarda RMS Surround (primo indicatore di immersione)
 - **> −26 dB** → aggressivo → base: **WIDE**
