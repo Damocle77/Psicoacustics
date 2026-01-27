@@ -188,7 +188,7 @@ Qui l’idea è *data-driven*, non “a naso”:
 
 ## 🧭 Flusso decisionale RMS (schema semplice)
 <p align="center">
-  <img src="docs/guida_voice_schema.png" width="700" alt="Schema decisionale Sonar / Aegis / Wide + guida LFE">
+  <img src="guida_voice_schema.png" width="700" alt="Schema decisionale Sonar / Aegis / Wide + guida LFE">
 </p>
 
 
