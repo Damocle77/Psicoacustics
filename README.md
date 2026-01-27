@@ -1,5 +1,5 @@
 <p align="left">
-  <img src="sonary_logo.png" width="600" alt="Sonary Suite Logo">
+  <img src="sonary_logo.png" width="700" alt="Sonary Suite Logo">
 </p>
 
 # 🎧 Sonary Suite – Sonar / Wide / Aegis / Voice
@@ -87,7 +87,7 @@ chmod +x aegis_sonar_wide_voice.sh
 
 ---
 
-## 🎚️ EQ Voce Sartoriale (Canale Centrale – FC)
+## 🎚️ EQ Voce Sartoriale (FC)
 
 L’EQ Voce è **sempre attiva**, indipendentemente dalla modalità surround selezionata.
 È progettata per esaltare il **parlato italiano**, con l’obiettivo di ottenere:
@@ -136,7 +136,8 @@ Qui l’idea è *data-driven*, non “a naso”:
 
    Fallback CLI (se vuoi applicare narmalizzazione dinamica a mano con FFmpeg, versione):
    ```bash
-   ffmpeg -i "input.mkv" -map 0 -c copy -c:a pcm_s16le -af "dynaudnorm=f=150:g=5:m=10" "prep_audio.wav"
+   ffmpeg -i "input.mkv" -map 0 -c copy -c:a pcm_s16le \
+   -af "dynaudnorm=f=150:g=5:m=10" "prep_audio.wav"
    ```
 
 2) **Analisi RMS in (si consiglia Audacity)**  
@@ -162,8 +163,8 @@ Qui l’idea è *data-driven*, non “a naso”:
 ---
 
 ## 🧭 Flusso decisionale RMS (schema semplice)
-<p align="center">
-  <img src="guida_voice_schema.png" width="900" alt="Schema decisionale Sonar / Aegis / Wide + guida LFE">
+<p align="left">
+  <img src="guida_voice_schema.png" width="700" alt="Schema decisionale Sonar / Aegis / Wide + guida LFE">
 </p>
 
 
