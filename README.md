@@ -2,7 +2,7 @@
   <img src="sonary_logo.png" width="700" alt="Sonary Suite Logo">
 </p>
 
-# 🎧 Sonary Suite – Sonar | Wide | Aegis | Voice
+# 🎧 Sonary Suite – Sonar / Wide / Aegis / Voice
 
 DSP **offline** avanzato per tracce audio **5.1**, progettato per migliorare **intelligibilità del parlato**, **coerenza timbrica** e **spazialità surround** senza stravolgere il mix originale.
 
@@ -49,7 +49,32 @@ Il risultato è un suono più intelleggibile, stabile e naturale, che **non comb
 ```bash
 git clone https://github.com/Damocle77/Psicoacustics.git
 cd Psicoacustics
-chmod +x aegis_sonar_wide_voice.sh
+chmod +x aegis_sonar_wide_voice.sh stereo251_psico.sh asmr_vr_psico.sh
+```
+
+---
+
+## 📜 Script aggiuntivi inclusi
+
+Oltre allo script principale `aegis_sonar_wide_voice.sh`, nel repo trovi anche due “utility” dedicate:
+
+### 1) `stereo251_psico.sh` — Upmix **stereo → 5.1**
+Pensato per sorgenti **2.0** (serie/film vecchi, release “stereo only”, ecc.) quando vuoi ottenere un 5.1 credibile (senza inventare un Atmos con la Forza).
+
+Esempi:
+```bash
+# modalità: pan | surround | cinema
+./stereo251_psico.sh surround 448k "episodio.mkv"
+./stereo251_psico.sh cinema 640k "film.mkv"
+```
+
+### 2) `asmr_vr_psico.sh` — Preset **VR/ASMR “close presence”** (stereo → pseudo-binaurale)
+Ottimizzato per cuffie / VR: crossfeed, EQ da sussurri ravvicinati e controllo loudness per un effetto “davanti al viso” (senza trasformare la voce in un demone radiofonico).
+
+Esempi:
+```bash
+./asmr_vr_psico.sh "input.mkv"
+./asmr_vr_psico.sh -o OUTDIR -k "input.mkv"   # -k mantiene anche la traccia originale
 ```
 
 ---
@@ -136,8 +161,7 @@ Qui l’idea è *data-driven*, non “a naso”:
 
    Fallback CLI (se vuoi applicare narmalizzazione dinamica a mano con FFmpeg, versione):
    ```bash
-   ffmpeg -i "input.mkv" -map 0 -c copy -c:a pcm_s16le \
-   -af "dynaudnorm=f=150:g=5:m=10" "prep_audio.wav"
+   ffmpeg -i "input.mkv" -map 0 -c copy -c:a pcm_s16le -af "dynaudnorm=f=150:g=5:m=10" "prep_audio.wav"
    ```
 
 2) **Analisi RMS in (si consiglia Audacity)**  
@@ -163,8 +187,8 @@ Qui l’idea è *data-driven*, non “a naso”:
 ---
 
 ## 🧭 Flusso decisionale RMS (schema semplice)
-<p align="left">
-  <img src="guida_voice_schema.png" width="700" alt="Schema decisionale Sonar / Aegis / Wide + guida LFE">
+<p align="center">
+  <img src="docs/guida_voice_schema.png" width="700" alt="Schema decisionale Sonar / Aegis / Wide + guida LFE">
 </p>
 
 
