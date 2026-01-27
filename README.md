@@ -8,7 +8,7 @@ DSP **offline** avanzato per tracce audio **5.1**, progettato per migliorare **i
 
 Pensato per AVR usati in modalità **Straight / Pure / Direct** (testato e ottimizzato su Yamaha RX-V4A), e compatibile con sistemi di correzione ambientale come **YPAO**.
 
-> "Non tutti i supereroi indossano un mantello… a volte basta un `-filter_complex` per salvare il mondo del 5.1."  
+> "Non tutti i supereroi indossano il mantello… a volte basta `filter_complex` per salvare il mondo del 5.1."  
 > ⚡ Sandro (D@mocle77) Sabbioni ⚡
 >   …perception follows physics…
 
@@ -23,20 +23,18 @@ Sonary Suite nasce da un principio semplice ma rigoroso:
 Per questo motivo:
 - l’elaborazione è **offline** (nessun DSP in tempo reale sull’AVR)
 - **FL / FR restano neutri**
-- **LFE non viene mai toccato**
-- il canale **Centrale (FC)** riceve una EQ dedicata e costante
+- **LFE non viene alterato**
+- il canale **Centrale (FC)** riceve una EQ dedicata e costante (eq sartoriale)
 - i **Surround** sono l’unico elemento variabile (Sonar / Wide / Aegis / oppure bypass in Voice)
 
-Il risultato è un suono più leggibile, stabile e naturale, che **non combatte** né YPAO né il mix originale.
-
-> Nota “fisica non negoziabile”: **AC3 / E-AC3 si codificano sempre via CPU**. L’eventuale HW accel riguarda al massimo la *decodifica video*, non l’encoding audio.
+Il risultato è un suono più intelleggibile, stabile e naturale, che **non combatte** il mix originale.
 
 ---
 
 ## ✅ Requisiti
 
 ### Software
-- **FFmpeg 7+** (consigliato con resampler **SOXR**)
+- **FFmpeg 8** (consigliato con resampler **SOXR**)
 - **Bash 4.x+**
 
 ### Sistemi operativi
@@ -49,8 +47,8 @@ Il risultato è un suono più leggibile, stabile e naturale, che **non combatte*
 ## 🚀 Installazione
 
 ```bash
-git clone https://github.com/Damocle77/Sonar_AC3D.git
-cd Sonar_AC3D
+git clone https://github.com/Damocle77/Psicoacustics.git
+cd Psicoacustics
 chmod +x aegis_sonar_wide_voice.sh
 ```
 
@@ -132,17 +130,16 @@ Quando i surround sono inutili o dannosi (mix piatto, serie vecchie, dialoghi fr
 
 Qui l’idea è *data-driven*, non “a naso”:
 
-1) **Normalizzazione dinamica preventiva (FFMediaMaster)**  
+1) **Normalizzazione dinamica preventiva (si consiglia ffMediaMaster)**  
    Utile solo se la traccia ha una dinamica ingestibile (dialoghi troppo bassi, esplosioni che ti fanno saltare sul divano).  
-   In **FFMediaMaster** applica una **normalizzazione dinamica leggera** (tipo *Dynamic Audio Normalizer / dynaudnorm* oppure un *loudnorm* non aggressivo), esportando una copia “preparata” per l’elaborazione Sonary.
+   In **ffMediaMaster** applica una **normalizzazione dinamica leggera** (tipo *Dynamic Audio Normalizer / dynaudnorm* oppure un *loudnorm* non aggressivo), esportando una copia “preparata” per l’elaborazione.
 
-   Fallback CLI (se vuoi farlo a mano con FFmpeg, versione *gentile*):
+   Fallback CLI (se vuoi applicare narmalizzazione dinamica a mano con FFmpeg, versione):
    ```bash
    ffmpeg -i "input.mkv" -map 0 -c copy -c:a pcm_s16le -af "dynaudnorm=f=150:g=5:m=10" "prep_audio.wav"
    ```
-   *(Poi userai il file originale per il mux finale; questa è solo una “diagnosi/prep”.)*
 
-2) **Analisi RMS in Audacity (scelta profilo)**  
+2) **Analisi RMS in (si consiglia Audacity)**  
    Apri la traccia 5.1 in Audacity (con FFmpeg installato), fai zoom su **2 finestre rappresentative** (scene action + scene dialogate), e misura RMS su:
    - **Surround (SL/SR)** → indice primario di *envelopment/immersione*
    - **Centrale (FC)** → priorità assoluta: **la voce deve stare sopra tutto**
@@ -151,11 +148,24 @@ Qui l’idea è *data-driven*, non “a naso”:
 
 4) **Fine-tuning (Front + LFE)** solo per aggiustamenti: *non cambia il profilo base*, ma ti evita quei casi “ok tutto… però i bassi sono morti”.
 
-> Suggerimento pratico: se Audacity non ti mostra chiaramente la 5.1 come canali separati, usa “Split to mono” (o esporta temporaneamente il 5.1 in WAV multicanale con FFmpeg) e analizza FC/SL/SR come tracce.
+> Suggerimento pratico: se Audacity non mostra chiaramente la 5.1 come canali separati, usa “Split to mono” e analizza FC/SL/SR come tracce.
 
+  Fallback CLI (se vuoi esportare manualmente il 5.1 in WAV multicanale con FFmpeg):  
+  ```bash
+   ffmpeg -hide_banner -y -i "input.mkv" -map 0:a:0 \
+   -filter_complex "channelsplit=channel_layout=5.1[FL][FR][FC][LFE][SL][SR]" \
+   -map "[FC]" -c:a pcm_s24le -ar 48000 "FC.wav" \
+   -map "[SL]" -c:a pcm_s24le -ar 48000 "SL.wav" \
+   -map "[SR]" -c:a pcm_s24le -ar 48000 "SR.wav"
+  ```
+  
 ---
 
 ## 🧭 Flusso decisionale RMS (schema semplice)
+<p align="center">
+  <img src="docs/guida_voice_schema.png" width="900" alt="Schema decisionale Sonar / Aegis / Wide + guida LFE">
+</p>
+
 
 ### 1) Guarda RMS Surround (primo indicatore di immersione)
 - **> −26 dB** → aggressivo → base: **WIDE**
@@ -216,4 +226,4 @@ Regola d’oro: se FC è basso → *downgrade profilo* (da **WIDE → SONAR/AEGI
 
 MIT License.
 
-> *Per riportare ordine nella Forza Sonora serve solo uno script Bash… questa è la via.*
+> *Per riportare ordine nella ForzaSonora serve solo uno script Bash… questa è la via.*
