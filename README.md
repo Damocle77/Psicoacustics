@@ -1,8 +1,8 @@
 <p align="left">
-  <img src="sonary_logo.png" width="600" alt="Sonary Suite Logo">
+  <img src="psicoacustics_logo.png" width="650" alt="Sonary Suite Logo">
 </p>
 
-# 🎧 Sonary Suite – Sonar / Wide / Aegis / Aura / Voice
+# 🎧 Psicoacustics Suite – Sonar / Wide / Aegis / Aura / Voice
 
 DSP **offline** avanzato per tracce audio **5.1**, progettato per migliorare **intelligibilità del parlato**, **coerenza timbrica** e **spazialità surround** senza stravolgere il mix originale.
 
@@ -165,7 +165,7 @@ Qui l’idea è *data-driven*, non “a naso”:
 
 > Aggiungi questa immagine al repo (es. `docs/preset_schema.jpg`) e aggiorna il path se serve:
 <p align="left">
-  <img src="preset_schema.jpg" width="900" alt="Flusso decisionale RMS – schema semplice">
+  <img src="preset_schema.jpg" width="700" alt="Flusso decisionale RMS – schema semplice">
 </p>
 
 ### 1) Guarda RMS Surround (primo indicatore di immersione)
@@ -217,7 +217,7 @@ Regola d’oro: se FC è basso → *downgrade profilo* (da **WIDE → SONAR/AEGI
 Per far rendere **Sonar / Wide / Aegis / Aura** (e per evitare l’effetto “surround a caso lanciato dal balcone”), il punto chiave è la **simmetria** rispetto alla posizione d’ascolto e un fronte **L/C/R** ben centrato sul TV.
 
 <p align="left">
-  <img src="sonar_room_layout.png" width="900" alt="Sonary – layout consigliato della stanza">
+  <img src="sonar_room_layout.png" width="700" alt="Sonary – layout consigliato della stanza">
 </p>
 
 Note pratiche:
