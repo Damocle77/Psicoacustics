@@ -10,7 +10,7 @@ Pensato per AVR usati in modalità **Straight / Pure / Direct** (testato e ottim
 
 > "Non tutti i supereroi indossano un mantello… a volte basta un `-filter_complex` per salvare il mondo del 5.1."  
 > ⚡ Sandro (D@mocle77) Sabbioni ⚡
-…perception follows physics…
+> …perception follows physics…
 
 ---
 
