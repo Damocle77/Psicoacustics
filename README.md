@@ -1,5 +1,5 @@
 <p align="left">
-  <img src="psicoacustics_logo.png" width="650" alt="Sonary Suite Logo">
+  <img src="psicoacustics_logo.png" width="700" alt="Sonary Suite Logo">
 </p>
 
 # 🎧 Psicoacustics Suite – Sonar / Wide / Aegis / Aura / Voice
@@ -165,7 +165,7 @@ Qui l’idea è *data-driven*, non “a naso”:
 
 > Aggiungi questa immagine al repo (es. `docs/preset_schema.jpg`) e aggiorna il path se serve:
 <p align="left">
-  <img src="preset_schema.jpg" width="700" alt="Flusso decisionale RMS – schema semplice">
+  <img src="guida_voice_schema.png" width="700" alt="Flusso decisionale RMS – schema semplice">
 </p>
 
 ### 1) Guarda RMS Surround (primo indicatore di immersione)
