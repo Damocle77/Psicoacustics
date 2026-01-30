@@ -217,7 +217,7 @@ Regola d’oro: se FC è basso → *downgrade profilo* (da **WIDE → SONAR/AEGI
 Per far rendere **Sonar / Wide / Aegis / Aura** (e per evitare l’effetto “surround a caso lanciato dal balcone”), il punto chiave è la **simmetria** rispetto alla posizione d’ascolto e un fronte **L/C/R** ben centrato sul TV.
 
 <p align="left">
-  <img src="sonar_room_layout.png" width="700" alt="Sonary – layout consigliato della stanza">
+  <img src="sonar_room_layout.png" width="600" alt="Sonary – layout consigliato della stanza">
 </p>
 
 Note pratiche:
