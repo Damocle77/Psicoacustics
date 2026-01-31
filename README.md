@@ -2,7 +2,7 @@
   <img src="sonary_logo.png" width="600" alt="Sonary Suite Logo">
 </p>
 
-# 🎧 SONARY Suite — Sonar / Wide / Aegis / Aura / Voice
+# 🎧 SONARY Suite - Sonar / Wide / Aegis / Aura / Voice - 2026
 
 DSP **offline** avanzato per tracce audio **5.1**, progettato per migliorare **intelligibilità del parlato**, **coerenza timbrica** e **spazialità surround** senza stravolgere il mix originale.
 
@@ -202,14 +202,12 @@ Ottimizza tracce **stereo** per ascolto ravvicinato VR/ASMR/intimo
 ## 🎨️ EQ Voce Sartoriale (Canale Centrale — FC)
 
 L'EQ Voce è **sempre attiva** in tutti gli script (5.1 processing, stereo upmix), indipendentemente dalla modalità surround.
-
-### Versione ottimizzata (2026)
 ```
 −1.0 dB @ 230 Hz   → alleggerimento del corpo vocale
 −1.0 dB @ 350 Hz   → riduzione "boxiness"
 −0.5 dB @ 900 Hz   → micro de-nasalizzazione
 +1.6 dB @ 1.0 kHz  → articolazione del parlato
-+0.4 dB @ 1.8 kHz  → "chiodo" frontale
++0.4 dB @ 1.8 kHz  → chiodo frontale
 +1.6 dB @ 2.5 kHz  → attacco consonantico (T,K,S,F) - RIDOTTO da +2.3
 +0.35 dB @ 3.2 kHz → presenza / intelligibilità
 −1.0 dB @ 7.2 kHz  → controllo sibilanti
