@@ -34,8 +34,6 @@ Il risultato è un suono più leggibile, stabile e naturale, che **non combatte*
 - **Stanza irregolare >4×5×4m** → Delay ridotti (50ms vs 85ms), energia surround bilanciata
 - **YPAO attivo** → Filtri coordinati per evitare doppia compensazione
 
-> Nota "fisica non negoziabile": **AC3 / E-AC3 si codificano sempre via CPU**. L'eventuale HW accel riguarda al massimo la *decodifica video*, non l'encoding audio.
-
 ---
 
 ## ✅ Requisiti
