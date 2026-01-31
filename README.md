@@ -2,7 +2,7 @@
   <img src="sonary_logo.png" width="600" alt="Sonary Suite Logo">
 </p>
 
-# 🎧 Psicoacustics Suite — Sonar / Wide / Aegis / Aura / Voice
+# 🎧 SONARY Suite — Sonar / Wide / Aegis / Aura / Voice
 
 DSP **offline** avanzato per tracce audio **5.1**, progettato per migliorare **intelligibilità del parlato**, **coerenza timbrica** e **spazialità surround** senza stravolgere il mix originale.
 
