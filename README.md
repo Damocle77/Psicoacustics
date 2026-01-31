@@ -457,7 +457,7 @@ ffmpeg -version
 
 ## 📄 Licenza
 
-MIT License - Vedi file LICENSE
+MIT License
 
 ---
 
