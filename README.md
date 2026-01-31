@@ -201,8 +201,6 @@ Ottimizza tracce **stereo** per ascolto ravvicinato VR/ASMR/intimo
 ## 🎨️ EQ Voce Sartoriale (Canale Centrale — FC)
 
 L'EQ Voce è **sempre attiva** in tutti gli script (5.1 processing, stereo upmix), indipendentemente dalla modalità surround.
-
-### Versione ottimizzata (2026)
 ```
 −1.0 dB @ 230 Hz   → alleggerimento del corpo vocale
 −1.0 dB @ 350 Hz   → riduzione "boxiness"
@@ -265,7 +263,7 @@ Questo compensa l'energia surround variabile mantenendo la voce sempre prioritar
 
 **Effetto**: Surround presente ma mai invadente, controllo su picchi
 
-### 4️⃣ AURA — Wide Light (spazio laterale soft)
+### 4️⃣ AURA — Wide Light (più spazio laterale)
 **Quando usarla**: Drama, dialoghi prioritari, mix delicati
 **Architettura**:
 - Solo 2 layer (direct + ambient)
