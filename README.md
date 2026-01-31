@@ -2,7 +2,7 @@
   <img src="sonary_logo.png" width="600" alt="Sonary Suite Logo">
 </p>
 
-# 🎧 SONARY Suite - Sonar / Wide / Aegis / Aura / Voice - 2026
+# 🎧 Sonary Suite — Sonar / Wide / Aegis / Aura / Voice
 
 DSP **offline** avanzato per tracce audio **5.1**, progettato per migliorare **intelligibilità del parlato**, **coerenza timbrica** e **spazialità surround** senza stravolgere il mix originale.
 
@@ -23,7 +23,6 @@ Sonary Suite nasce da un principio semplice ma rigoroso:
 Per questo motivo:
 - l'elaborazione è **offline** (nessun DSP in tempo reale sull'AVR)
 - **FL / FR restano neutri**
-- **LFE non viene mai toccato**
 - il canale **Centrale (FC)** riceve una EQ dedicata e costante
 - i **Surround** sono l'unico elemento variabile (Sonar / Wide / Aegis / Aura oppure bypass in Voice)
 
@@ -58,7 +57,7 @@ Il risultato è un suono più leggibile, stabile e naturale, che **non combatte*
 git clone https://github.com/Damocle77/Sonary_Suite.git
 cd Sonary_Suite
 chmod +x aegis_sonar_wide_aura_voice.sh
-chmod +x stereo251_psico.sh
+chmod +x stereo251_upmix.sh
 chmod +x asmr_vr_intimate.sh
 ```
 
@@ -69,7 +68,7 @@ chmod +x asmr_vr_intimate.sh
 ### 1️⃣ **aegis_sonar_wide_aura_voice.sh** - Processing 5.1 esistente
 Elabora tracce **5.1 già presenti** con DSP surround psicoacustico
 
-### 2️⃣ **stereo251_psico.sh** - Upmix Stereo → 5.1
+### 2️⃣ **stereo251_upmix.sh** - Upmix Stereo → 5.1
 Converte tracce **stereo** in 5.1 con upmix psicoacustico reattivo
 
 ### 3️⃣ **asmr_vr_intimate.sh** - Audio binaurale intimo
@@ -99,19 +98,19 @@ Ottimizza tracce **stereo** per ascolto ravvicinato VR/ASMR/intimo
 ### Esempi pratici
 ```bash
 # Film d'azione moderno → WIDE per massima ampiezza laterale
-./aegis_sonar_wide_aura_voice.sh eac3 no "frenetico.mkv" 768k wide
+./aegis_sonar_wide_aura_voice.sh eac3 no "fast_furious.mkv" 768k wide
 
 # Sci-fi/fantasy → SONAR per effetto altezza
-./aegis_sonar_wide_aura_voice.sh eac3 no "blockbuster.mkv" 768k sonar
+./aegis_sonar_wide_aura_voice.sh eac3 no "interstellar.mkv" 768k sonar
 
 # Thriller con dinamica variabile → AEGIS per controllo
-./aegis_sonar_wide_aura_voice.sh eac3 no "cinecomic.mkv" 640k aegis
+./aegis_sonar_wide_aura_voice.sh eac3 no "batman.mkv" 640k aegis
 
 # Drama/contenuto vocale → AURA per spazio discreto
-./aegis_sonar_wide_aura_voice.sh ac3 si "dramatico.mkv" 640k aura
+./aegis_sonar_wide_aura_voice.sh ac3 si "drama.mkv" 640k aura
 
 # Traccia con surround inutili → VOICE (solo EQ centrale)
-./aegis_sonar_wide_aura_voice.sh ac3 no "vecchiofilm.mkv" 640k voice
+./aegis_sonar_wide_aura_voice.sh ac3 no "vecchio_film.mkv" 640k voice
 
 # Batch intera cartella con WIDE
 ./aegis_sonar_wide_aura_voice.sh eac3 no "" 768k wide
@@ -119,11 +118,11 @@ Ottimizza tracce **stereo** per ascolto ravvicinato VR/ASMR/intimo
 
 ---
 
-## 🎚️ Script 2: stereo251_psico.sh (Upmix Stereo → 5.1)
+## 🎚️ Script 2: stereo251_upmix.sh (Upmix Stereo → 5.1)
 
 ### Utilizzo base
 ```bash
-./stereo251_psico.sh <pan|surround> [codec] [bitrate] file1.mkv [file2.mkv ...]
+./stereo251_upmix.sh <pan|surround> [codec] [bitrate] file1.mkv [file2.mkv ...]
 ```
 
 ### Modalità
@@ -137,18 +136,18 @@ Ottimizza tracce **stereo** per ascolto ravvicinato VR/ASMR/intimo
 ### Esempi
 ```bash
 # Film moderno stereo → 5.1 reattivo
-./stereo251_psico.sh surround eac3 768k "film_stereo.mkv"
+./stereo251_upmix.sh surround eac3 768k "film_stereo.mkv"
 
 # Vecchio film → 5.1 stabile
-./stereo251_psico.sh pan ac3 640k "classico_1960.mkv"
+./stereo251_upmix.sh pan ac3 640k "classico_1960.mkv"
 
 # Default (surround, eac3, 448k)
-./stereo251_psico.sh surround "serie.mkv"
+./stereo251_upmix.sh surround "serie.mkv"
 ```
 
 ### Caratteristiche tecniche
 - **Crossfeed moderato** (0.02) per stabilità immagine stereo
-- **Sidechain upward compression** sui surround (reagisce all'envelope dei front)
+- **surround BED+EVENT** envelope lenta (~12 Hz), limiter finale, overwrite TTY-aware
 - **Aphaser decorrelation** per evitare localizzazione centrale posteriore
 - **LFE ottimizzato** per crossover 160Hz (lowpass 140Hz, volume 1.50)
 - **Surround highpass 160Hz** coordinato con bass management AVR
@@ -202,12 +201,14 @@ Ottimizza tracce **stereo** per ascolto ravvicinato VR/ASMR/intimo
 ## 🎨️ EQ Voce Sartoriale (Canale Centrale — FC)
 
 L'EQ Voce è **sempre attiva** in tutti gli script (5.1 processing, stereo upmix), indipendentemente dalla modalità surround.
+
+### Versione ottimizzata (2026)
 ```
 −1.0 dB @ 230 Hz   → alleggerimento del corpo vocale
 −1.0 dB @ 350 Hz   → riduzione "boxiness"
 −0.5 dB @ 900 Hz   → micro de-nasalizzazione
 +1.6 dB @ 1.0 kHz  → articolazione del parlato
-+0.4 dB @ 1.8 kHz  → chiodo frontale
++0.4 dB @ 1.8 kHz  → "chiodo" frontale
 +1.6 dB @ 2.5 kHz  → attacco consonantico (T,K,S,F) - RIDOTTO da +2.3
 +0.35 dB @ 3.2 kHz → presenza / intelligibilità
 −1.0 dB @ 7.2 kHz  → controllo sibilanti
@@ -451,18 +452,7 @@ ffmpeg -version
 
 ---
 
-## 📝 Changelog
-
-### v2.0 (Gennaio 2026) - Ottimizzazione setup reale
-- ✅ Crossover 160Hz: LFE → 140Hz lowpass, volume 1.50
-- ✅ Surround highpass coordinato a 160Hz
-- ✅ Delay ridotti: 85ms → 50ms per stanze reali
-- ✅ EQ voce 2.5kHz: +2.3 → +1.6 dB (meno affaticamento)
-- ✅ Aggiunto **stereo251_psico.sh** (upmix stereo → 5.1)
-- ✅ Aggiunto **asmr_vr_intimate.sh** (audio binaurale intimo)
-- ✅ Documentazione completa con workflow RMS
-
-### v1.0 (2025)
+### Gennaio (2025)
 - 🎉 Release iniziale con 5 modalità (Sonar, Wide, Aegis, Aura, Voice)
 
 ---
@@ -485,6 +475,7 @@ MIT License - Vedi file LICENSE
 
 - Community FFmpeg per gli strumenti
 - Yamaha per RX-V4A e YPAO
+- Tutti i beta tester che hanno fornito feedback
 
 ---
 
