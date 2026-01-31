@@ -473,7 +473,6 @@ MIT License - Vedi file LICENSE
 
 - Community FFmpeg per gli strumenti
 - Yamaha per RX-V4A e YPAO
-- Tutti i beta tester che hanno fornito feedback
 
 ---
 
