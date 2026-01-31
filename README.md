@@ -99,19 +99,19 @@ Ottimizza tracce **stereo** per ascolto ravvicinato VR/ASMR/intimo
 ### Esempi pratici
 ```bash
 # Film d'azione moderno → WIDE per massima ampiezza laterale
-./aegis_sonar_wide_aura_voice.sh eac3 no "fast_furious.mkv" 768k wide
+./aegis_sonar_wide_aura_voice.sh eac3 no "frenetico.mkv" 768k wide
 
 # Sci-fi/fantasy → SONAR per effetto altezza
-./aegis_sonar_wide_aura_voice.sh eac3 no "interstellar.mkv" 768k sonar
+./aegis_sonar_wide_aura_voice.sh eac3 no "blockbuster.mkv" 768k sonar
 
 # Thriller con dinamica variabile → AEGIS per controllo
-./aegis_sonar_wide_aura_voice.sh eac3 no "batman.mkv" 640k aegis
+./aegis_sonar_wide_aura_voice.sh eac3 no "cinecomic.mkv" 640k aegis
 
 # Drama/contenuto vocale → AURA per spazio discreto
-./aegis_sonar_wide_aura_voice.sh ac3 si "drama.mkv" 640k aura
+./aegis_sonar_wide_aura_voice.sh ac3 si "dramatico.mkv" 640k aura
 
 # Traccia con surround inutili → VOICE (solo EQ centrale)
-./aegis_sonar_wide_aura_voice.sh ac3 no "vecchio_film.mkv" 640k voice
+./aegis_sonar_wide_aura_voice.sh ac3 no "vecchiofilm.mkv" 640k voice
 
 # Batch intera cartella con WIDE
 ./aegis_sonar_wide_aura_voice.sh eac3 no "" 768k wide
@@ -487,7 +487,6 @@ MIT License - Vedi file LICENSE
 
 - Community FFmpeg per gli strumenti
 - Yamaha per RX-V4A e YPAO
-- Tutti i beta tester che hanno fornito feedback
 
 ---
 
