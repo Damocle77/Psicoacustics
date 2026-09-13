@@ -38,23 +38,16 @@ DECORR_GAIN_WIDE="0.042"
 DECORR_GAIN_AEGIS="0.034"
 DECORR_GAIN_VOICE="0"
 
-# Guard rail della verifica audio comparativa input/output.
-VERIFY_SILENCE_PEAK_DB="-80.0"
-VERIFY_ACTIVE_INPUT_RMS_DB="-65.0"
-VERIFY_MAX_OVERALL_DROP_DB="18.0"
-VERIFY_MAX_MAIN_CHANNEL_DROP_DB="24.0"
-VERIFY_MAX_LFE_DROP_DB="36.0"
-VERIFY_MIN_SAMPLE_RATIO="0.98"
+# Peak catcher senza makeup gain: il gain nominale resta quello del VOLAMP.
+FC_LIMITER_OPTS="limit=0.94:attack=1.5:release=60:level=0:latency=1"
+MASTER_LIMITER_OPTS="limit=0.94:attack=2.5:release=50:level=0:latency=1"
 
-# La verifica audio lavora per default su una finestra centrale: evita due
-# decodifiche complete aggiuntive per ogni film (sorgente + candidato), che nei
-# batch facevano sembrare bloccata la fase conclusiva. Impostare a 0 per la
-# vecchia verifica esaustiva dell'intera traccia.
-VERIFY_SCAN_SECONDS="${VERIFY_SCAN_SECONDS:-180}"
-if ! [[ "$VERIFY_SCAN_SECONDS" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-  err "VERIFY_SCAN_SECONDS non valido: '$VERIFY_SCAN_SECONDS'"
-  exit 1
-fi
+# Compensazione del bed solo con marker esatto della traccia originale nel contenitore.
+# Indipendente dal preset DSP; nessuna attivazione da profilo codec o nome file.
+ATMOS_ORIGINAL_TITLE="EAC3 Atmos Original"
+ATMOS_ORIGINAL_TITLE_LEGACY="EAC3 Atmos (Original)"
+ATMOS_FC_GAIN_DB="0.6"
+ATMOS_LFE_GAIN_DB="-0.5"
 
 # FRONT_EQ: equalizzatore frontale condiviso, adattato a torri audio 3 vie.
 FRONT_EQ="equalizer=f=320:t=q:w=1.1:g=-0.8,equalizer=f=5000:t=q:w=1.4:g=0.4,highshelf=f=11000:t=q:w=0.7:g=0.4"
@@ -79,16 +72,16 @@ PARAMETRI:
   preset    : aegis | sonar | wide | aura | voice (default: sonar).
   volamp    : Gain finale opzionale in dB prima del limiter.
               Valori consentiti: 0 .. 6.0.
-              0 = OFF, default = 4.0 dB.
+              0 = OFF, default = 3.0 dB.
               Esempi pratici: 0 | 3.0 | 4.0 | 5.0 | 6.0
 
 MODALITA' --files:
   Processa soltanto i file elencati. Bitrate, preset e volamp sono obbligatori
   e in ordine fisso, cosi' i nomi dei file non risultano ambigui.
 ESEMPIO:
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 4.0 "film.mkv"
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 3.0 "film.mkv"
   ./aegis_sonar_wide_aura_voice_volamp_psycho.sh ac3 no 640k wide 3.0 ""
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files eac3 no 768k sonar 4.0 ep1.mkv ep4.mkv
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files eac3 no 768k sonar 3.0 ep1.mkv ep4.mkv
 
 COMPATIBILITA': resta accettato il vecchio ordine codec keep file [bitrate] [preset] [volamp].
 
@@ -122,7 +115,7 @@ MULTI_FILES=()
 INPUT_FILE=""
 BITRATE=""
 SUR_MODE=""
-VOLAMP_DB="4.0"
+VOLAMP_DB="3.0"
 
 if [[ "${1:-}" == "--files" ]]; then
   # Sintassi fissa: --files codec keep bitrate preset volamp file...
@@ -271,16 +264,11 @@ case "$VOLAMP_DB" in
     ;;
 esac
 
-# Guard rail: sopra 4.5 dB il limiter finale puo' iniziare a lavorare in modo udibile.
+# Guard rail: sopra 3.5 dB il limiter finale puo' iniziare a lavorare in modo udibile.
 # fino a 6.0 resta permesso per sorgenti realmente basse, ma va trattato come modalita' spinta.
-if awk -v v="$VOLAMP_DB" 'BEGIN { exit !(v > 4.5) }'; then
+if awk -v v="$VOLAMP_DB" 'BEGIN { exit !(v > 3.5) }'; then
   warn "volamp alto (${VOLAMP_DB} dB): controlla eventuale compressione percepita nei picchi."
 fi
-
-# Resampling finale HQ con SoX Resampler / SOXR. Precisione 28 bit.
-# 192k upsample: cutoff ininfluente (no contenuto sopra 24 kHz). 48k downsample: cutoff=0.91 per meno pre-ring.
-ARESAMPLE_192K="aresample=192000:resampler=soxr:precision=28"
-ARESAMPLE_48K="aresample=48000:resampler=soxr:precision=28:cutoff=0.91"
 
 # Descrizioni preset per log: non sono parte del processing, ma aiutano a capire cosa fa ogni preset senza dover leggere il codice.
 case "$SUR_MODE" in
@@ -343,6 +331,30 @@ get_audio_title_by_index() {
     -show_entries stream=index:stream_tags=title \
     -of default=nw=1 "$1" 2>/dev/null | awk -v idx="$2" '
     $0=="index="idx{f=1;next} f&&/^TAG:title=/{sub(/^TAG:title=/,"");print;exit} f&&/^index=/{exit}'
+}
+
+# Il marker puo' stare sulla traccia originale secondaria mentre elaboriamo il bed.
+# Match completo (case-insensitive), come per i marker affidabili dell'analyzer.
+set_atmos_bed_compensation() {
+  local titles title
+  ATMOS_FC_GAIN_FILTER=""
+  ATMOS_LFE_GAIN_FILTER=""
+  if ! titles=$(ffprobe -v error -select_streams a -show_entries stream_tags=title \
+      -of default=nw=1:nk=1 "$1" 2>/dev/null); then
+    warn "Marker Atmos non verificabile: compensazione FC/LFE disattivata."
+    return 0
+  fi
+  while IFS= read -r title; do
+    title="${title//$'\r'/}"
+    if [[ "${title,,}" == "${ATMOS_ORIGINAL_TITLE,,}" || \
+          "${title,,}" == "${ATMOS_ORIGINAL_TITLE_LEGACY,,}" ]]; then
+      ATMOS_FC_GAIN_FILTER="volume=${ATMOS_FC_GAIN_DB}dB,"
+      ATMOS_LFE_GAIN_FILTER="volume=${ATMOS_LFE_GAIN_DB}dB,"
+      info "Marker '$title': compensazione bed FC=${ATMOS_FC_GAIN_DB} dB, LFE=${ATMOS_LFE_GAIN_DB} dB."
+      return 0
+    fi
+  done <<<"$titles"
+  info "Marker originale Atmos assente: compensazione FC/LFE disattivata."
 }
 
 # Costruisco la lista dei file da processare: se è stato specificato un file, lo uso. Altrimenti, cerco tutti i file compatibili nella cartella.
@@ -463,42 +475,37 @@ EOF
 # PROFILI PRESET
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-# Funzione per impostare i blocchi di processing in base al preset selezionato. Ogni preset ha un set specifico di filtri, guadagni e opzioni del limiter.
+# Funzione per impostare i blocchi di processing in base al preset selezionato. Ogni preset ha un set specifico di filtri e guadagni.
 set_preset_profile() {
   case "$SUR_MODE" in
     sonar)
       SUR_BLOCK="$SUR_FILTERS_SONAR"
       VOICE_BLOCK="${VOICE_EQ_BASE}${VOICE_DELTA_SONAR}"
       DECORR_GAIN="$DECORR_GAIN_SONAR"
-      LIMITER_OPTS="limit=0.985:attack=2.5:release=50:level=1:latency=1"
       MODE_TITLE="SONAR"
       ;;
     aegis)
       SUR_BLOCK="$SUR_FILTERS_AEGIS"
       VOICE_BLOCK="${VOICE_EQ_BASE}${VOICE_DELTA_AEGIS}"
       DECORR_GAIN="$DECORR_GAIN_AEGIS"
-      LIMITER_OPTS="limit=0.985:attack=2.5:release=50:level=1:latency=1"
       MODE_TITLE="AEGIS"
       ;;
     aura)
       SUR_BLOCK="$SUR_FILTERS_AURA"
       VOICE_BLOCK="${VOICE_EQ_BASE}${VOICE_DELTA_AURA}"
       DECORR_GAIN="$DECORR_GAIN_AURA"
-      LIMITER_OPTS="limit=0.985:attack=2.5:release=50:level=1:latency=1"
       MODE_TITLE="AURA"
       ;;
     wide)
       SUR_BLOCK="$SUR_FILTERS_WIDE"
       VOICE_BLOCK="${VOICE_EQ_BASE}${VOICE_DELTA_WIDE}"
       DECORR_GAIN="$DECORR_GAIN_WIDE"
-      LIMITER_OPTS="limit=0.985:attack=2.5:release=50:level=1:latency=1"
       MODE_TITLE="WIDE"
       ;;
     voice)
       SUR_BLOCK="$SUR_FILTERS_VOICEONLY"
       VOICE_BLOCK="${VOICE_EQ_BASE}${VOICE_DELTA_VOICEONLY}"
       DECORR_GAIN="$DECORR_GAIN_VOICE"
-      LIMITER_OPTS="limit=0.985:attack=2.5:release=50:level=1:latency=1"
       MODE_TITLE="VOICE"
       ;;
     *)
@@ -544,18 +551,18 @@ EOF
 # - il file resta 5.1 con un solo canale LFE; l'eventuale doppio sub (5.2) e' gestito dall'AVR;
 # - unisce i sei canali in 5.1(side);
 # - mantiene il limiter finale come protezione globale;
-# - esegue il true-peak oversampling a 192 kHz e il ritorno a 48 kHz.
-#highshelf=f=12000:g=0.4:w=0.5:c=FL|FR|FC|SL|SR,${ARESAMPLE_192K},alimiter=${LIMITER_OPTS},${ARESAMPLE_48K},aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=5.1(side)[aout]
+# - applica gli offset del bed Atmos (solo marker affidabile) prima dei limiter FC/LFE;
+# - limita FC dopo il volamp e la compensazione.
 build_output_join_graph() {
   cat <<EOF
 [FLp]${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[FLf];
 [FRp]${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[FRf];
-[FCv]${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[FCf];
-[LFE]aformat=channel_layouts=mono,highpass=f=32,lowpass=f=110,${FINAL_GAIN_FILTER}alimiter=limit=0.94:attack=2.0:release=120:level=0:latency=1[LFEf];
+[FCv]${FINAL_GAIN_FILTER}${ATMOS_FC_GAIN_FILTER}alimiter=${FC_LIMITER_OPTS},aformat=channel_layouts=mono[FCf];
+[LFE]aformat=channel_layouts=mono,highpass=f=32,lowpass=f=110,${FINAL_GAIN_FILTER}${ATMOS_LFE_GAIN_FILTER}alimiter=limit=0.94:attack=2.0:release=120:level=0:latency=1[LFEf];
 [SL_final]${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[SLf];
 [SR_final]${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[SRf];
 [FLf][FRf][FCf][LFEf][SLf][SRf]join=inputs=6:channel_layout=5.1(side):map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR,
-highshelf=f=12000:g=0.4:w=0.5:c=FL|FR|FC|SL|SR,alimiter=${LIMITER_OPTS},aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=5.1(side)[aout]
+highshelf=f=12000:g=0.4:w=0.5:c=FL|FR|FC|SL|SR,alimiter=${MASTER_LIMITER_OPTS},aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=5.1(side)[aout]
 EOF
 }
 
@@ -568,171 +575,34 @@ build_filter_complex() {
   printf '%s\n%s\n%s\n%s\n%s\n' "$input_graph" "$VOICE_BLOCK" "$SUR_BLOCK" "$psycho_graph" "$output_graph"
 }
 
-# Restituisce la durata del container in secondi. Serve soltanto a posizionare
-# la finestra QC; in caso di probe non conclusivo la verifica torna esaustiva.
-get_media_duration_seconds() {
-  ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$1" 2>/dev/null | \
-    awk 'NF && $1 ~ /^[0-9]+([.][0-9]+)?$/ && $1 > 0 { print $1; exit }'
-}
+# Codifica la traccia DSP e copia gli altri stream nello stesso processo FFmpeg.
+# Il contenitore MKV temporaneo viene pubblicato solo se FFmpeg termina con successo.
+encode_and_mux_output() {
+  local output_file="$1" filter_complex="$2" orig_title
+  local -a cmd=(ffmpeg -hide_banner -nostdin -stats -xerror -loglevel warning -y)
 
-# Calcola una finestra centrale di durata massima VERIFY_SCAN_SECONDS.
-# Formato: seek_seconds|length_seconds. Nessun output significa scansione completa.
-calculate_verify_window() {
-  local media_duration="$1"
+  cmd+=(
+    -i "$CUR_FILE"
+    -map_metadata 0 -map_chapters 0
+    -filter_complex "$filter_complex"
+    -map "0:V:0?" -c:v copy
+    -map "0:s?" -c:s copy
+    -map "0:t?" -c:t copy
+    -map "[aout]" -c:a:0 "$OUT_CODEC" -b:a:0 "$BITRATE" -dialnorm -31 -ar:a:0 48000 -ac:a:0 6
+    -metadata:s:a:0 title="${OUT_CODEC^^} 5.1 ${MODE_TITLE}"
+    -disposition:a:0 default
+  )
 
-  awk -v total="$media_duration" -v window="$VERIFY_SCAN_SECONDS" 'BEGIN {
-    if (window <= 0 || total <= window) exit
-    printf "%.3f|%.3f\n", (total-window)/2, window
-  }'
-}
+  [[ -n "$A_LANG" && "${A_LANG,,}" != "und" ]] && cmd+=( -metadata:s:a:0 language="$A_LANG" )
 
-# Misura in una sola decodifica picco, RMS e numero di campioni, globalmente e per ciascun canale.
-# peak|rms|samples|rms_c0|rms_c1|rms_c2|rms_c3|rms_c4|rms_c5
-measure_audio_signal() {
-  local f="$1" map_spec="$2" seek_seconds="${3:-}" scan_seconds="${4:-}" probe metrics
-  local -a seek_opts=() duration_opts=()
-
-  [[ -n "$seek_seconds" ]] && seek_opts=( -ss "$seek_seconds" )
-  [[ -n "$scan_seconds" ]] && duration_opts=( -t "$scan_seconds" )
-
-  probe="$(
-    ffmpeg -hide_banner -nostdin -v info "${seek_opts[@]}" -i "$f" \
-      -map "$map_spec" -vn -sn -dn \
-      "${duration_opts[@]}" \
-      -af "aformat=sample_rates=48000:sample_fmts=fltp,astats=metadata=0:reset=0" \
-      -f null - 2>&1 || true
-  )"
-
-  # Normalizza CRLF prima dei pattern awk ancorati a fine riga.
-  # Su alcune combinazioni Windows/FFmpeg/MSYS il command substitution puo' conservare il CR.
-  probe="${probe//$'\r'/}"
-
-  metrics="$(printf '%s\n' "$probe" | awk '
-    /Channel:/ {
-      channel=$NF
-      overall=0
-      next
-    }
-    /] Overall$/ {
-      overall=1
-      channel=0
-      next
-    }
-    /Peak level dB:/ {
-      if (overall) overall_peak=$NF
-      next
-    }
-    /RMS level dB:/ {
-      if (overall) overall_rms=$NF
-      else if (channel >= 1 && channel <= 6) channel_rms[channel]=$NF
-      next
-    }
-    /Number of samples:/ {
-      if (overall) samples=$NF
-      next
-    }
-    END {
-      if (overall_peak == "" || overall_rms == "" || samples == "") exit 1
-      for (i=1; i<=6; i++) if (channel_rms[i] == "") exit 1
-      printf "%s|%s|%s", overall_peak, overall_rms, samples
-      for (i=1; i<=6; i++) printf "|%s", channel_rms[i]
-      printf "\n"
-    }
-  ')" || return 1
-
-  [[ -n "$metrics" ]] || return 1
-  printf '%s\n' "$metrics"
-}
-
-is_finite_db() {
-  [[ "$1" =~ ^-?[0-9]+([.][0-9]+)?$ ]]
-}
-
-# Confronta l'output codificato con la traccia sorgente selezionata.
-# Ritorni:
-#   0 = segnale coerente
-#   1 = output silenzioso, quasi muto, troncato o con un canale attivo perso
-#   2 = misura non conclusiva
-verify_output_audio_signal() {
-  local f="$1" input_metrics="$2" seek_seconds="${3:-}" scan_seconds="${4:-}" output_metrics
-  local -a in_m out_m channel_names=(FL FR FC LFE SL SR)
-  local input_peak input_rms input_samples output_peak output_rms output_samples
-  local i input_channel_rms output_channel_rms max_drop
-
-  output_metrics="$(measure_audio_signal "$f" "0:a:0" "$seek_seconds" "$scan_seconds")" || {
-    VERIFY_REASON="astats non ha restituito metriche complete per l'output"
-    return 2
-  }
-
-  IFS='|' read -r -a in_m <<<"$input_metrics"
-  IFS='|' read -r -a out_m <<<"$output_metrics"
-  [[ ${#in_m[@]} -eq 9 && ${#out_m[@]} -eq 9 ]] || {
-    VERIFY_REASON="numero di metriche input/output inatteso"
-    return 2
-  }
-
-  input_peak="${in_m[0]}"; input_rms="${in_m[1]}"; input_samples="${in_m[2]}"
-  output_peak="${out_m[0]}"; output_rms="${out_m[1]}"; output_samples="${out_m[2]}"
-
-  if [[ "$output_peak" == "-inf" || "$output_rms" == "-inf" ]]; then
-    VERIFY_REASON="output digitalmente silenzioso"
-    return 1
-  fi
-  if ! is_finite_db "$input_peak" || ! is_finite_db "$input_rms" || \
-     ! is_finite_db "$output_peak" || ! is_finite_db "$output_rms" || \
-     ! [[ "$input_samples" =~ ^[0-9]+([.][0-9]+)?$ && "$output_samples" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-    VERIFY_REASON="metriche globali non numeriche"
-    return 2
+  if [[ "$KEEP_ORIG" = "si" ]]; then
+    orig_title="$(get_audio_title_by_index "$CUR_FILE" "$A_STREAM_INDEX" || true)"
+    [[ -z "${orig_title// }" ]] && orig_title="Original Audio"
+    cmd+=( -map 0:"$A_STREAM_INDEX" -c:a:1 copy -metadata:s:a:1 title="$orig_title" -disposition:a:1 0 )
   fi
 
-  if awk -v v="$output_peak" -v lim="$VERIFY_SILENCE_PEAK_DB" 'BEGIN { exit !(v <= lim) }'; then
-    VERIFY_REASON="picco output troppo basso (${output_peak} dBFS)"
-    return 1
-  fi
-  if awk -v i="$input_rms" -v o="$output_rms" -v lim="$VERIFY_MAX_OVERALL_DROP_DB" \
-       'BEGIN { exit !((i-o) > lim) }'; then
-    VERIFY_REASON="perdita RMS globale eccessiva: input=${input_rms} dBFS, output=${output_rms} dBFS"
-    return 1
-  fi
-  if awk -v i="$input_samples" -v o="$output_samples" -v ratio="$VERIFY_MIN_SAMPLE_RATIO" \
-       'BEGIN { exit !(o < i*ratio) }'; then
-    VERIFY_REASON="output troncato: campioni input=${input_samples}, output=${output_samples}"
-    return 1
-  fi
-
-  for i in {0..5}; do
-    input_channel_rms="${in_m[$((i+3))]}"
-    output_channel_rms="${out_m[$((i+3))]}"
-
-    # Un canale sorgente sotto questa soglia e' considerato intenzionalmente inattivo.
-    if [[ "$input_channel_rms" == "-inf" ]]; then
-      continue
-    fi
-    if ! is_finite_db "$input_channel_rms" || \
-       { [[ "$output_channel_rms" != "-inf" ]] && ! is_finite_db "$output_channel_rms"; }; then
-      VERIFY_REASON="metrica canale ${channel_names[$i]} non numerica"
-      return 2
-    fi
-    if ! awk -v v="$input_channel_rms" -v lim="$VERIFY_ACTIVE_INPUT_RMS_DB" \
-         'BEGIN { exit !(v > lim) }'; then
-      continue
-    fi
-    if [[ "$output_channel_rms" == "-inf" ]]; then
-      VERIFY_REASON="canale ${channel_names[$i]} attivo in input ma silenzioso in output"
-      return 1
-    fi
-
-    max_drop="$VERIFY_MAX_MAIN_CHANNEL_DROP_DB"
-    [[ $i -eq 3 ]] && max_drop="$VERIFY_MAX_LFE_DROP_DB"
-    if awk -v src="$input_channel_rms" -v dst="$output_channel_rms" -v lim="$max_drop" \
-         'BEGIN { exit !((src-dst) > lim) }'; then
-      VERIFY_REASON="canale ${channel_names[$i]} attenuato eccessivamente: input=${input_channel_rms} dBFS, output=${output_channel_rms} dBFS"
-      return 1
-    fi
-  done
-
-  info "Verifica audio: peak ${input_peak}→${output_peak} dBFS; RMS ${input_rms}→${output_rms} dBFS; campioni ${input_samples}→${output_samples}"
-  return 0
+  cmd+=( "$output_file" )
+  "${cmd[@]}"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -790,6 +660,7 @@ for CUR_FILE in "${FILES[@]}"; do
   esac
 
   # Imposto il profilo preset per questo file, costruisco il filter_complex dinamicamente, e preparo il comando ffmpeg. Se il file esiste già, chiedo conferma prima di sovrascrivere.
+  set_atmos_bed_compensation "$CUR_FILE"
   set_preset_profile
   OUT_FILE="${CUR_FILE%.*}_${OUT_CODEC^^}_${SUR_MODE^}.mkv"
 
@@ -797,10 +668,33 @@ for CUR_FILE in "${FILES[@]}"; do
   if [[ -f "$OUT_FILE" ]]; then
     if [[ "$OVERWRITE_ALL" == false ]]; then
       # Se la sessione è interattiva, chiedo conferma all'utente. Altrimenti, skippo il file e loggo un warning.
-      if { exec 3</dev/tty; } 2>/dev/null; then
+      # Preferisco il terminale già collegato a stdin (Git Bash/mintty).
+      # Riapro /dev/tty solo quando stdin è rediretto.
+      if [[ -t 0 ]]; then
+        exec {CONFIRM_FD}<&0
+      elif { exec {CONFIRM_FD}</dev/tty; } 2>/dev/null; then
+        :
+      else
+        warn "Output già esistente e sessione non interattiva → salto: $OUT_FILE"
+        continue
+      fi
+      if [[ -n "${CONFIRM_FD:-}" ]]; then
+        # Il terminale puo' arrivare qui con -icrnl (osservato in Git Bash):
+        # Invio produce CR, mentre read aspetta LF. Ripristino la conversione.
+        if command -v stty >/dev/null 2>&1; then
+          stty icrnl -igncr -inlcr <&"$CONFIRM_FD" 2>/dev/null || true
+        fi
         echo -ne "${C_WARN} Il file '$OUT_FILE' esiste già. Sovrascrivere? [s/n/t] (s=sì, n=no, t=tutti): "
-        read -r ans <&3
-        exec 3<&-
+        ans=""
+        if ! read -r ans <&"$CONFIRM_FD"; then
+          exec {CONFIRM_FD}<&-
+          unset CONFIRM_FD
+          warn "Conferma non leggibile → salto: $OUT_FILE"
+          continue
+        fi
+        exec {CONFIRM_FD}<&-
+        unset CONFIRM_FD
+        ans="${ans//$'\r'/}"
         case "${ans,,}" in
           t|tutti)
             OVERWRITE_ALL=true
@@ -823,119 +717,27 @@ for CUR_FILE in "${FILES[@]}"; do
     fi
   fi
 
-  # Posiziono il QC su una finestra centrale, uguale per sorgente e candidato.
-  # Con VERIFY_SCAN_SECONDS=0 (o durata non rilevabile) resta attiva la scansione completa.
-  VERIFY_SEEK=""
-  VERIFY_LENGTH=""
-  INPUT_DURATION="$(get_media_duration_seconds "$CUR_FILE" || true)"
-  if [[ -n "$INPUT_DURATION" ]]; then
-    VERIFY_WINDOW="$(calculate_verify_window "$INPUT_DURATION")"
-    if [[ -n "$VERIFY_WINDOW" ]]; then
-      IFS='|' read -r VERIFY_SEEK VERIFY_LENGTH <<<"$VERIFY_WINDOW"
-      info "Pre-verifica rapida: finestra di ${VERIFY_LENGTH}s da ${VERIFY_SEEK}s"
-    else
-      info "Pre-verifica completa della traccia audio"
-    fi
-  else
-    warn "Durata non rilevabile: uso la pre-verifica completa"
-  fi
-
-  # Misuro la sorgente prima dell'encode: il controllo finale usera' questo riferimento
-  # per distinguere un file naturalmente quieto da un output reso quasi muto dal processing.
-  INPUT_AUDIO_METRICS="$(measure_audio_signal "$CUR_FILE" "0:$A_STREAM_INDEX" "$VERIFY_SEEK" "$VERIFY_LENGTH")" || {
-    err "Impossibile misurare in modo affidabile la traccia audio sorgente → salto: $CUR_FILE"
-    ((ERR_COUNT++))
-    continue
-  }
-
-  # Una lunga pausa esattamente al centro non deve causare un falso rifiuto.
-  # In quel caso soltanto, torno automaticamente alla verifica completa.
-  if [[ -n "$VERIFY_LENGTH" ]]; then
-    INPUT_WINDOW_PEAK="${INPUT_AUDIO_METRICS%%|*}"
-    if [[ "$INPUT_WINDOW_PEAK" == "-inf" ]] || \
-       ! is_finite_db "$INPUT_WINDOW_PEAK" || \
-       awk -v v="$INPUT_WINDOW_PEAK" -v lim="$VERIFY_SILENCE_PEAK_DB" \
-         'BEGIN { exit !(v <= lim) }'; then
-      warn "Finestra QC centrale silenziosa/non conclusiva: ripiego sulla verifica completa"
-      VERIFY_SEEK=""
-      VERIFY_LENGTH=""
-      INPUT_AUDIO_METRICS="$(measure_audio_signal "$CUR_FILE" "0:$A_STREAM_INDEX")" || {
-        err "Impossibile completare la misura audio sorgente → salto: $CUR_FILE"
-        ((ERR_COUNT++))
-        continue
-      }
-    fi
-  fi
-
-  # L'encode viene scritto in un candidato temporaneo nella stessa cartella.
-  # Solo un candidato verificato sostituisce atomicamente il nome finale.
+  # DSP, encode audio e mux producono un unico MKV temporaneo.
   TMP_OUT_FILE="${OUT_FILE%.mkv}.partial.$$.${RANDOM}.mkv"
   if [[ -e "$TMP_OUT_FILE" ]]; then
-    err "File temporaneo già esistente, impossibile procedere in sicurezza: $TMP_OUT_FILE"
+    err "Contenitore temporaneo già esistente, impossibile procedere in sicurezza: $TMP_OUT_FILE"
     ((ERR_COUNT++))
     continue
   fi
 
-  # Costruisco dinamicamente il filter_complex in base al preset scelto, concatenando i blocchi di input split, processing voce, processing surround, e output join.
   FILTER_COMPLEX="$(build_filter_complex)"
 
-  # Preparo il comando ffmpeg con i parametri dinamici: input, filter_complex, mappatura tracce, codec audio, bitrate, metadata, e output.
-  CMD=(ffmpeg -hide_banner -nostdin -stats -loglevel warning -y)
-  CMD+=(
-    -i "$CUR_FILE"
-    -map_metadata 0 -map_chapters 0
-    -filter_complex "$FILTER_COMPLEX"
-    -map "0:V:0?" -c:v copy
-    -map "0:s?" -c:s copy
-    -map "0:t?" -c:t copy
-    -map "[aout]" -c:a:0 "$OUT_CODEC" -b:a:0 "$BITRATE" -dialnorm -31 -ar:a:0 48000 -ac:a:0 6
-    -metadata:s:a:0 title="${OUT_CODEC^^} 5.1 ${MODE_TITLE}"
-    -disposition:a:0 default
-  )
-  # Imposto la lingua della traccia audio principale, se specificata.
-  [[ -n "$A_LANG" && "${A_LANG,,}" != "und" ]] && CMD+=( -metadata:s:a:0 language="$A_LANG" )
-
-  # Se l'opzione KEEP_ORIG è attiva, mantengo la traccia audio originale come secondaria, copiandola senza ricodifica e disattivando la flag di default.
-  if [[ "$KEEP_ORIG" = "si" ]]; then
-    ORIG_TITLE="$(get_audio_title_by_index "$CUR_FILE" "$A_STREAM_INDEX" || true)"
-    [[ -z "${ORIG_TITLE// }" ]] && ORIG_TITLE="Original Audio"
-    CMD+=( -map 0:"$A_STREAM_INDEX" -c:a:1 copy -metadata:s:a:1 title="$ORIG_TITLE" -disposition:a:1 0 )
-  fi
-
-  # Eseguo il comando ffmpeg. Se l'encode riesce, confronto livelli, canali e durata con la sorgente.
-  CMD+=( "$TMP_OUT_FILE" )
-  if "${CMD[@]}"; then
-    VERIFY_REASON=""
-    if [[ -n "$VERIFY_LENGTH" ]]; then
-      info "Verifica finale rapida del candidato (${VERIFY_LENGTH}s)"
+  # Pubblico il file finale solo dopo il completamento riuscito di encode/mux.
+  if encode_and_mux_output "$TMP_OUT_FILE" "$FILTER_COMPLEX"; then
+    if mv -f -- "$TMP_OUT_FILE" "$OUT_FILE"; then
+      ok "Creato con mux unico: $OUT_FILE"
+      ((OK_COUNT++))
     else
-      info "Verifica finale completa del candidato"
+      err "Encode/mux completato, ma pubblicazione del file finale fallita: $TMP_OUT_FILE"
+      ((ERR_COUNT++))
     fi
-    verify_output_audio_signal "$TMP_OUT_FILE" "$INPUT_AUDIO_METRICS" "$VERIFY_SEEK" "$VERIFY_LENGTH"
-    VERIFY_RC=$?
-    case "$VERIFY_RC" in
-      0)
-        if mv -f -- "$TMP_OUT_FILE" "$OUT_FILE"; then
-          ok "Creato e verificato: $OUT_FILE"
-          ((OK_COUNT++))
-        else
-          err "Verifica superata, ma pubblicazione del file finale fallita: $TMP_OUT_FILE"
-          ((ERR_COUNT++))
-        fi
-        ;;
-      1)
-        err "Candidato rifiutato dalla verifica audio: ${VERIFY_REASON}: $TMP_OUT_FILE"
-        err "Il candidato resta con suffisso .partial per il debug; il file finale non viene toccato."
-        ((ERR_COUNT++))
-        ;;
-      *)
-        err "Verifica audio del candidato non conclusiva: ${VERIFY_REASON}: $TMP_OUT_FILE"
-        err "Fail-closed: il file finale non viene toccato e il candidato resta .partial."
-        ((ERR_COUNT++))
-        ;;
-    esac
   else
-    warn "Errore su: $CUR_FILE (eventuale candidato incompleto: $TMP_OUT_FILE)"
+    warn "Errore su: $CUR_FILE (eventuale MKV temporaneo incompleto: $TMP_OUT_FILE)"
     ((ERR_COUNT++))
   fi
 done

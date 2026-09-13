@@ -42,14 +42,25 @@ err(){  echo -e "${C_ERR}  $*"; }
 ok(){   echo -e "${C_OK}  $*"; }
 
 # Controllo binari essenziali: ffmpeg, ffprobe, awk. Se uno manca, esco con errore. Importante per evitare errori a cascata quando si tenta di analizzare i file.
-for _bin in ffmpeg ffprobe awk sha256sum stat realpath; do
+for _bin in ffmpeg ffprobe awk sha256sum stat realpath mktemp; do
   command -v "$_bin" &>/dev/null || { err "$_bin non trovato nel PATH"; exit 1; }
 done
 
-# Directory temporanea unica per i log ebur128: ripulita anche su interruzione (Ctrl-C),
-# importante su Git Bash/Windows dove i temp orfani danno piu' fastidio.
-ANALYZER_TMPDIR="$(mktemp -d 2>/dev/null || mktemp -d -t analyzer)"
-trap 'rm -rf "$ANALYZER_TMPDIR"' EXIT INT TERM
+# Il PID resta nella shell principale, anche durante la misura audio.
+ANALYZER_TMPDIR="$(mktemp -d)" || { err "Impossibile creare i temporanei"; exit 1; }
+ANALYZER_FFMPEG_PID=""
+BATCH_TMP=""
+cleanup_analyzer() {
+  if [[ -n "$ANALYZER_FFMPEG_PID" ]]; then
+    kill "$ANALYZER_FFMPEG_PID" 2>/dev/null || true
+    wait "$ANALYZER_FFMPEG_PID" 2>/dev/null || true
+  fi
+  [[ -z "$BATCH_TMP" ]] || rm -f -- "$BATCH_TMP"
+  rm -rf -- "$ANALYZER_TMPDIR"
+}
+trap cleanup_analyzer EXIT
+trap 'warn "Analisi interrotta; batch non aggiornato."; exit 130' INT
+trap 'warn "Analisi terminata; batch non aggiornato."; exit 143' TERM
 
 usage() {
   cat <<'USAGE'
@@ -175,7 +186,7 @@ if [[ "$MULTI_FILES_MODE" == true ]]; then
 else
   info "Metrica: CLASSIFIER RMS + VOICE BAND | Batch: ${BATCH_CODEC} / keep=${BATCH_KEEP} / ${BATCH_BITRATE} / run_processing=${CREATE_RUN}"
 fi
-info "Volamp heuristic: make-up DSP 4.0 dB + recupero loudness con step 4 / 4.5 / 5 / 5.5 dB"
+info "Volamp heuristic: make-up DSP 3.0 dB + recupero loudness con step 3 / 3.5 / 4 / 4.5 dB"
 
 # ── CONFIG ANALITICA INTERNA ──────────────────────────────────────────────────
 # Target domestico fisso: niente variabili da esportare prima del lancio.
@@ -187,7 +198,7 @@ LOUDNESS_TARGET="-21.0"
 # un futuro cambio dell'algoritmo non puo' riutilizzare risultati obsoleti.
 ANALYZER_CACHE="${ANALYZER_CACHE:-1}"
 ANALYZER_CACHE_DIR="${ANALYZER_CACHE_DIR:-.clearvoice_analyzer_cache}"
-ANALYZER_CACHE_SCHEMA="classifier-rms-voiceband-ebur-full-v1"
+ANALYZER_CACHE_SCHEMA="classifier-rms-voiceband-ebur-full-v2"
 ANALYZER_PROGRESS_INTERVAL="${ANALYZER_PROGRESS_INTERVAL:-10}"
 
 if ! [[ "$ANALYZER_CACHE" =~ ^[01]$ ]]; then
@@ -207,8 +218,8 @@ fi
 # Make-up gain minimo del processore.
 # Non rappresenta una sorgente "bassa": compensa la perdita percepita introdotta
 # da split/EQ/compressori/limiter della pipeline psicoacustica.
-VOLAMP_BASE="4.0"
-VOLAMP_MAX="5.5"
+VOLAMP_BASE="3.0"
+VOLAMP_MAX="4.5"
 
 # Width Mid/Side sotto questa soglia = surround collassati/stretti (poca separazione L/R).
 # In quel caso, a parita' di Delta, una ricostruzione laterale (WIDE) rende di piu'
@@ -229,10 +240,16 @@ AURA_DELTA_GATE="-7.0"
 SUR_BALANCE_WARN_DB="10.0"
 PRESET_BORDERLINE_MARGIN="0.7"
 
-# Discriminante Atmos conservativo. La provenienza tecnica non forza SONAR:
-# estende di soli 1.5 dB la soglia quando il classifier ha gia' scelto AURA.
-# VOICE, WIDE e gli override di sicurezza non vengono mai sostituiti.
-ATMOS_SONAR_BORDERLINE_GATE="-11.5"
+# Bias Atmos graduato:
+# - sotto STRONG_GATE un AURA puo' essere promosso a SONAR;
+# - sotto SOFT_GATE resta AURA ma SONAR diventa alternativa;
+# - Width troppo stretta impedisce la promozione automatica a SONAR.
+ATMOS_SONAR_STRONG_GATE="-10.5"
+ATMOS_SONAR_SOFT_GATE="-8.5"
+
+# Preferenza Atmos: AURA diventa SONAR, salvo borderline voce/width.
+# AEGIS resta invariato con SONAR come alternativa di ascolto.
+# Il preset misurato resta disponibile separatamente dalla scelta finale.
 ATMOS_ORIGINAL_TITLE="EAC3 Atmos Original"
 ATMOS_ORIGINAL_TITLE_LEGACY="EAC3 Atmos (Original)"
 
@@ -268,11 +285,14 @@ GLOBAL_REASON_VALUES=()
 GLOBAL_SOURCE_CLASS_VALUES=()
 GLOBAL_SOURCE_EVIDENCE_VALUES=()
 GLOBAL_SOURCE_BIAS_VALUES=()
+GLOBAL_MEASURED_PRESET_VALUES=()
 
 # ────────────────────────────────────────────────────────────────────────────────
 # Raccolta file
 # ────────────────────────────────────────────────────────────────────────────────
 # Modalità raccolta file:
+ANALYSIS_ERRORS=0
+ANALYSIS_SKIPPED=0
 FILES=()
 if [[ "$MULTI_FILES_MODE" == true ]]; then
   (( ${#MULTI_FILES[@]} > 0 )) || { err "Modalita' --files richiesta ma nessun file passato."; exit 1; }
@@ -282,6 +302,7 @@ if [[ "$MULTI_FILES_MODE" == true ]]; then
       FILES+=("$f")
     else
       warn "File inesistente, salto: $f"
+      ((ANALYSIS_ERRORS+=1))
     fi
   done
 elif [[ -z "$INPUT_ARG" ]]; then
@@ -333,7 +354,7 @@ pick_best_stream() {
   local raw_data
   raw_data=$(ffprobe -v error -select_streams a \
     -show_entries stream=index,channels,channel_layout:stream_disposition=default:stream_tags=language \
-    -of csv=p=0 "$f" 2>/dev/null </dev/null || true)
+    -of csv=p=0 "$f" 2>/dev/null </dev/null) || return 1
   raw_data="${raw_data//$'\r'/}"
   # Punteggio identico al processore: lingua italiana, poi flag default.
   local best_idx=""
@@ -504,24 +525,89 @@ classify_preset_v6() {
   }'
 }
 
-# Un Atmos verificato influenza soltanto un risultato AURA molto vicino alla
-# soglia SONAR. Le protezioni voce e il discriminante WIDE restano prioritari.
+# La provenienza Atmos orienta la scelta spaziale, non misura il contenuto 3D.
+# Le metriche reali restano prioritarie.
+#
+# Regole:
+# - VOICE / WIDE / CHECK non vengono mai sovrascritti dal bias Atmos.
+# - AURA molto vicina a SONAR + width sana -> promozione SONAR.
+# - AURA intermedia -> resta AURA, SONAR come alternativa.
+# - AURA vicina ad AEGIS -> resta AURA.
+# - AEGIS -> resta AEGIS, SONAR solo come alternativa di ascolto.
 apply_atmos_discriminator() {
-  local preset_raw="$1" source_class="$2" delta_sur="$3"
+  local preset_raw="$1"
+  local source_class="$2"
+  local delta_sur="$3"
+  local width_ms="$4"
+
   local preset color confidence alternative reason
   IFS='|' read -r preset color confidence alternative reason <<<"$preset_raw"
 
-  if [[ "$source_class" == "ATMOS" && "$preset" == "AURA" ]] && \
-     awk -v ds="$delta_sur" -v gate="$ATMOS_SONAR_BORDERLINE_GATE" \
-       'BEGIN { exit !(ds < gate) }'; then
-    preset="SONAR"
-    color="\033[1;31m"
-    confidence="bassa"
-    alternative="AURA"
-    reason="discriminante Atmos: profilo/marker affidabile e surround borderline SONAR"
+  # Nessuna provenienza Atmos: classificazione misurata invariata.
+  if [[ "$source_class" != "ATMOS" ]]; then
+    printf '%s|%s|%s|%s|%s
+' \
+      "$preset" "$color" "$confidence" "$alternative" "$reason"
+    return
   fi
 
-  printf '%s|%s|%s|%s|%s\n' "$preset" "$color" "$confidence" "$alternative" "$reason"
+  # I segnali di sicurezza / intelligibilita' / width hanno priorita'
+  # assoluta rispetto alla provenienza del master.
+  if [[ "$preset" == "VOICE" || \
+        "$preset" == "WIDE"  || \
+        "$alternative" == "VOICE" || \
+        "$alternative" == "WIDE"  || \
+        "$alternative" == "CHECK" ]]; then
+    printf '%s|%s|%s|%s|%s
+' \
+      "$preset" "$color" "$confidence" "$alternative" "$reason"
+    return
+  fi
+
+  if [[ "$preset" == "AURA" ]]; then
+
+    # Fascia AURA prossima a SONAR:
+    # promuovo soltanto se la width non indica surround stretti/collassati.
+    if awk -v ds="$delta_sur" \
+           -v strong="$ATMOS_SONAR_STRONG_GATE" \
+           -v w="$width_ms" \
+           -v wgate="$WIDTH_WIDE_GATE" \
+           'BEGIN { exit !(ds < strong && w >= wgate) }'; then
+
+      preset="SONAR"
+      color="[1;31m"
+      confidence="bassa"
+      alternative="AURA"
+      reason="preferenza Atmos forte: AURA prossima a SONAR con width compatibile; ${reason}"
+
+    # Fascia intermedia: nessun override, ma SONAR diventa alternativa.
+    elif awk -v ds="$delta_sur" \
+             -v soft="$ATMOS_SONAR_SOFT_GATE" \
+             'BEGIN { exit !(ds < soft) }'; then
+
+      confidence="bassa"
+      alternative="SONAR"
+
+      if awk -v w="$width_ms" -v wgate="$WIDTH_WIDE_GATE" \
+             'BEGIN { exit !(w < wgate) }'; then
+        reason="${reason}; origine Atmos presente ma width troppo stretta per override SONAR"
+      else
+        reason="${reason}; origine Atmos: SONAR come alternativa consigliata"
+      fi
+
+    else
+      # AURA prossima ad AEGIS: il mix misurato e' gia' sufficientemente presente.
+      reason="${reason}; origine Atmos rilevata, nessun override spaziale necessario"
+    fi
+
+  elif [[ "$preset" == "AEGIS" ]]; then
+    alternative="SONAR"
+    reason="${reason}; SONAR come alternativa di ascolto per origine Atmos"
+  fi
+
+  printf '%s|%s|%s|%s|%s
+' \
+    "$preset" "$color" "$confidence" "$alternative" "$reason"
 }
 
 is_finite_db() {
@@ -571,7 +657,7 @@ store_metrics_cache() {
 
 # ────────────────────────────────────────────────────────────────────────────────
 # Euristica volamp da Loudness Integrata del file intero
-# Output consentiti automatici: 4 | 4.5 | 5 | 5.5
+# Output consentiti automatici: 3 | 3.5 | 4 | 4.5
 # ────────────────────────────────────────────────────────────────────────────────
 loudness_to_volamp() {
   local i_val="$1"
@@ -582,16 +668,16 @@ loudness_to_volamp() {
   local deficit
   deficit=$(awk -v i="$i_val" -v t="$LOUDNESS_TARGET" 'BEGIN { printf "%.2f", (t - i) }')
 
-  # Baseline allineata al default del processore: +4 dB nominali.
+  # Baseline allineata al default del processore: +3 dB nominali.
   # Gli step superiori recuperano sorgenti progressivamente piu' basse.
-  # - 4.0 dB = make-up DSP standard
-  # - 4.5/5.0/5.5 dB = recupero crescente sotto il target loudness
+  # - 3.0 dB = make-up DSP standard
+  # - 3.5/4.0/4.5 dB = recupero crescente sotto il target loudness
   if awk -v d="$deficit" 'BEGIN { exit !(d < 0.8) }'; then
     echo "$VOLAMP_BASE"
   elif awk -v d="$deficit" 'BEGIN { exit !(d < 1.8) }'; then
-    echo "4.5"
+    echo "3.5"
   elif awk -v d="$deficit" 'BEGIN { exit !(d < 3.0) }'; then
-    echo "5.0"
+    echo "4.0"
   else
     echo "$VOLAMP_MAX"
   fi
@@ -600,10 +686,10 @@ loudness_to_volamp() {
 # Descrizione testuale del volamp consigliato per il display.
 volamp_to_desc() {
   case "$1" in
-    4|4.0)   echo "Make-up DSP standard" ;;
-    4.5)     echo "Recupero loudness leggero" ;;
-    5|5.0)   echo "Recupero loudness" ;;
-    5.5)     echo "Recupero loudness forte" ;;
+    3|3.0)   echo "Make-up DSP standard" ;;
+    3.5)     echo "Recupero loudness leggero" ;;
+    4|4.0)   echo "Recupero loudness" ;;
+    4.5)     echo "Recupero loudness forte" ;;
     6|6.0)   echo "Recupero massimo manuale" ;;
     0|0.0)   echo "OFF manuale" ;;
     *)       echo "Boost custom" ;;
@@ -614,10 +700,10 @@ volamp_to_desc() {
 source_volume_status() {
   local volamp="$1"
   case "$volamp" in
-    4|4.0)   echo "standard / make-up DSP" ;;
-    4.5)     echo "basso" ;;
-    5|5.0)   echo "molto basso" ;;
-    5.5)     echo "estremamente basso" ;;
+    3|3.0)   echo "standard / make-up DSP" ;;
+    3.5)     echo "basso" ;;
+    4|4.0)   echo "molto basso" ;;
+    4.5)     echo "estremamente basso" ;;
     6|6.0)   echo "modalita' manuale spinta" ;;
     0|0.0)   echo "OFF manuale" ;;
     *)       echo "da verificare" ;;
@@ -633,10 +719,10 @@ cap_volamp_by_lra() {
   [[ -n "$lra" && "$lra" =~ ^-?[0-9]+([.][0-9]+)?$ ]] || { echo "$volamp"; return; }
 
   # Mix molto dinamico: consento il recupero ma limito gli step piu' spinti.
-  # Il cap non scende mai sotto il make-up base di 4.0 dB.
+  # Il cap non scende mai sotto il make-up base di 3.0 dB.
   if awk -v l="$lra" 'BEGIN { exit !(l >= 18.0) }'; then
-    if awk -v v="$volamp" 'BEGIN { exit !(v > 4.5) }'; then
-      echo "4.5"
+    if awk -v v="$volamp" 'BEGIN { exit !(v > 3.5) }'; then
+      echo "3.5"
     else
       echo "$volamp"
     fi
@@ -678,15 +764,15 @@ width_to_desc() {
 # ────────────────────────────────────────────────────────────────────────────────
 measure_classifier_metrics() {
   local f="$1" stream="$2"
-  local probe log_file progress_file ffmpeg_pid ffmpeg_rc
+  local probe log_file progress_file ffmpeg_rc
   local processed last_processed=""
-  log_file=$(mktemp -p "$ANALYZER_TMPDIR")
-  progress_file=$(mktemp -p "$ANALYZER_TMPDIR")
+  log_file=$(mktemp -p "$ANALYZER_TMPDIR") || return 1
+  progress_file=$(mktemp -p "$ANALYZER_TMPDIR") || return 1
 
   # framelog=verbose sopprime le righe periodiche di ebur128 al normale livello
   # info, conservando il summary finale. Gli astats terminano in anullsink:
   # vengono eseguiti, ma non trasformati/codificati inutilmente come output PCM.
-  ffmpeg -y -nostdin -hide_banner -nostats -loglevel info \
+  ffmpeg -y -nostdin -hide_banner -nostats -xerror -loglevel info \
     -stats_period "$ANALYZER_PROGRESS_INTERVAL" -progress "$progress_file" \
     -i "$f" \
     -filter_complex "[0:${stream}]asplit=5[loud_in][full_in][mid_in][side_in][voice_in];\
@@ -697,9 +783,9 @@ measure_classifier_metrics() {
 [loud_in]ebur128@loudness=peak=sample:framelog=verbose[loud_out]" \
     -map "[loud_out]" -vn -sn -f null - \
     >/dev/null 2>"$log_file" </dev/null &
-  ffmpeg_pid=$!
+  ANALYZER_FFMPEG_PID=$!
 
-  while kill -0 "$ffmpeg_pid" 2>/dev/null; do
+  while kill -0 "$ANALYZER_FFMPEG_PID" 2>/dev/null; do
     sleep 0.2
     processed=$(awk -F= '$1 == "out_time" { value=$2 } END { print value }' "$progress_file" 2>/dev/null)
     if [[ -n "$processed" && "$processed" != "$last_processed" ]]; then
@@ -707,8 +793,9 @@ measure_classifier_metrics() {
       last_processed="$processed"
     fi
   done
-  wait "$ffmpeg_pid"
+  wait "$ANALYZER_FFMPEG_PID"
   ffmpeg_rc=$?
+  ANALYZER_FFMPEG_PID=""
 
   # Mostra anche l'ultimo timestamp, normalmente scritto subito prima di end.
   processed=$(awk -F= '$1 == "out_time" { value=$2 } END { print value }' "$progress_file" 2>/dev/null)
@@ -758,7 +845,8 @@ measure_classifier_metrics() {
     END { printf "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s", fl,fr,fc,sl,sr,mid,side,vfl,vfr,vfc,vsl,vsr }
   ' <<<"$probe")
 
-  echo "${i_val:-}|${lra_val:-}|${peak_val:-}|${rms_values}"
+  # Assegna la variabile locale del chiamante senza una subshell.
+  all_metrics="${i_val:-}|${lra_val:-}|${peak_val:-}|${rms_values}"
 }
 
 # Media energetica in dB di due o tre valori RMS. I valori devono essere finiti.
@@ -788,15 +876,15 @@ scan_delta() {
   info "Avvio analisi Delta SUR-FC su: $f"
   # Seleziono lo stream migliore usando la stessa logica del processore: preferenza per 6 canali, traccia default, lingua italiana. Restituisce "stream_index canali layout". Se non riesco a trovare stream validi, esco con warning e codice di errore.
   local stream_info
-  stream_info=$(pick_best_stream "$f")
+  stream_info=$(pick_best_stream "$f") || { warn "Probe fallito: $f"; return 1; }
   local target_stream="${stream_info%% *}"
   local rest="${stream_info#* }"
   local max_ch="${rest%% *}"
   local layout="${rest#* }"
   # Se pick_best_stream non riesce a trovare stream validi, esce con warning e codice di errore. Controllo robusto: se target_stream non è un numero valido, esco con warning e codice di errore.
   if [[ -z "$target_stream" ]]; then
-    warn "Impossibile determinare stream target. File saltato."
-    return 1
+    warn "Nessuna traccia 5.1 idonea. File saltato."
+    return 2
   fi
   # Controllo robusto: se max_ch non è un numero valido, esco con warning e codice di errore.
   if ! [[ "$max_ch" =~ ^[0-9]+$ ]] || [[ "$max_ch" -ne 6 ]]; then
@@ -850,7 +938,7 @@ scan_delta() {
   fi
 
   if (( cache_hit == 0 )); then
-    all_metrics=$(measure_classifier_metrics "$f" "$target_stream") || {
+    measure_classifier_metrics "$f" "$target_stream" || {
       warn "Analisi FFmpeg non conclusiva. File saltato."
       return 1
     }
@@ -945,7 +1033,16 @@ scan_delta() {
     preset_raw="VOICE|\033[1;33m|bassa|CHECK|sbilanciamento SL/SR"
   else
     preset_raw=$(classify_preset_v6 "$delta_sur" "$delta_fc" "$delta_voice" "$voice_mask" "$width_ms")
-    preset_raw=$(apply_atmos_discriminator "$preset_raw" "$source_class" "$delta_sur")
+  fi
+  local measured_preset="${preset_raw%%|*}"
+  if (( forced_preset == 0 )) &&
+     awk -v b="$balance_sur" -v gate="$SUR_BALANCE_WARN_DB" -v margin="$PRESET_BORDERLINE_MARGIN" \
+       'BEGIN { exit !(b < gate-margin) }'; then
+    preset_raw=$(apply_atmos_discriminator \
+      "$preset_raw" \
+      "$source_class" \
+      "$delta_sur" \
+      "$width_ms")
   fi
 
   # Loudness integrata e LRA sono gia' state misurate insieme al sample peak.
@@ -960,7 +1057,8 @@ scan_delta() {
   local preset p_color confidence alternative preset_reason
   IFS='|' read -r preset p_color confidence alternative preset_reason <<<"$preset_raw"
   local source_bias_applied="no"
-  [[ "$preset_reason" == "discriminante Atmos:"* ]] && source_bias_applied="sonar"
+  [[ "$preset_reason" == "preferenza Atmos:"* ]] && source_bias_applied="sonar"
+  [[ "$source_class" == "ATMOS" && "$preset" == "AEGIS" && "$alternative" == "SONAR" ]] && source_bias_applied="alternativa-sonar"
   if (( forced_preset == 0 )) && \
      awk -v b="$balance_sur" -v gate="$SUR_BALANCE_WARN_DB" -v margin="$PRESET_BORDERLINE_MARGIN" \
        'BEGIN { exit !(b < gate && (gate-b) <= margin) }'; then
@@ -989,6 +1087,7 @@ scan_delta() {
   GLOBAL_SOURCE_CLASS_VALUES+=("$source_class")
   GLOBAL_SOURCE_EVIDENCE_VALUES+=("$source_evidence")
   GLOBAL_SOURCE_BIAS_VALUES+=("$source_bias_applied")
+  GLOBAL_MEASURED_PRESET_VALUES+=("$measured_preset")
 
   # Display dei risultati per il file, con colori e descrizioni. Se alcune metriche non sono misurabili, le segnalo come N/A. Se il preset è stato forzato, mostro comunque il preset forzato ma con la descrizione che indica la ragione.
   ok "Risultati Classifier per: $f"
@@ -1003,6 +1102,7 @@ scan_delta() {
   echo -e "  \033[1;33mI(full):  \033[0m  ${i_full:-N/A} LUFS"
   echo -e "  \033[1;33mLRA:      \033[0m  ${lra_full:-N/A} LU  (solo cap volamp)"
   echo -e "  \033[1;36mSource:   \033[0m  ${source_class}  (${source_evidence}; bias=${source_bias_applied})"
+  echo -e "  \033[1;37mMisure:   \033[0m  ${measured_preset}  | preferenza Atmos: ${source_bias_applied}"
   echo -e "  \033[1;37mPreset:   \033[0m  ${p_color}${preset}\033[0m  (${preset_reason})"
   echo -e "  \033[1;37mConfid.:  \033[0m  ${confidence}  | alternativa: ${alternative}"
   echo -e "  \033[1;37mVolume:   \033[0m  \033[1;36m${volume_status}\033[0m"
@@ -1017,7 +1117,19 @@ scan_delta() {
 for CUR_FILE in "${FILES[@]}"; do
   info "Analisi: $CUR_FILE"
   scan_delta "$CUR_FILE"
+  case $? in
+    0) ;;
+    2) ((ANALYSIS_SKIPPED+=1)) ;;
+    *) ((ANALYSIS_ERRORS+=1)) ;;
+  esac
 done
+
+# Un batch incompleto non sostituisce quello precedente.
+if (( ANALYSIS_ERRORS > 0 || ${#GLOBAL_METRIC_VALUES[@]} == 0 )); then
+  err "Analisi non completata: OK=${#GLOBAL_METRIC_VALUES[@]}, FALLITI=$ANALYSIS_ERRORS, SALTATI=$ANALYSIS_SKIPPED"
+  [[ "$CREATE_RUN" != "si" ]] || warn "Batch NON aggiornato. Non eseguire un eventuale run_processing.sh precedente per questa analisi."
+  exit 1
+fi
 
 # ────────────────────────────────────────────────────────────────────────────────
 # VERDETTO STAGIONALE / GENERAZIONE BATCH
@@ -1129,7 +1241,9 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
   # Se ho risultati validi, genero un batch file con i comandi di processing consigliati per ogni file, usando i preset raffinati per-file se sono stati forzati o se la stagione è eterogenea, altrimenti usando il preset stagionale. Il batch file include commenti e istruzioni per l'utente, e ogni comando include un commento con le metriche rilevanti per quel file.
   BATCH_FILE="run_processing.sh"
   if [[ "$CREATE_RUN" == "si" ]]; then
-    {
+    BATCH_TMP=$(mktemp "./.${BATCH_FILE}.XXXXXX") || { err "Impossibile creare il batch temporaneo"; exit 1; }
+    (
+      set -e
       echo '#!/usr/bin/env bash'
       echo "# ── Batch generato da audio_analyzer (V6 RMS + VOICE BAND) ──"
       echo "# Data: $(date '+%Y-%m-%d %H:%M')"
@@ -1146,6 +1260,7 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
       echo 'PROC="${PROC:-./aegis_sonar_wide_aura_voice_volamp_psycho.sh}"'
       echo ''
       echo '# ── COMANDI ──'
+      echo 'BATCH_FAILURES=0'
       echo "# Nota: l'ultimo parametro numerico e' il volamp consigliato per-file."
   
       # Per ogni file genero un comando usando sempre il preset raffinato per-file. Escludo gli output già processati.
@@ -1175,21 +1290,30 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
         file_source_class="${GLOBAL_SOURCE_CLASS_VALUES[$i]:-UNKNOWN}"
         file_source_evidence="${GLOBAL_SOURCE_EVIDENCE_VALUES[$i]:-nessun segnale Atmos}"
         file_source_bias="${GLOBAL_SOURCE_BIAS_VALUES[$i]:-no}"
+        file_measured_preset="${GLOBAL_MEASURED_PRESET_VALUES[$i]:-N/A}"
         escaped_path=$(printf '%q' "${GLOBAL_METRIC_PATHS[$i]}")
   
         # Il commento conserva metriche, confidenza, alternativa e prova Atmos.
-        printf '"$PROC" "$CODEC" "$KEEP" "$BITRATE" %s %s %s  # Source=%s (%s) AtmosBias=%s | DeltaSur=%s dB | DeltaFC=%s dB | VoiceDelta=%s dB | VoiceMask=%s dB | Balance=%s dB | Width=%s dB | conf=%s alt=%s | I=%s LUFS LRA=%s LU\n' \
+        printf '"$PROC" "$CODEC" "$KEEP" "$BITRATE" %s %s %s || BATCH_FAILURES=$((BATCH_FAILURES + 1))  # Source=%s (%s) AtmosBias=%s MeasuredPreset=%s | DeltaSur=%s dB | DeltaFC=%s dB | VoiceDelta=%s dB | VoiceMask=%s dB | Balance=%s dB | Width=%s dB | conf=%s alt=%s | I=%s LUFS LRA=%s LU\n' \
           "$file_preset_lower" "$file_volamp" "$escaped_path" "$file_source_class" "$file_source_evidence" "$file_source_bias" \
-          "${GLOBAL_METRIC_VALUES[$i]}" \
+          "$file_measured_preset" "${GLOBAL_METRIC_VALUES[$i]}" \
           "$file_delta_fc" "$file_delta_voice" "$file_voice_mask" "$file_balance" "$file_width" "$file_confidence" "$file_alternative" \
           "$file_loudness" "$file_lra"
       done
   
       echo ''
-      echo 'echo "Batch completato."'
-    } > "$BATCH_FILE"
-    # Rendo eseguibile il batch file generato e mostro un messaggio di conferma. Se per qualche motivo il batch file non è stato generato correttamente, esco con warning e codice di errore.
-    chmod +x "$BATCH_FILE"
+      echo 'if (( BATCH_FAILURES > 0 )); then'
+      echo '  echo "Batch completato con errori: FALLITI=$BATCH_FAILURES" >&2'
+      echo '  exit 1'
+      echo 'fi'
+      echo 'echo "Batch completato senza errori."'
+    ) > "$BATCH_TMP"
+    BATCH_RC=$?
+    if (( BATCH_RC != 0 )) || ! chmod +x "$BATCH_TMP" || ! mv -fT -- "$BATCH_TMP" "$BATCH_FILE"; then
+      err "Pubblicazione batch fallita. run_processing.sh non aggiornato."
+      exit 1
+    fi
+    BATCH_TMP=""
     ok "Batch file generato: ${BATCH_FILE}"
   else
     info "Generazione run_processing.sh disattivata (run=no)."

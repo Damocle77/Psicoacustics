@@ -17,7 +17,7 @@ set -uo pipefail
 # │     - Propagazione language tag                                              │
 # │     - LFO fix: tremolo+flanger (la pan= non supporta espressioni t-varianti) │
 # │     - Keep originale come traccia secondaria (-k)                            │
-# │     - loudnorm post-DSP: il target LUFS descrive davvero l'output finale     │
+# │     - loudnorm post-DSP; True Peak post-codec con retry e trim finale        │
 # │     - ITD disattivabile (-t) per materiale gia' binaurale                    │
 # │     - Preflight encoder e parser ffprobe robusto chiave/valore               │
 # ╰──────────────────────────────────────────────────────────────────────────────╯
@@ -32,7 +32,7 @@ warn(){ echo -e "${C_WARN} $*"; }
 err(){  echo -e "${C_ERR}  $*"; }
 ok(){   echo -e "${C_OK}  $*"; }
 
-for _bin in ffmpeg ffprobe; do
+for _bin in ffmpeg ffprobe awk mktemp; do
   command -v "$_bin" &>/dev/null || { err "$_bin non trovato nel PATH"; exit 1; }
 done
 
@@ -238,9 +238,10 @@ pick_best_stereo_stream() {
 #   4. stereotools + pan — width e crosstalk statici
 #   5. EQ psicoacustico — rinforza frequenze di prossimita'
 #   6. ITD ed eventuale LFO
-#   7. loudnorm — misura la catena gia' processata e centra il target del preset
+#   7. loudnorm — normalizza la catena gia' processata verso il target del preset
 #   8. ritorno esplicito a 48 kHz
 #   9. alimiter finale — safety net senza auto-level
+#  10. eventuale trim del retry, encoding, QC/True Peak integrali e mux unico
 # ────────────────────────────────────────────────────────────────────────────────
 
 # WHISPER (20-30cm)
@@ -277,14 +278,14 @@ LFO_PART="tremolo=f=0.12:d=0.06,flanger=delay=2:depth=1.5:regen=0:width=40:speed
 
 # Misura peak, RMS, campioni e RMS L/R in una sola decodifica.
 # Output: peak|rms|samples|rms_L|rms_R
-measure_stereo_signal() {
+measure_audio_signal() {
   local f="$1" map_spec="$2" probe metrics
   probe="$(
-    ffmpeg -hide_banner -nostdin -v info -i "$f" \
+    ffmpeg -hide_banner -nostdin -nostats -xerror -v info -i "$f" \
       -map "$map_spec" -vn -sn -dn \
       -af "aformat=sample_rates=48000:sample_fmts=fltp,astats=metadata=0:reset=0" \
-      -f null - 2>&1 || true
-  )"
+      -f null - 2>&1
+  )" || return 1
   probe="${probe//$'\r'/}"
 
   metrics="$(printf '%s\n' "$probe" | awk '
@@ -312,13 +313,13 @@ is_finite_db() {
   [[ "$1" =~ ^-?[0-9]+([.][0-9]+)?$ ]]
 }
 
-verify_stereo_output() {
+verify_output_audio_signal() {
   local f="$1" input_metrics="$2" output_metrics
   local -a in_m out_m channel_names=(L R)
   local input_peak input_rms input_samples output_peak output_rms output_samples
   local i input_channel_rms output_channel_rms
 
-  output_metrics="$(measure_stereo_signal "$f" "0:a:0")" || {
+  output_metrics="$(measure_audio_signal "$f" "0:a:0")" || {
     VERIFY_REASON="astats non ha restituito metriche stereo complete per l'output"
     return 2
   }
@@ -339,6 +340,10 @@ verify_stereo_output() {
      ! is_finite_db "$output_peak" || ! is_finite_db "$output_rms" || \
      ! [[ "$input_samples" =~ ^[0-9]+([.][0-9]+)?$ && "$output_samples" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
     VERIFY_REASON="metriche globali non numeriche"
+    return 2
+  fi
+  if awk -v i="$input_samples" -v o="$output_samples" 'BEGIN { exit !(i <= 0 || o <= 0) }'; then
+    VERIFY_REASON="numero di campioni nullo/non valido"
     return 2
   fi
   if awk -v v="$output_peak" -v lim="$VERIFY_SILENCE_PEAK_DB" 'BEGIN { exit !(v <= lim) }'; then
@@ -384,11 +389,164 @@ verify_stereo_output() {
   return 0
 }
 
-CURRENT_TMP=""
-cleanup_tmp() {
-  [[ -n "$CURRENT_TMP" && -f "$CURRENT_TMP" ]] && rm -f -- "$CURRENT_TMP"
+# True Peak post-codec: ceiling del preset, retry limitato come nel processore 5.1.
+# Il valore whisper iniziale viene aggiornato dalla selezione preset.
+VERIFY_MAX_TRUE_PEAK_DB="-2.0"
+TRUE_PEAK_RETRY_MARGIN_DB="0.2"
+TRUE_PEAK_MAX_AUTO_TRIM_DB="3.0"
+
+# Estrae soltanto il Peak della sezione True peak dell'ultimo summary ebur128.
+# Il valore e l'unita' devono essere riconosciuti: nessun fallback a Sample Peak.
+measure_true_peak_db() {
+  awk '
+    /Summary:[[:space:]]*$/ { in_summary=1; expect_peak=0; tp=""; next }
+    !in_summary { next }
+    /^[[:space:]]*True peak:[[:space:]]*$/ { expect_peak=1; tp=""; next }
+    expect_peak {
+      if (NF == 0) next
+      if (NF == 3 && $1 == "Peak:" && $2 ~ /^[+-]?[0-9]+([.][0-9]+)?$/ &&
+          ($3 == "dBFS" || $3 == "dBTP")) tp=$2
+      expect_peak=0
+    }
+    END {
+      if (tp == "") exit 1
+      print tp
+    }
+  '
 }
-trap cleanup_tmp EXIT INT TERM
+
+# Decodifica l'intero candidato AAC/Opus/FLAC: niente -ss/-t e nessuna finestra QC.
+# Un errore FFmpeg o un summary incompleto rendono la misura non conclusiva.
+measure_encoded_true_peak() {
+  local probe
+  probe="$(ffmpeg -hide_banner -nostdin -nostats -xerror -v info -i "$1" \
+    -map "0:a:0" -vn -sn -dn -af "ebur128=peak=true:framelog=verbose" \
+    -f null - 2>&1)" || return 1
+  probe="${probe//$'\r'/}"
+  printf '%s\n' "$probe" | measure_true_peak_db
+}
+
+
+verify_audio_candidate() {
+  local rc
+  VERIFY_FAILURE_KIND=""
+  VERIFY_OUTPUT_TRUE_PEAK=""
+  VERIFY_REASON=""
+  info "Verifica comparativa sull'intera traccia audio"
+  verify_output_audio_signal "$1" "$INPUT_AUDIO_METRICS"
+  rc=$?
+  (( rc == 0 )) || return "$rc"
+  info "Verifica True Peak post-codec sull'intera traccia audio"
+  VERIFY_OUTPUT_TRUE_PEAK="$(measure_encoded_true_peak "$1")" || {
+    VERIFY_REASON="misura True Peak post-codec fallita o non conclusiva"
+    return 2
+  }
+  info "True Peak post-codec: ${VERIFY_OUTPUT_TRUE_PEAK} dBTP"
+  if awk -v tp="$VERIFY_OUTPUT_TRUE_PEAK" -v lim="$VERIFY_MAX_TRUE_PEAK_DB" \
+       'BEGIN { exit !(tp > lim) }'; then
+    VERIFY_FAILURE_KIND="true_peak"
+    VERIFY_REASON="True Peak ${VERIFY_OUTPUT_TRUE_PEAK} dBTP oltre ${VERIFY_MAX_TRUE_PEAK_DB} dBTP"
+    return 1
+  fi
+  return 0
+}
+
+# Conserva i timestamp sorgente anche nel candidato solo audio, cosi' il mux
+# mantiene l'offset audio/video. Il trim segue loudnorm, ritorno a 48 kHz e
+# limiter: la normalizzazione non puo' recuperare l'attenuazione del retry.
+encode_audio_candidate() {
+  local output_file="$1" graph="$2" trim="$3" output_label="[aout]"
+  if awk -v trim="$trim" 'BEGIN { exit !(trim > 0) }'; then
+    graph="${graph};[aout]volume=-${trim}dB[retry_out]"
+    output_label="[retry_out]"
+  fi
+  local -a cmd=(ffmpeg -hide_banner -nostdin -stats -xerror -loglevel warning -y
+    -copyts -i "$CUR_FILE" -filter_complex "$graph"
+    -map "$output_label" -c:a:0 "$A_ENCODER" -ar:a:0 48000 -ac:a:0 2
+    -metadata:s:a:0 "title=$FINAL_AUDIO_TITLE" -disposition:a:0 default
+    -avoid_negative_ts disabled)
+  [[ -n "$A_LANG" && "${A_LANG,,}" != "und" ]] && cmd+=(-metadata:s:a:0 "language=$A_LANG")
+  [[ "$OUT_CODEC" != "flac" ]] && cmd+=(-b:a:0 "$OUT_BITRATE")
+  cmd+=("$output_file")
+  "${cmd[@]}"
+}
+
+mux_verified_audio() {
+  local output_file="$1" audio_file="$2"
+  local -a cmd=(ffmpeg -hide_banner -nostdin -stats -xerror -loglevel warning -y
+    -copyts -i "$CUR_FILE" -i "$audio_file"
+    -map_metadata 0 -map_chapters 0
+    -map "0:V:0?" -c:v copy -map "0:s?" -c:s copy -map "0:t?" -c:t copy
+    -map "1:a:0" -c:a:0 copy
+    -metadata:s:a:0 "title=$FINAL_AUDIO_TITLE" -disposition:a:0 default
+    -avoid_negative_ts make_zero)
+  if [[ "$KEEP_ORIGINAL" == "si" ]]; then
+    cmd+=(-map "0:$ORIGINAL_INDEX" -c:a:1 copy
+      -metadata:s:a:1 "title=$ORIGINAL_TITLE" -disposition:a:1 0)
+  fi
+  if [[ -n "$A_LANG" && "${A_LANG,,}" != "und" ]]; then
+    cmd+=(-metadata:s:a:0 "language=$A_LANG")
+    [[ "$KEEP_ORIGINAL" == "si" ]] && cmd+=(-metadata:s:a:1 "language=$A_LANG")
+  fi
+  cmd+=("$output_file")
+  "${cmd[@]}"
+}
+
+# Directory riservata atomicamente nella cartella dell'output: nessuna collisione
+# puo' far cancellare file altrui. Gli errori e le interruzioni conservano il debug.
+# Script autonomo; stessa gestione transazionale degli altri processori.
+process_verified_audio() {
+  local graph="$1" work_dir candidate first_candidate mux_file rc trim="0.0"
+  work_dir="$(mktemp -d "$(dirname -- "$OUT_FILE")/.$(basename -- "${OUT_FILE%.mkv}").partial.XXXXXX")" || {
+    err "Impossibile riservare la directory temporanea"
+    return 1
+  }
+  info "Temporanei: $work_dir"
+  first_candidate="$work_dir/audio.mka"
+  candidate="$first_candidate"
+  mux_file="$work_dir/mux.mkv"
+  if ! encode_audio_candidate "$candidate" "$graph" "$trim"; then
+    err "Encoding audio fallito; temporanei conservati: $work_dir"
+    return 1
+  fi
+  verify_audio_candidate "$candidate"
+  rc=$?
+  if [[ "$rc" -eq 1 && "$VERIFY_FAILURE_KIND" == "true_peak" ]]; then
+    trim="$(awk -v tp="$VERIFY_OUTPUT_TRUE_PEAK" -v lim="$VERIFY_MAX_TRUE_PEAK_DB" \
+      -v margin="$TRUE_PEAK_RETRY_MARGIN_DB" -v maximum="$TRUE_PEAK_MAX_AUTO_TRIM_DB" \
+      'BEGIN { required=tp-lim+margin; printf "%.2f", (required < maximum ? required : maximum) }')"
+    info "Retry unico dalla sorgente: trim finale -${trim} dB (massimo ${TRUE_PEAK_MAX_AUTO_TRIM_DB} dB)"
+    candidate="$work_dir/audio.retry.mka"
+    if ! encode_audio_candidate "$candidate" "$graph" "$trim"; then
+      err "Retry audio fallito; temporanei conservati: $work_dir"
+      return 1
+    fi
+    verify_audio_candidate "$candidate"
+    rc=$?
+  fi
+  if (( rc != 0 )); then
+    err "Verifica rifiutata/non conclusiva: $VERIFY_REASON"
+    err "Nessun altro encode; output finale invariato. Temporanei: $work_dir"
+    return 1
+  fi
+  info "Audio verificato: mux finale unico"
+  if ! mux_verified_audio "$mux_file" "$candidate"; then
+    err "Mux fallito; audio verificato e temporanei conservati: $work_dir"
+    return 1
+  fi
+  if ! mv -f -- "$mux_file" "$OUT_FILE"; then
+    err "Pubblicazione fallita; temporanei conservati: $work_dir"
+    return 1
+  fi
+  # Soltanto file di questa esecuzione; mai pulizia ricorsiva o su nomi condivisi.
+  rm -f -- "$first_candidate" "$work_dir/audio.retry.mka" || warn "Pulizia audio incompleta: $work_dir"
+  rmdir -- "$work_dir" || warn "Directory temporanea conservata: $work_dir"
+  ok "Creato e verificato (trim finale -${trim} dB): $OUT_FILE"
+  return 0
+}
+
+trap 'warn "Interrotto: temporanei conservati per il debug"; exit 130' INT
+trap 'warn "Terminato: temporanei conservati per il debug"; exit 143' TERM
 
 # ────────────────────────────────────────────────────────────────────────────────
 # CICLO ELABORAZIONE
@@ -409,7 +567,7 @@ for CUR_FILE in "$@"; do
 
   IFS='|' read -r A_STREAM_INDEX A_CHANNELS A_LANG <<<"$PROBE_RESULT"
 
-  if [[ "$A_CHANNELS" -ne 2 ]]; then
+  if ! [[ "$A_CHANNELS" =~ ^[0-9]+$ ]] || [[ "$A_CHANNELS" -ne 2 ]]; then
     warn "Stream selezionato non e' stereo (Canali: $A_CHANNELS). Salto."
     ((SKIP_COUNT+=1))
     continue
@@ -424,12 +582,10 @@ for CUR_FILE in "$@"; do
     center)  F_BASE="$FILTER_CENTER";  ITD="$ITD_CENTER";  LOUDNORM="$LOUDNORM_CENTER";  LIMITER="$LIMITER_CENTER";  T="Center Front" ;;
   esac
   [[ "$DISABLE_ITD" -eq 1 ]] && ITD=""
-
-  INPUT_AUDIO_METRICS="$(measure_stereo_signal "$CUR_FILE" "0:$A_STREAM_INDEX")" || {
-    err "Impossibile misurare in modo affidabile la traccia stereo sorgente. Salto."
-    ((ERR_COUNT+=1))
-    continue
-  }
+  # Stessa soglia TP della normalizzazione, verificata anche dopo il codec.
+  VERIFY_MAX_TRUE_PEAK_DB="${LOUDNORM#*:TP=}"
+  VERIFY_MAX_TRUE_PEAK_DB="${VERIFY_MAX_TRUE_PEAK_DB%%:*}"
+  info "Ceiling True Peak post-codec: ${VERIFY_MAX_TRUE_PEAK_DB} dBTP"
 
   # Assembla catena filtri con stream target
   FINAL_F="[0:${A_STREAM_INDEX}]${F_BASE}"
@@ -453,75 +609,23 @@ for CUR_FILE in "$@"; do
     fi
   fi
 
-  # ── FFmpeg Command ─────────────────────────────────────────────────────────
-  # Codifica in un candidato nella stessa directory: l'output precedente resta
-  # intatto finche' encoding e verifica audio non sono entrambi riusciti.
-  OUT_DIR=$(dirname -- "$OUT_FILE")
-  OUT_BASE=$(basename -- "${OUT_FILE%.mkv}")
-  CURRENT_TMP="${OUT_DIR}/.${OUT_BASE}.partial.$$.mkv"
-  if [[ -e "$CURRENT_TMP" ]]; then
-    err "File temporaneo gia' esistente, impossibile procedere: $CURRENT_TMP"
+  INPUT_AUDIO_METRICS="$(measure_audio_signal "$CUR_FILE" "0:$A_STREAM_INDEX")" || {
+    err "Impossibile misurare in modo affidabile la traccia stereo sorgente. Salto."
     ((ERR_COUNT+=1))
     continue
-  fi
+  }
 
-  CMD=(ffmpeg -hide_banner -nostdin -stats -loglevel warning -y)
-  CMD+=(
-    -i "$CUR_FILE"
-    -map_metadata 0 -map_chapters 0
-    -filter_complex "$FINAL_F"
-    -map "0:V:0?" -c:v copy
-    -map "0:s?" -c:s copy
-    -map "0:t?" -c:t copy
-    -map "[aout]" -c:a:0 "$A_ENCODER" -ac:a:0 2 -ar:a:0 48000
-    -metadata:s:a:0 title="VR Intimate ${T}"
-    -disposition:a:0 default
-  )
-
-  if [[ "$OUT_CODEC" != "flac" ]]; then
-    CMD+=( -b:a:0 "$OUT_BITRATE" )
-  fi
-
-  # Propagazione language tag
-  [[ -n "$A_LANG" && "${A_LANG,,}" != "und" ]] && CMD+=( -metadata:s:a:0 language="$A_LANG" )
-
-  # Keep originale come traccia secondaria
-  if [[ "$KEEP_ORIG" -eq 1 ]]; then
-    CMD+=( -map 0:"$A_STREAM_INDEX" -c:a:1 copy
-           -metadata:s:a:1 title="Stereo Original"
-           -disposition:a:1 0 )
-    [[ -n "$A_LANG" && "${A_LANG,,}" != "und" ]] && CMD+=( -metadata:s:a:1 language="$A_LANG" )
-  fi
-
-  CMD+=( "$CURRENT_TMP" )
-  if "${CMD[@]}"; then
-    VERIFY_REASON=""
-    verify_stereo_output "$CURRENT_TMP" "$INPUT_AUDIO_METRICS"
-    VERIFY_RC=$?
-    case "$VERIFY_RC" in
-      0)
-        if mv -f -- "$CURRENT_TMP" "$OUT_FILE"; then
-          CURRENT_TMP=""
-          ok "Creato e verificato: $OUT_FILE"
-          ((OK_COUNT+=1))
-        else
-          err "Verifica superata, ma pubblicazione fallita: $CURRENT_TMP"
-          ((ERR_COUNT+=1))
-        fi
-        ;;
-      1|2)
-        err "Candidato rifiutato dalla verifica audio: ${VERIFY_REASON}: $CURRENT_TMP"
-        err "Il file finale non viene toccato; il candidato resta per il debug."
-        CURRENT_TMP=""
-        ((ERR_COUNT+=1))
-        ;;
-    esac
+  FINAL_AUDIO_TITLE="VR Intimate ${T}"
+  KEEP_ORIGINAL="no"
+  [[ "$KEEP_ORIG" -eq 1 ]] && KEEP_ORIGINAL="si"
+  ORIGINAL_INDEX="$A_STREAM_INDEX"
+  ORIGINAL_TITLE="Stereo Original"
+  if process_verified_audio "$FINAL_F"; then
+    ((OK_COUNT+=1))
   else
-    warn "Errore su: $CUR_FILE (candidato incompleto rimosso)"
-    cleanup_tmp
-    CURRENT_TMP=""
     ((ERR_COUNT+=1))
   fi
+
 done
 
 if (( ERR_COUNT > 0 )); then
