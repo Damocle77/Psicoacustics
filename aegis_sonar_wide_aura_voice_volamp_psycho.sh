@@ -46,12 +46,12 @@ DECORR_GAIN_VOICE="0"
 FC_LIMITER_OPTS="limit=0.94:attack=1.5:release=60:level=0:latency=1"
 MASTER_LIMITER_OPTS="limit=0.94:attack=2.5:release=50:level=0:latency=1"
 
-# Compensazione del bed solo con marker esatto della traccia originale nel contenitore.
-# Indipendente dal preset DSP; nessuna attivazione da profilo codec o nome file.
+# Compensazione del bed con profilo EAC3 Atmos o marker esatto del workflow.
+# Indipendente dal preset DSP; nessuna attivazione dal nome file.
 ATMOS_ORIGINAL_TITLE="EAC3 Atmos Original"
 ATMOS_ORIGINAL_TITLE_LEGACY="EAC3 Atmos (Original)"
 ATMOS_FC_GAIN_DB="0.6"
-ATMOS_LFE_GAIN_DB="-0.5"
+ATMOS_LFE_GAIN_DB="-0.6"
 
 # FRONT_EQ: equalizzatore frontale condiviso, adattato a torri audio 3 vie.
 FRONT_EQ="equalizer=f=320:t=q:w=1.1:g=-0.8,equalizer=f=5000:t=q:w=1.4:g=0.4,highshelf=f=11000:t=q:w=0.7:g=0.4"
@@ -337,28 +337,61 @@ get_audio_title_by_index() {
     $0=="index="idx{f=1;next} f&&/^TAG:title=/{sub(/^TAG:title=/,"");print;exit} f&&/^index=/{exit}'
 }
 
-# Il marker puo' stare sulla traccia originale secondaria mentre elaboriamo il bed.
-# Match completo (case-insensitive), come per i marker affidabili dell'analyzer.
-set_atmos_bed_compensation() {
-  local titles title
-  ATMOS_FC_GAIN_FILTER=""
-  ATMOS_LFE_GAIN_FILTER=""
-  if ! titles=$(ffprobe -v error -select_streams a -show_entries stream_tags=title \
-      -of default=nw=1:nk=1 "$1" 2>/dev/null); then
-    warn "Marker Atmos non verificabile: compensazione FC/LFE disattivata."
-    return 0
-  fi
-  while IFS= read -r title; do
-    title="${title//$'\r'/}"
+# Stessa verifica dell'analyzer: profilo EAC3 Atmos, poi marker esatto del workflow.
+detect_atmos_source() {
+  local f="$1" audio_count audio_ord stream_meta codec profile title
+  local marker_found=false marker_stream=""
+
+  audio_count=$(ffprobe -v error -select_streams a -show_entries stream=index \
+    -of csv=p=0 "$f" 2>/dev/null | tr -d '\r' | awk 'NF { n++ } END { print n+0 }')
+
+  for (( audio_ord=0; audio_ord<audio_count; audio_ord++ )); do
+    stream_meta=$(ffprobe -v error -select_streams "a:${audio_ord}" \
+      -show_entries stream=codec_name,profile:stream_tags=title \
+      -of default=nw=1 "$f" 2>/dev/null | tr -d '\r' || true)
+    codec=$(printf '%s\n' "$stream_meta" | awk -F= '$1=="codec_name" { print $2; exit }')
+    profile=$(printf '%s\n' "$stream_meta" | awk -F= '$1=="profile" { sub(/^[^=]*=/,""); print; exit }')
+    title=$(printf '%s\n' "$stream_meta" | awk -F= '$1=="TAG:title" { sub(/^[^=]*=/,""); print; exit }')
+
     if [[ "${title,,}" == "${ATMOS_ORIGINAL_TITLE,,}" || \
           "${title,,}" == "${ATMOS_ORIGINAL_TITLE_LEGACY,,}" ]]; then
-      ATMOS_FC_GAIN_FILTER="volume=${ATMOS_FC_GAIN_DB}dB,"
-      ATMOS_LFE_GAIN_FILTER="volume=${ATMOS_LFE_GAIN_DB}dB,"
-      echo -e "${C_ATMOS_FOUND} RILEVATO DAL WORKFLOW - marker '$title': compensazione bed FC=${ATMOS_FC_GAIN_DB} dB, LFE=${ATMOS_LFE_GAIN_DB} dB.\033[0m"
+      marker_found=true
+      marker_stream="$audio_ord"
+    fi
+
+    [[ "$codec" == "eac3" ]] || continue
+
+    if [[ "${profile,,}" == *"atmos"* ]]; then
+      printf 'ATMOS|profilo FFprobe sullo stream audio %s\n' "$audio_ord"
       return 0
     fi
-  done <<<"$titles"
-  echo -e "${C_ATMOS_UNKNOWN} NON RILEVATO DAL WORKFLOW - marker originale Atmos assente: compensazione FC/LFE disattivata.\033[0m"
+
+  done
+
+  if [[ "$marker_found" == true ]]; then
+    printf 'ATMOS|marker affidabile sullo stream audio %s\n' "$marker_stream"
+  else
+    printf 'UNKNOWN|nessun profilo Atmos rilevato\n'
+  fi
+}
+
+set_atmos_bed_compensation() {
+  local source_probe source_class source_evidence
+  ATMOS_FC_GAIN_FILTER=""
+  ATMOS_LFE_GAIN_FILTER=""
+  source_probe=$(detect_atmos_source "$1")
+  IFS='|' read -r source_class source_evidence <<<"$source_probe"
+  if [[ "$source_class" == "ATMOS" ]]; then
+    ATMOS_FC_GAIN_FILTER="volume=${ATMOS_FC_GAIN_DB}dB,"
+    ATMOS_LFE_GAIN_FILTER="volume=${ATMOS_LFE_GAIN_DB}dB,"
+    if [[ "$source_evidence" == "profilo FFprobe"* ]]; then
+      echo -e "${C_ATMOS_FOUND} VERIFICATO con ffprobe, applico compensazione sonora FC=+${ATMOS_FC_GAIN_DB} dB, LFE=${ATMOS_LFE_GAIN_DB} dB\033[0m"
+    else
+      echo -e "${C_ATMOS_FOUND} RILEVATO DAL WORKFLOW - ${source_evidence}: applico compensazione sonora FC=+${ATMOS_FC_GAIN_DB} dB, LFE=${ATMOS_LFE_GAIN_DB} dB.\033[0m"
+    fi
+  else
+    echo -e "${C_ATMOS_UNKNOWN} NON RILEVATO - ${source_evidence}: compensazione FC/LFE disattivata.\033[0m"
+  fi
 }
 
 # Costruisco la lista dei file da processare: se è stato specificato un file, lo uso. Altrimenti, cerco tutti i file compatibili nella cartella.
@@ -555,7 +588,7 @@ EOF
 # - il file resta 5.1 con un solo canale LFE; l'eventuale doppio sub (5.2) e' gestito dall'AVR;
 # - unisce i sei canali in 5.1(side);
 # - mantiene il limiter finale come protezione globale;
-# - applica gli offset del bed Atmos (solo marker affidabile) prima dei limiter FC/LFE;
+# - applica gli offset del bed Atmos (profilo EAC3 Atmos o marker affidabile) prima dei limiter FC/LFE;
 # - limita FC dopo il volamp e la compensazione.
 build_output_join_graph() {
   cat <<EOF

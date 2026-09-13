@@ -6,7 +6,7 @@
 
 Suite di script **Bash AWK + FFmpeg** per analizzare, normalizzare, correggere e trasformare tracce audio stereo, 5.1 ed EAC3 Atmos/JOC in modo offline, ripetibile e controllato.
 
-> Non tutti i supereroi indossano un mantello. Alcuni lanciano `ffmpeg` e salvano dialoghi ed effetti dal multiverso del mix *stonato*.
+> Non tutti i supereroi indossano un mantello. Alcuni lanciano `ffmpeg` e salvano i dialoghi dal multiverso del mix sbagliato.
 
 ## Indice degli argomenti
 
@@ -126,7 +126,7 @@ Verifica locale del 13 settembre 2026 sulla compensazione Atmos: sintassi Bash d
 | Script | Scopo |
 |---|---|
 | `audio_analyzer_volamp_psycho.sh` | Classifier per 5.1: Delta surround/centro, banda voce, mascheramento, width, target `-21 LUFS`, volamp automatico **3.0–4.5 dB** e batch opzionale |
-| `aegis_sonar_wide_aura_voice_volamp_psycho.sh` | Processore 5.1 con preset `aegis`, `sonar`, `wide`, `aura`, `voice`, EQ voce, surround psicoacustici, controllo LFE e compensazione FC/LFE attivata dal marker Atmos originale |
+| `aegis_sonar_wide_aura_voice_volamp_psycho.sh` | Processore 5.1 con preset `aegis`, `sonar`, `wide`, `aura`, `voice`, EQ voce, surround psicoacustici, controllo LFE e compensazione FC/LFE attivata dal profilo EAC3 Atmos o dal marker originale |
 | `stereo251_upmix_psycho.sh` | Upmix stereo → 5.1 plausibile: matrice L-R, centro assist, LFE minimo, output atomico/verificato e preset `quad` dedicato alla musica |
 | `asmr_vr_intimate_psycho.sh` | Processing stereo per cuffie/ASMR/VR con BS2B, ITD opzionale, loudnorm post-DSP, LFO e output atomico/verificato |
 | `atmos_to_51_dynaudnorm_psicho.sh` | Prepara un MKV con EAC3 5.1 normalizzata come primaria e traccia Atmos/EAC3 originale copiata come secondaria |
@@ -300,7 +300,7 @@ Il discriminante Atmos dell'analyzer usa il profilo E-AC-3 esposto da FFprobe op
 | altrimenti | resta `AURA` |
 | preset misurato `AEGIS` | resta `AEGIS`, alternativa di ascolto `SONAR` |
 
-`VOICE`, `WIDE` e le alternative di sicurezza `VOICE`, `WIDE` o `CHECK` impediscono gli override Atmos. La compensazione di volume FC/LFE del processore ha invece un requisito esclusivo: il marker completo della traccia originale, descritto in [Compensazione del bed Atmos](#compensazione-del-bed-atmos). Il solo profilo Atmos rilevato dall'analyzer non abilita gli offset.
+`VOICE`, `WIDE` e le alternative di sicurezza `VOICE`, `WIDE` o `CHECK` impediscono gli override Atmos. La compensazione di volume FC/LFE del processore è indipendente dagli override del preset: viene attivata dal profilo EAC3 Atmos oppure dal marker completo della traccia originale, come descritto in [Compensazione del bed Atmos](#compensazione-del-bed-atmos). `bias preset=no` non disabilita gli offset.
 
 ## Width MS
 
@@ -348,7 +348,7 @@ L'ultimo parametro numerico è il volamp realmente passato al processore. Il bat
 PROC="${PROC:-./aegis_sonar_wide_aura_voice_volamp_psycho.sh}"
 ```
 
-Il processore controlla il marker direttamente nel file di input a ogni esecuzione, anche quando viene chiamato dal batch. Gli offset Atmos non sono incorporati nel valore `volamp` scritto dall'analyzer e non richiedono nuovi argomenti.
+Il processore controlla il profilo EAC3 Atmos e il marker direttamente nel file di input a ogni esecuzione, anche quando viene chiamato dal batch. Gli offset Atmos non sono incorporati nel valore `volamp` scritto dall'analyzer e non richiedono nuovi argomenti.
 
 Il batch usa sempre il preset per-file, derivato da `DeltaSur`, `DeltaFC`, `VoiceDelta`, `VoiceMask`, balance, `Width MS` ed eventuali override di sicurezza. Il P25 di `DeltaSur` è soltanto diagnostico; il verdetto stagionale richiede almeno 2/3 di consenso e non sostituisce mai il preset scritto nelle singole righe del batch.
 
@@ -369,7 +369,7 @@ Motore principale per tracce **5.1 esistenti**.
 - processing surround differenziato per preset;
 - air/decorrelation layer controllato;
 - trattamento LFE: high-pass `32 Hz`, low-pass `110 Hz`, volamp ed eventuale compensazione Atmos prima del limiter dedicato;
-- compensazione del bed **FC +0,6 dB / LFE −0,5 dB**, esclusivamente con marker Atmos originale, per tutti e cinque i preset;
+- compensazione del bed **FC +0,6 dB / LFE −0,6 dB**, con profilo EAC3 Atmos o marker originale, per tutti e cinque i preset;
 - diffusori mantenuti `Small`, con bass management e crossover a circa `110 Hz` affidati all'AVR; lo script applica ai canali principali solo un high-pass di sicurezza a `40 Hz`;
 - `FRONT_EQ` leggermente adattato alle torri senza widening o alterazioni della scena frontale;
 - volamp manuale `0–6.0 dB`, default **3.0 dB**;
@@ -410,7 +410,7 @@ split 5.1
 → EQ frontali / EQ centrale / processing surround
 → volamp individuale FL/FR/FC/SL/SR
 → FC: eventuale offset Atmos +0,6 dB → limiter dedicato
-→ LFE: HPF 32 Hz + LPF 110 Hz + volamp → eventuale offset Atmos −0,5 dB → limiter dedicato
+→ LFE: HPF 32 Hz + LPF 110 Hz + volamp → eventuale offset Atmos −0,6 dB → limiter dedicato
 → join 5.1(side)
 → high-shelf finale sui canali non-LFE
 → master limiter 5.1
@@ -429,14 +429,14 @@ FRONT_EQ:
   +0.4 dB high-shelf @ 11 kHz
 
 FC (dopo il volamp):
-  volume +0,6 dB solo con marker Atmos originale
+  volume +0,6 dB con profilo EAC3 Atmos o marker originale
   alimiter limit=0.94, attack=1.5 ms, release=60 ms, level=0, latency=1
 
 LFE:
   highpass 32 Hz
   lowpass 110 Hz
   volamp
-  volume −0,5 dB solo con marker Atmos originale
+  volume −0,6 dB con profilo EAC3 Atmos o marker originale
   alimiter limit=0.94, attack=2 ms, release=120 ms, level=0, latency=1
 
 Master:
@@ -449,33 +449,34 @@ I limiter FC, LFE e master usano tutti `level=0`: non aggiungono auto-level al v
 
 ## Compensazione del bed Atmos
 
-La taratura richiesta nasce dal design del preset **Atmos Original** usato in questo workflow, che prevede una maggiore presenza del canale LFE. La compensazione riduce leggermente il LFE e sostiene il centrale nel bed elaborato, per riequilibrare il rapporto tra basso e dialoghi. È una scelta di taratura specifica di questo preset sorgente, non una proprietà generale attribuita al formato Dolby Atmos.
+La taratura richiesta nasce dal design del preset **Atmos Original** usato in questo workflow, che prevede una maggiore presenza del canale LFE. La compensazione riduce leggermente il LFE e sostiene il centrale nel bed elaborato, per riequilibrare il rapporto tra basso e dialoghi. Il workflow estende questa taratura alle sorgenti verificate tramite profilo EAC3 Atmos. Resta una scelta di taratura del progetto, non una proprietà generale attribuita al formato Dolby Atmos.
 
-Il processore aggiunge **+0,6 dB al FC** e **−0,5 dB al LFE**, dopo il volamp e prima dei rispettivi limiter, solo quando una traccia audio del contenitore porta uno dei marker affidabili. Il confronto usa il titolo completo, senza distinzione tra maiuscole e minuscole, e gestisce i terminatori CRLF di FFprobe su Windows.
+Il processore aggiunge **+0,6 dB al FC** e **−0,6 dB al LFE**, dopo il volamp e prima dei rispettivi limiter, quando una traccia EAC3 del contenitore espone un profilo FFprobe contenente «Atmos», oppure, come fallback, una traccia audio porta uno dei marker affidabili. Il confronto usa il titolo completo, senza distinzione tra maiuscole e minuscole, e gestisce i terminatori CRLF di FFprobe su Windows.
 
-| Titolo della traccia audio nell'input | Compensazione |
+| Prova rilevata sulle tracce audio dell'input | Compensazione |
 |---|---|
+| Profilo EAC3 Atmos, anche senza marker | attiva |
 | `EAC3 Atmos Original` | attiva |
 | `EAC3 Atmos (Original)` (legacy) | attiva |
-| `EAC3 Original` | disattivata |
-| titolo assente, diverso o con testo aggiunto | disattivata |
+| Solo `EAC3 Original`, senza profilo EAC3 Atmos | disattivata |
+| Nessun profilo EAC3 Atmos e nessun marker esatto | disattivata |
 
-Il marker può essere sulla traccia originale secondaria mentre viene elaborata la 5.1 normalizzata primaria. La scelta di `aegis`, `sonar`, `wide`, `aura` o `voice` non cambia questa regola. Il profilo codec, il nome del file o un titolo generico contenente «Atmos» non attivano gli offset.
+Il marker può essere sulla traccia originale secondaria mentre viene elaborata la 5.1 normalizzata primaria. La scelta di `aegis`, `sonar`, `wide`, `aura` o `voice` non cambia questa regola. Il profilo EAC3 Atmos ha priorità sul marker. Il nome del file o un titolo generico contenente «Atmos» non attivano gli offset.
 
 Valori configurabili in testa a `aegis_sonar_wide_aura_voice_volamp_psycho.sh`:
 
 ```bash
 ATMOS_FC_GAIN_DB="0.6"
-ATMOS_LFE_GAIN_DB="-0.5"
+ATMOS_LFE_GAIN_DB="-0.6"
 ```
 
 Per usare +0,5 dB sul centrale, modificare `ATMOS_FC_GAIN_DB` nello script. Questi parametri non sono argomenti CLI né override da variabili d'ambiente.
 
-Gli offset si sommano al volamp anche quando `volamp=0`. Per esempio, con `volamp=3.0`, gli stadi di volume finale valgono complessivamente **+3,6 dB sul FC** e **+2,5 dB sul LFE**; EQ, gain del preset e intervento dei limiter concorrono al livello audio effettivo.
+Gli offset si sommano al volamp anche quando `volamp=0`. Per esempio, con `volamp=3.0`, gli stadi di volume finale valgono complessivamente **+3,6 dB sul FC** e **+2,4 dB sul LFE**; EQ, gain del preset e intervento dei limiter concorrono al livello audio effettivo.
 
-Il controllo viene ripetuto per ogni file: marker assente o lettura FFprobe fallita lasciano entrambi gli offset disattivati, senza ereditare lo stato del file precedente. Il log riporta l'attivazione con i valori applicati oppure la disattivazione.
+Il controllo viene ripetuto per ogni file: nessuna prova Atmos disponibile (profilo o marker) lascia entrambi gli offset disattivati, senza ereditare lo stato del file precedente. Il log riporta l'attivazione con i valori applicati oppure la disattivazione.
 
-La compensazione viene applicata nel processore finale; il preparatore Atmos non applica questi due offset. Passare al processore il contenitore intermedio completo: estraendo soltanto il bed si perde il marker della seconda traccia e la compensazione resta disattivata.
+La compensazione viene applicata nel processore finale; il preparatore Atmos non applica questi due offset. Passare al processore il contenitore intermedio completo: estraendo soltanto il bed si perdono le prove della seconda traccia; in assenza di un profilo EAC3 Atmos sul bed, la compensazione resta disattivata.
 
 Il file prodotto resta **5.1 con un solo canale LFE**. Un eventuale impianto **5.2** distribuisce il canale `.1` ai due subwoofer tramite l'AVR; lo script non crea due canali LFE separati.
 
@@ -910,7 +911,7 @@ Se il fallback non è verificato come Atmos, il titolo della seconda traccia div
 EAC3 Original
 ```
 
-Questo titolo non attiva la compensazione FC/LFE del processore. Quando la sorgente è riconosciuta come Atmos, il preparatore scrive invece `EAC3 Atmos Original`: è il marker che abilita gli offset nel successivo processing del bed.
+Questo titolo da solo non attiva la compensazione FC/LFE del processore. Quando la sorgente è riconosciuta come Atmos, il preparatore scrive invece `EAC3 Atmos Original`: è il marker che abilita gli offset nel successivo processing del bed.
 
 ## Dynaudnorm
 
@@ -939,7 +940,7 @@ Interpretazione:
 - `coupling=1`: stesso fattore di gain sui canali, preservando il bilanciamento surround;
 - `altboundary=0`: modalità boundary standard.
 
-Il preparatore non applica gli offset FC/LFE né un trattamento specifico al solo LFE. Il successivo processore gestisce high-pass `32 Hz`, low-pass `110 Hz` e limiter del canale `.1`, oltre a FC +0,6 dB e LFE −0,5 dB quando trova il marker originale Atmos.
+Il preparatore non applica gli offset FC/LFE né un trattamento specifico al solo LFE. Il successivo processore gestisce high-pass `32 Hz`, low-pass `110 Hz` e limiter del canale `.1`, oltre a FC +0,6 dB e LFE −0,6 dB quando trova il profilo EAC3 Atmos o il marker originale.
 
 ## Verifica e pubblicazione
 
@@ -1013,7 +1014,7 @@ Atmos/JOC
    - Atmos originale secondaria con titolo EAC3 Atmos Original
 → analyzer sul contenitore completo
 → processing psicoacustico opzionale con il preset scelto
-   - marker presente: FC +0,6 dB / LFE −0,5 dB prima dei limiter
+   - marker presente: FC +0,6 dB / LFE −0,6 dB prima dei limiter
 ```
 
 Il file dual-track resta il riferimento per la riproduzione Atmos non alterata. Il file psicoacustico è un'alternativa separata.
@@ -1157,7 +1158,7 @@ Oppure:
 ./atmos_to_51_dynaudnorm_psicho.sh "film_atmos.mkv" 768k
 ```
 
-Il risultato contiene la 5.1 normalizzata come traccia default e l'originale come seconda traccia. Per Atmos non alterato selezionare la seconda. Per il processing passare il MKV completo: la prima traccia viene elaborata e il marker `EAC3 Atmos Original` sulla seconda abilita gli offset FC/LFE con qualsiasi preset. Il fallback `EAC3 Original` lascia la compensazione disattivata.
+Il risultato contiene la 5.1 normalizzata come traccia default e l'originale come seconda traccia. Per Atmos non alterato selezionare la seconda. Per il processing passare il MKV completo: la prima traccia viene elaborata e il marker `EAC3 Atmos Original` sulla seconda abilita gli offset FC/LFE con qualsiasi preset. Il solo fallback `EAC3 Original`, senza profilo EAC3 Atmos nel contenitore, lascia la compensazione disattivata.
 
 ## L'analyzer forza VOICE
 

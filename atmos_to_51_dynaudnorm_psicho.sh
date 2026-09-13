@@ -579,7 +579,7 @@ for CUR_FILE in "${FILES[@]}"; do
 
   info "Traccia audio: idx=$A_IDX, canali=$A_CH, lingua=$A_LANG, tipo=$A_TYPE"
   if [[ "$A_TYPE" == "atmos" ]]; then
-    echo -e "${C_ATMOS_FOUND} RILEVATO - origine verificata tramite profilo FFprobe.\033[0m"
+    echo -e "${C_ATMOS_FOUND} VERIFICATO - origine verificata tramite profilo FFprobe. Compensazione FC/LFE demandata al processore finale.\033[0m"
   fi
 
   # Come nel motore principale, il pan usa indici di canale espliciti. In questo

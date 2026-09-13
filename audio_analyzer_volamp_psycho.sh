@@ -902,10 +902,11 @@ scan_delta() {
   IFS='|' read -r source_class source_evidence <<<"$source_probe"
   if [[ "$source_class" == "ATMOS" ]]; then
     if [[ "$source_evidence" == "profilo FFprobe"* ]]; then
-      echo -e "${C_ATMOS_FOUND} RILEVATO - origine verificata tecnicamente: ${source_evidence}.\033[0m"
+      echo -e "${C_ATMOS_FOUND} VERIFICATO - origine verificata tecnicamente: ${source_evidence}.\033[0m"
     else
       echo -e "${C_ATMOS_FOUND} RILEVATO DAL WORKFLOW - ${source_evidence}.\033[0m"
     fi
+    info "Compensazione sonora Atmos prevista nel processing: FC=+0.6 dB, LFE=-0.6 dB (indipendente dal preset e dal volamp)."
   else
     echo -e "${C_ATMOS_UNKNOWN} NON RILEVATO - ${source_evidence}.\033[0m"
   fi
@@ -1105,7 +1106,7 @@ scan_delta() {
   echo -e "  \033[1;36mWidth MS: \033[0m  ${width_ms} dB  (${width_desc}; SIDE - MID SL/SR)"
   echo -e "  \033[1;33mI(full):  \033[0m  ${i_full:-N/A} LUFS"
   echo -e "  \033[1;33mLRA:      \033[0m  ${lra_full:-N/A} LU  (solo cap volamp)"
-  echo -e "  \033[1;36mSource:   \033[0m  ${source_class}  (${source_evidence}; bias=${source_bias_applied})"
+  echo -e "  \033[1;36mSource:   \033[0m  ${source_class}  (${source_evidence}; bias preset=${source_bias_applied})"
   echo -e "  \033[1;37mMisure:   \033[0m  ${measured_preset}  | preferenza Atmos: ${source_bias_applied}"
   echo -e "  \033[1;37mPreset:   \033[0m  ${p_color}${preset}\033[0m  (${preset_reason})"
   echo -e "  \033[1;37mConfid.:  \033[0m  ${confidence}  | alternativa: ${alternative}"
