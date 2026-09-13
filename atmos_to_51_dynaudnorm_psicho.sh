@@ -28,11 +28,15 @@ set -uo pipefail
 # Colori
 C_INFO="\033[0;36m[INFO]\033[0m"
 C_WARN="\033[0;33m[WARNING]\033[0m"
+C_MAPPING="\033[0;33m[MAPPING]\033[0m"
+C_ATMOS_FOUND="\033[0;38;5;208m[ATMOS]"
+C_ATMOS_UNKNOWN="\033[0;38;5;208m[ATMOS]"
 C_ERR="\033[0;31m[ERROR]\033[0m"
 C_OK="\033[0;32m[OK]\033[0m"
 
 # Funzioni di log
 info(){ echo -e "${C_INFO} $*"; }
+mapping(){ echo -e "${C_MAPPING} $*"; }
 warn(){ echo -e "${C_WARN} $*"; }
 err(){  echo -e "${C_ERR}  $*"; }
 ok(){   echo -e "${C_OK}  $*"; }
@@ -217,7 +221,7 @@ find_atmos_stream() {
   if [[ -n "$best_atmos" ]]; then
     printf '%s\n' "$best_atmos"
   elif [[ -n "$best_fallback" ]]; then
-    warn "Nessun profilo Atmos esplicito trovato: uso il miglior EAC3 6ch come fallback." >&2
+    echo -e "${C_ATMOS_UNKNOWN} NON RILEVATO - nessun profilo Atmos esplicito trovato: uso il miglior EAC3 6ch come fallback.\033[0m" >&2
     printf '%s\n' "$best_fallback"
   else
     return 1
@@ -574,19 +578,22 @@ for CUR_FILE in "${FILES[@]}"; do
   A_LANG="${A_LANG//$'\r'/}"
 
   info "Traccia audio: idx=$A_IDX, canali=$A_CH, lingua=$A_LANG, tipo=$A_TYPE"
+  if [[ "$A_TYPE" == "atmos" ]]; then
+    echo -e "${C_ATMOS_FOUND} RILEVATO - origine verificata tramite profilo FFprobe.\033[0m"
+  fi
 
   # Come nel motore principale, il pan usa indici di canale espliciti. In questo
   # modo aformat non puo' rimappare automaticamente i sei canali quando il layout
   # e' assente, non standard oppure dichiarato come 5.1(back).
   case "$A_LAYOUT" in
     "5.1(side)")
-      info "Layout input: 5.1(side) → copia posizionale pura c0..c5"
+      mapping "Layout input: 5.1(side) → copia posizionale pura c0..c5"
       ;;
     "5.1"|"5.1(back)")
-      info "Layout input: ${A_LAYOUT} → copia posizionale pura; c4/c5 diventano SL/SR"
+      mapping "Layout input: ${A_LAYOUT} → copia posizionale pura; c4/c5 diventano SL/SR"
       ;;
     *)
-      warn "Layout '${A_LAYOUT:-vuoto}' non dichiarato/non standard → mapping posizionale c0..c5"
+      mapping "Layout audio '${A_LAYOUT:-unknown}': uso del mapping posizionale 5.1 c0..c5 (FC=c2, SL=c4, SR=c5)."
       ;;
   esac
 

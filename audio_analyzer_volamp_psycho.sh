@@ -31,12 +31,16 @@ set -uo pipefail
 # Note:
 C_INFO="\033[0;36m[INFO]\033[0m"
 C_WARN="\033[0;33m[WARNING]\033[0m"
+C_MAPPING="\033[0;33m[MAPPING]\033[0m"
 C_ERR="\033[0;31m[ERROR]\033[0m"
 C_OK="\033[0;32m[OK]\033[0m"
 C_PROGRESS="\033[1;35m[AVANZAMENTO]\033[0m"
+C_ATMOS_FOUND="\033[0;38;5;208m[ATMOS]"
+C_ATMOS_UNKNOWN="\033[0;38;5;208m[ATMOS]"
 
 # Funzioni di log con colori: info, warn, err, ok. Usate per output coerente e facilmente distinguibile.
 info(){ echo -e "${C_INFO} $*"; }
+mapping(){ echo -e "${C_MAPPING} $*"; }
 warn(){ echo -e "${C_WARN} $*"; }
 err(){  echo -e "${C_ERR}  $*"; }
 ok(){   echo -e "${C_OK}  $*"; }
@@ -898,23 +902,23 @@ scan_delta() {
   IFS='|' read -r source_class source_evidence <<<"$source_probe"
   if [[ "$source_class" == "ATMOS" ]]; then
     if [[ "$source_evidence" == "profilo FFprobe"* ]]; then
-      info "Origine ATMOS verificata tecnicamente: ${source_evidence}."
+      echo -e "${C_ATMOS_FOUND} RILEVATO - origine verificata tecnicamente: ${source_evidence}.\033[0m"
     else
-      info "Origine ATMOS riconosciuta dal workflow: ${source_evidence}."
+      echo -e "${C_ATMOS_FOUND} RILEVATO DAL WORKFLOW - ${source_evidence}.\033[0m"
     fi
   else
-    info "Origine standard/UNKNOWN: ${source_evidence}."
+    echo -e "${C_ATMOS_UNKNOWN} NON RILEVATO - ${source_evidence}.\033[0m"
   fi
 
   # Mapping posizionale robusto, allineato al processore principale: nell'ordine
   # canonico 5.1 c2 e' FC, c4/c5 sono i surround. Non dipende dai nomi del layout.
   case "$layout" in
     "5.1(side)")
-      info "Layout audio 5.1(side): mapping posizionale FC=c2, SL=c4, SR=c5." ;;
+      mapping "Layout audio 5.1(side): mapping posizionale FC=c2, SL=c4, SR=c5." ;;
     "5.1"|"5.1(back)")
-      info "Layout audio ${layout}: mapping posizionale; c4/c5 diventano SL/SR." ;;
+      mapping "Layout audio ${layout}: mapping posizionale; c4/c5 diventano SL/SR." ;;
     *)
-      warn "Layout audio '${layout:-unknown}' non standard: mapping posizionale sicuro c0..c5." ;;
+      mapping "Layout audio '${layout:-unknown}': uso del mapping posizionale 5.1 c0..c5 (FC=c2, SL=c4, SR=c5)." ;;
   esac
 
   # Loudness, LRA, peak, RMS scena, Width e banda voce condividono la stessa

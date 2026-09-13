@@ -22,11 +22,15 @@ set -uo pipefail
 # Color codes per log: info, warning, error, ok. Usati per distinguere i livelli di messaggio in console.
 C_INFO="\033[0;36m[INFO]\033[0m"
 C_WARN="\033[0;33m[WARNING]\033[0m"
+C_MAPPING="\033[0;33m[MAPPING]\033[0m"
+C_ATMOS_FOUND="\033[0;38;5;208m[ATMOS]"
+C_ATMOS_UNKNOWN="\033[0;38;5;208m[ATMOS]"
 C_ERR="\033[0;31m[ERROR]\033[0m"
 C_OK="\033[0;32m[OK]\033[0m"
 
 # Funzioni di log: info, warn, err, ok. Usano colori per distinguere i livelli di messaggio.
 info(){ echo -e "${C_INFO} $*"; }
+mapping(){ echo -e "${C_MAPPING} $*"; }
 warn(){ echo -e "${C_WARN} $*"; }
 err(){  echo -e "${C_ERR}  $*"; }
 ok(){   echo -e "${C_OK}  $*"; }
@@ -350,11 +354,11 @@ set_atmos_bed_compensation() {
           "${title,,}" == "${ATMOS_ORIGINAL_TITLE_LEGACY,,}" ]]; then
       ATMOS_FC_GAIN_FILTER="volume=${ATMOS_FC_GAIN_DB}dB,"
       ATMOS_LFE_GAIN_FILTER="volume=${ATMOS_LFE_GAIN_DB}dB,"
-      info "Marker '$title': compensazione bed FC=${ATMOS_FC_GAIN_DB} dB, LFE=${ATMOS_LFE_GAIN_DB} dB."
+      echo -e "${C_ATMOS_FOUND} RILEVATO DAL WORKFLOW - marker '$title': compensazione bed FC=${ATMOS_FC_GAIN_DB} dB, LFE=${ATMOS_LFE_GAIN_DB} dB.\033[0m"
       return 0
     fi
   done <<<"$titles"
-  info "Marker originale Atmos assente: compensazione FC/LFE disattivata."
+  echo -e "${C_ATMOS_UNKNOWN} NON RILEVATO DAL WORKFLOW - marker originale Atmos assente: compensazione FC/LFE disattivata.\033[0m"
 }
 
 # Costruisco la lista dei file da processare: se è stato specificato un file, lo uso. Altrimenti, cerco tutti i file compatibili nella cartella.
@@ -649,13 +653,13 @@ for CUR_FILE in "${FILES[@]}"; do
   INPUT_PAN_MAP="FL=c0|FR=c1|FC=c2|LFE=c3|SL=c4|SR=c5"
   case "$A_LAYOUT" in
     "5.1(side)")
-      info "Layout input: 5.1(side) → copia posizionale pura c0..c5"
+      mapping "Layout input: 5.1(side) → copia posizionale pura c0..c5"
       ;;
     "5.1"|"5.1(back)")
-      info "Layout input: ${A_LAYOUT} → copia posizionale pura; c4/c5 diventano SL/SR"
+      mapping "Layout input: ${A_LAYOUT} → copia posizionale pura; c4/c5 diventano SL/SR"
       ;;
     *)
-      warn "Layout '${A_LAYOUT:-vuoto}' non dichiarato/non standard → mapping posizionale 6ch c0..c5"
+      mapping "Layout audio '${A_LAYOUT:-unknown}': uso del mapping posizionale 5.1 c0..c5 (FC=c2, SL=c4, SR=c5)."
       ;;
   esac
 
