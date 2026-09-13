@@ -8,6 +8,25 @@ Suite di script **Bash + FFmpeg** per analizzare, normalizzare, correggere e tra
 
 > Non tutti i supereroi indossano un mantello. Alcuni lanciano `ffmpeg` e salvano i dialoghi dal multiverso del mix sbagliato.
 
+## Indice degli argomenti
+
+- [Schema di riferimento](#schema-di-riferimento)
+- [Requisiti](#requisiti)
+- [Installazione](#installazione)
+- [Script inclusi](#script-inclusi)
+- [Quick Start](#quick-start)
+- [1. Analyzer: analisi e classificazione 5.1](#1-audio_analyzer_volamp_psychosh)
+- [2. Aegis / Sonar / Wide / Aura / Voice: processing 5.1](#2-aegis_sonar_wide_aura_voice_volamp_psychosh)
+- [3. Upmix stereo → 5.1](#3-stereo251_upmix_psychosh)
+- [4. ASMR / VR: processing per cuffie](#4-asmr_vr_intimate_psychosh)
+- [5. Atmos: preparazione EAC3 5.1](#5-atmos_to_51_dynaudnorm_psichosh)
+- [Workflow consigliati](#workflow-consigliati)
+- [Benchmark orientativo](#benchmark-orientativo)
+- [Troubleshooting](#troubleshooting)
+- [Cosa la suite non fa](#cosa-la-suite-non-fa)
+- [Licenza](#licenza)
+- [Autore](#autore)
+
 La filosofia è semplice: **misurare prima, processare dopo**. Il Classifier dell'analyzer misura scena full-band, prominenza della voce, mascheramento e width dei surround; sceglie quindi il preset per-file più adatto e può generare un batch riproducibile. Gli altri script coprono upmix stereo, preparazione Atmos/EAC3 e processing binaurale per cuffie.
 
 La taratura 5.1 è pensata per un impianto domestico ibrido con frontali a torre 3 vie, centrale e surround compatti, tutti configurati **Small** con crossover AVR unico intorno a **110 Hz**, uno o due subwoofer attivi gestiti dall'AVR, ascolto medio/basso e priorità all'intelligibilità della voce italiana.
