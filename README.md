@@ -368,7 +368,7 @@ Motore principale per tracce **5.1 esistenti**.
 - limiter sul centrale dopo il volamp e l’eventuale compensazione Atmos, senza auto-level;
 - processing surround differenziato per preset;
 - air/decorrelation layer controllato;
-- trattamento LFE: high-pass `32 Hz`, low-pass `110 Hz`, volamp ed eventuale compensazione Atmos prima del limiter dedicato;
+- trattamento LFE: volamp ed eventuale compensazione Atmos prima del limiter dedicato; filtraggio dedicato affidato all’hardware;
 - compensazione del bed **FC +0,6 dB / LFE −0,6 dB**, con profilo EAC3 Atmos o marker originale, per tutti e cinque i preset;
 - diffusori mantenuti `Small`, con bass management e crossover a circa `110 Hz` affidati all'AVR; lo script applica ai canali principali solo un high-pass di sicurezza a `40 Hz`;
 - `FRONT_EQ` leggermente adattato alle torri senza widening o alterazioni della scena frontale;
@@ -410,7 +410,7 @@ split 5.1
 → EQ frontali / EQ centrale / processing surround
 → volamp individuale FL/FR/FC/SL/SR
 → FC: eventuale offset Atmos +0,6 dB → limiter dedicato
-→ LFE: HPF 32 Hz + LPF 110 Hz + volamp → eventuale offset Atmos −0,6 dB → limiter dedicato
+→ LFE: volamp → eventuale offset Atmos −0,6 dB → limiter dedicato
 → join 5.1(side)
 → high-shelf finale sui canali non-LFE
 → master limiter 5.1
@@ -424,7 +424,7 @@ Parametri principali:
 
 ```text
 FRONT_EQ:
-  -0.8 dB @ 320 Hz
+  -0.4 dB @ 320 Hz
   +0.4 dB @ 5 kHz
   +0.4 dB high-shelf @ 11 kHz
 
@@ -433,8 +433,6 @@ FC (dopo il volamp):
   alimiter limit=0.94, attack=1.5 ms, release=60 ms, level=0, latency=1
 
 LFE:
-  highpass 32 Hz
-  lowpass 110 Hz
   volamp
   volume −0,6 dB con profilo EAC3 Atmos o marker originale
   alimiter limit=0.94, attack=2 ms, release=120 ms, level=0, latency=1
@@ -940,7 +938,7 @@ Interpretazione:
 - `coupling=1`: stesso fattore di gain sui canali, preservando il bilanciamento surround;
 - `altboundary=0`: modalità boundary standard.
 
-Il preparatore non applica gli offset FC/LFE né un trattamento specifico al solo LFE. Il successivo processore gestisce high-pass `32 Hz`, low-pass `110 Hz` e limiter del canale `.1`, oltre a FC +0,6 dB e LFE −0,6 dB quando trova il profilo EAC3 Atmos o il marker originale.
+Il preparatore non applica gli offset FC/LFE né un trattamento specifico al solo LFE: il passa-alto generale a `20 Hz` e dynaudnorm coinvolgono tutti i canali. Il successivo processore applica volamp e limiter al canale `.1`, oltre a FC +0,6 dB e LFE −0,6 dB quando trova il profilo EAC3 Atmos o il marker originale. Il filtraggio dedicato dell’LFE è affidato all’hardware.
 
 ## Verifica e pubblicazione
 

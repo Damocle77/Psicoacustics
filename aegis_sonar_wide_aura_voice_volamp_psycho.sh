@@ -14,7 +14,7 @@ set -uo pipefail
 # │   - Canali principali: highpass di sicurezza a 40 Hz                             │
 # │   - Voce: EQ sartoriale FC, dinamica piena, nessun compressore                   │
 # │   - Surround psicoacustici controllati                                           │
-# │   - LFE: highpass 32 Hz + lowpass 110 Hz + limiter picchi                        │
+# │   - LFE: volamp + compensazione Atmos + limiter picchi                         │
 # │   - Pipeline leggibile: input -> split -> voice -> surround -> output            │
 # |   - gestione robusta dei sei canali anche con channel_layout=unknown             |
 # ╰──────────────────────────────────────────────────────────────────────────────────╯
@@ -54,7 +54,7 @@ ATMOS_FC_GAIN_DB="0.6"
 ATMOS_LFE_GAIN_DB="-0.6"
 
 # FRONT_EQ: equalizzatore frontale condiviso, adattato a torri audio 3 vie.
-FRONT_EQ="equalizer=f=320:t=q:w=1.1:g=-0.8,equalizer=f=5000:t=q:w=1.4:g=0.4,highshelf=f=11000:t=q:w=0.7:g=0.4"
+FRONT_EQ="equalizer=f=320:t=q:w=1.1:g=-0.4,equalizer=f=5000:t=q:w=1.4:g=0.4,highshelf=f=11000:t=q:w=0.7:g=0.4"
 
 # Controllo dipendenze: ffmpeg e ffprobe sono essenziali per il funzionamento dello script. Se non sono nel PATH, esco con errore.
 for _bin in ffmpeg ffprobe; do
@@ -595,7 +595,7 @@ build_output_join_graph() {
 [FLp]${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[FLf];
 [FRp]${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[FRf];
 [FCv]${FINAL_GAIN_FILTER}${ATMOS_FC_GAIN_FILTER}alimiter=${FC_LIMITER_OPTS},aformat=channel_layouts=mono[FCf];
-[LFE]aformat=channel_layouts=mono,highpass=f=32,lowpass=f=110,${FINAL_GAIN_FILTER}${ATMOS_LFE_GAIN_FILTER}alimiter=limit=0.94:attack=2.0:release=120:level=0:latency=1[LFEf];
+[LFE]aformat=channel_layouts=mono,${FINAL_GAIN_FILTER}${ATMOS_LFE_GAIN_FILTER}alimiter=limit=0.94:attack=2.0:release=120:level=0:latency=1[LFEf];
 [SL_final]${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[SLf];
 [SR_final]${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[SRf];
 [FLf][FRf][FCf][LFEf][SLf][SRf]join=inputs=6:channel_layout=5.1(side):map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR,
