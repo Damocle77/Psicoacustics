@@ -435,7 +435,7 @@ detect_atmos_source() {
   if [[ "$marker_found" == true ]]; then
     printf 'ATMOS|marker affidabile sullo stream audio %s\n' "$marker_stream"
   else
-    printf 'UNKNOWN|nessun profilo Atmos rilevato\n'
+    printf 'UNKNOWN|nessun profilo compatibile\n'
   fi
 }
 
@@ -895,20 +895,20 @@ scan_delta() {
     warn "Stream [$target_stream] ha '${max_ch:-?}' canali (non 5.1). Delta richiede esattamente 6 canali. Saltato."
     return 1
   fi
-  info "Stream selezionato: [$target_stream], ${max_ch} canali, layout ${layout:-unknown}."
+  local display_layout="${layout:-unknown}"
+  if [[ "$display_layout" == "unknown" ]]; then
+    display_layout="5.1(side)"
+  fi
+  info "Stream selezionato: [$target_stream], ${max_ch} canali, layout ${display_layout}."
 
   local source_probe source_class source_evidence
   source_probe=$(detect_atmos_source "$f")
   IFS='|' read -r source_class source_evidence <<<"$source_probe"
   if [[ "$source_class" == "ATMOS" ]]; then
-    if [[ "$source_evidence" == "profilo FFprobe"* ]]; then
-      echo -e "${C_ATMOS_FOUND} VERIFICATO - origine verificata tecnicamente: ${source_evidence}.\033[0m"
-    else
-      echo -e "${C_ATMOS_FOUND} RILEVATO DAL WORKFLOW - ${source_evidence}.\033[0m"
-    fi
-    info "Compensazione sonora Atmos prevista nel processing: FC=+0.6 dB, LFE=-0.6 dB (indipendente dal preset e dal volamp)."
+    echo -e "${C_ATMOS_FOUND} Atmos verificato nella traccia audio originale.\033[0m"
+    info "Compensazione sonora Atmos prevista nel processing: FC=+0.6 dB, LFE=-0.6 dB."
   else
-    echo -e "${C_ATMOS_UNKNOWN} NON RILEVATO - ${source_evidence}.\033[0m"
+    echo -e "${C_ATMOS_UNKNOWN} Atmos non verificato nella traccia audio originale.\033[0m"
   fi
 
   # Mapping posizionale robusto, allineato al processore principale: nell'ordine
@@ -919,7 +919,7 @@ scan_delta() {
     "5.1"|"5.1(back)")
       mapping "Layout audio ${layout}: mapping posizionale; c4/c5 diventano SL/SR." ;;
     *)
-      mapping "Layout audio '${layout:-unknown}': uso del mapping posizionale 5.1 c0..c5 (FC=c2, SL=c4, SR=c5)." ;;
+      mapping "Layout audio ${display_layout}: uso del mapping posizionale 5.1 c0..c5 (FC=c2, SL=c4, SR=c5)." ;;
   esac
 
   # Loudness, LRA, peak, RMS scena, Width e banda voce condividono la stessa

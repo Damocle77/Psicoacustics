@@ -384,13 +384,9 @@ set_atmos_bed_compensation() {
   if [[ "$source_class" == "ATMOS" ]]; then
     ATMOS_FC_GAIN_FILTER="volume=${ATMOS_FC_GAIN_DB}dB,"
     ATMOS_LFE_GAIN_FILTER="volume=${ATMOS_LFE_GAIN_DB}dB,"
-    if [[ "$source_evidence" == "profilo FFprobe"* ]]; then
-      echo -e "${C_ATMOS_FOUND} VERIFICATO con ffprobe, applico compensazione sonora FC=+${ATMOS_FC_GAIN_DB} dB, LFE=${ATMOS_LFE_GAIN_DB} dB\033[0m"
-    else
-      echo -e "${C_ATMOS_FOUND} RILEVATO DAL WORKFLOW - ${source_evidence}: applico compensazione sonora FC=+${ATMOS_FC_GAIN_DB} dB, LFE=${ATMOS_LFE_GAIN_DB} dB.\033[0m"
-    fi
+    echo -e "${C_ATMOS_FOUND} Atmos verificato nella traccia audio originale. Compensazione FC=+${ATMOS_FC_GAIN_DB} dB, LFE=${ATMOS_LFE_GAIN_DB} dB.\033[0m"
   else
-    echo -e "${C_ATMOS_UNKNOWN} NON RILEVATO - ${source_evidence}: compensazione FC/LFE disattivata.\033[0m"
+    echo -e "${C_ATMOS_UNKNOWN} Atmos non verificato nella traccia audio originale. Compensazione FC/LFE disattivata.\033[0m"
   fi
 }
 
@@ -692,7 +688,7 @@ for CUR_FILE in "${FILES[@]}"; do
       mapping "Layout input: ${A_LAYOUT} → copia posizionale pura; c4/c5 diventano SL/SR"
       ;;
     *)
-      mapping "Layout audio '${A_LAYOUT:-unknown}': uso del mapping posizionale 5.1 c0..c5 (FC=c2, SL=c4, SR=c5)."
+      mapping "Layout audio 5.1(side): uso del mapping posizionale 5.1 c0..c5 (FC=c2, SL=c4, SR=c5)."
       ;;
   esac
 

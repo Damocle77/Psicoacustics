@@ -171,9 +171,9 @@ BITRATE="${BITRATE_KBPS}k"
 # altboundary=0  : boundary mode standard
 DYNAUDNORM="highpass=f=20:t=q:w=0.707,dynaudnorm=framelen=500:gausssize=31:peak=0.92:maxgain=4:targetrms=0:compress=0:coupling=1:altboundary=0"
 
-# NB: nessun filtro LFE qui. Questo script e' solo pre-stadio di aegis_sonar_wide_aura_voice_volamp_psycho.sh,
-# che gestisce interamente l'LFE (highpass 32 + lowpass 110 + limiter picchi sub). Applicare qui gli stessi
-# highpass/lowpass creerebbe un doppio band-pass (ordine raddoppiato, -6 dB ai corner 32/110 Hz): ridondante e dannoso.
+# Nessun trattamento dedicato al solo LFE: highpass 20 Hz e dynaudnorm
+# si applicano a tutti i canali. Il processore finale gestisce gain e limiter LFE;
+# il filtraggio dedicato del sub resta affidato all'hardware.
 
 # Probe chiave/valore: profilo, layout e lingua dalla stessa interrogazione.
 # Il mapping c0..c5 richiede esattamente sei canali: nessun downmix implicito.
@@ -221,7 +221,7 @@ find_atmos_stream() {
   if [[ -n "$best_atmos" ]]; then
     printf '%s\n' "$best_atmos"
   elif [[ -n "$best_fallback" ]]; then
-    echo -e "${C_ATMOS_UNKNOWN} NON RILEVATO - nessun profilo Atmos esplicito trovato: uso il miglior EAC3 6ch come fallback.\033[0m" >&2
+    echo -e "${C_ATMOS_UNKNOWN} Atmos non verificato nella traccia audio originale: uso il miglior EAC3 6ch come fallback.\033[0m" >&2
     printf '%s\n' "$best_fallback"
   else
     return 1
@@ -579,7 +579,7 @@ for CUR_FILE in "${FILES[@]}"; do
 
   info "Traccia audio: idx=$A_IDX, canali=$A_CH, lingua=$A_LANG, tipo=$A_TYPE"
   if [[ "$A_TYPE" == "atmos" ]]; then
-    echo -e "${C_ATMOS_FOUND} VERIFICATO - origine verificata tramite profilo FFprobe. Compensazione FC/LFE demandata al processore finale.\033[0m"
+    echo -e "${C_ATMOS_FOUND} Atmos verificato nella traccia audio originale. Compensazione FC/LFE demandata al processore finale.\033[0m"
   fi
 
   # Come nel motore principale, il pan usa indici di canale espliciti. In questo
@@ -593,7 +593,7 @@ for CUR_FILE in "${FILES[@]}"; do
       mapping "Layout input: ${A_LAYOUT} → copia posizionale pura; c4/c5 diventano SL/SR"
       ;;
     *)
-      mapping "Layout audio '${A_LAYOUT:-unknown}': uso del mapping posizionale 5.1 c0..c5 (FC=c2, SL=c4, SR=c5)."
+      mapping "Layout audio 5.1(side): uso del mapping posizionale 5.1 c0..c5 (FC=c2, SL=c4, SR=c5)."
       ;;
   esac
 

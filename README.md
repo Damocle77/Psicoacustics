@@ -350,6 +350,8 @@ PROC="${PROC:-./aegis_sonar_wide_aura_voice_volamp_psycho.sh}"
 
 Il processore controlla il profilo EAC3 Atmos e il marker direttamente nel file di input a ogni esecuzione, anche quando viene chiamato dal batch. Gli offset Atmos non sono incorporati nel valore `volamp` scritto dall'analyzer e non richiedono nuovi argomenti.
 
+I messaggi Atmos e di mapping visualizzati durante `run_processing.sh` provengono dal processore indicato da `PROC`. Per aggiornare queste descrizioni basta aggiornare lo script del processore usato dal batch; non serve rigenerare il batch.
+
 Il batch usa sempre il preset per-file, derivato da `DeltaSur`, `DeltaFC`, `VoiceDelta`, `VoiceMask`, balance, `Width MS` ed eventuali override di sicurezza. Il P25 di `DeltaSur` è soltanto diagnostico; il verdetto stagionale richiede almeno 2/3 di consenso e non sostituisce mai il preset scritto nelle singole righe del batch.
 
 ---
@@ -364,6 +366,7 @@ Motore principale per tracce **5.1 esistenti**.
 - preset `aegis`, `sonar`, `wide`, `aura`, `voice`;
 - selezione stream score-based: entrano solo tracce a 6 canali; lingua italiana `+300`, flag default `+200`; la durata del container non entra nel punteggio;
 - layout gestiti: `5.1`, `5.1(back)`, `5.1(side)`;
+- con sei canali e layout assente o `unknown`, il log mostra `5.1(side)`, indicando il mapping posizionale adottato (`FC=c2`, `SL=c4`, `SR=c5`); questa descrizione non modifica i metadati della sorgente. La stessa convenzione è usata dall'analyzer e dal preparatore Atmos;
 - EQ voce dedicato per ogni preset;
 - limiter sul centrale dopo il volamp e l’eventuale compensazione Atmos, senza auto-level;
 - processing surround differenziato per preset;
@@ -473,6 +476,15 @@ Per usare +0,5 dB sul centrale, modificare `ATMOS_FC_GAIN_DB` nello script. Ques
 Gli offset si sommano al volamp anche quando `volamp=0`. Per esempio, con `volamp=3.0`, gli stadi di volume finale valgono complessivamente **+3,6 dB sul FC** e **+2,4 dB sul LFE**; EQ, gain del preset e intervento dei limiter concorrono al livello audio effettivo.
 
 Il controllo viene ripetuto per ogni file: nessuna prova Atmos disponibile (profilo o marker) lascia entrambi gli offset disattivati, senza ereditare lo stato del file precedente. Il log riporta l'attivazione con i valori applicati oppure la disattivazione.
+
+Analyzer, processore e preparatore usano descrizioni uniformi per l'esito del controllo:
+
+```text
+[ATMOS] Atmos verificato nella traccia audio originale.
+[ATMOS] Atmos non verificato nella traccia audio originale.
+```
+
+Il messaggio positivo non specifica il numero dello stream né la prova utilizzata. Nell'analyzer e nel processore può derivare dal profilo FFprobe oppure dal marker affidabile; il preparatore verifica il profilo. Il messaggio negativo indica che non è stata trovata una prova riconosciuta. Il processore aggiunge i valori della compensazione o ne segnala la disattivazione; il preparatore indica il fallback EAC3 quando necessario. Le regole di riconoscimento restano quelle descritte sopra.
 
 La compensazione viene applicata nel processore finale; il preparatore Atmos non applica questi due offset. Passare al processore il contenitore intermedio completo: estraendo soltanto il bed si perdono le prove della seconda traccia; in assenza di un profilo EAC3 Atmos sul bed, la compensazione resta disattivata.
 
