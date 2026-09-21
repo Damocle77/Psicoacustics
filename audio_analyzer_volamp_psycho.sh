@@ -23,10 +23,7 @@ set -uo pipefail
 # │   Le misure RMS dei canali vengono raccolte in un solo passaggio FFmpeg.        │
 # │                                                                                 │
 # │   VERDETTO STAGIONALE:                                                          │
-# │   Verdetto: servono almeno 2/3 di consenso; parita'/spread > 4 dB -> MIXED.     │
-# │                                                                                 │
-# │   LRA non sceglie piu' il preset: viene misurata solo per limitare il volamp    │
-# │   quando un mix cinematografico e' basso ma molto dinamico.                     │
+# │   Verdetto: servono almeno 2/3 di consenso; parita'/spread > 4 dB -> MIXED.     │                │
 # ╰─────────────────────────────────────────────────────────────────────────────────╯
 # Note:
 C_INFO="\033[0;36m[INFO]\033[0m"
@@ -68,7 +65,7 @@ trap 'warn "Analisi terminata; batch non aggiornato."; exit 143' TERM
 
 usage() {
   cat <<'USAGE'
------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------
 UTILIZZO:
   ./audio_analyzer_volamp_psycho.sh <codec> <keep> <bitrate> <run> <file|directory|"">
   ./audio_analyzer_volamp_psycho.sh --files <codec> <keep> <bitrate> <run> <file1> [file2 ...]
@@ -79,7 +76,6 @@ MODALITA' INPUT:
   ""        : Analizza tutti i file compatibili nella cartella corrente.
   --files   : Analizza solo i file elencati esplicitamente dopo i parametri.
               Utile per testare 2-3 episodi campione senza scandire tutta la folder.
-
 PARAMETRI:
   codec   : eac3   (Default) Codec per il batch file generato.
             ac3    Alternativa.
@@ -88,21 +84,22 @@ PARAMETRI:
   bitrate : Default automatico: AC3  = 640k - EAC3 = 768k
   run     : si     (Default) Genera o aggiorna run_processing.sh.
             no     Esegue solo l'analisi senza creare/modificare il batch.
-
 ESEMPI:
   ./audio_analyzer_volamp_psycho.sh eac3 no 768k si "film.mkv"
   ./audio_analyzer_volamp_psycho.sh eac3 si 768k no .
   ./audio_analyzer_volamp_psycho.sh eac3 no 768k si ""
   ./audio_analyzer_volamp_psycho.sh --files eac3 no 768k no ep1.mkv ep4.mkv
 
-COMPATIBILITA': resta accettato il vecchio ordine <input> [codec] [keep] [bitrate] [run].
------------------------------------------------------------------------------------------------------------
+REGOLAZIONI AUTOMATICHE:
+  L'analizzatore sceglie preset, volume e correzioni LFE/bassi per ogni file.
+  Con run=si salva tutto in run_processing.sh: basta poi eseguire il batch.
+-----------------------------------------------------------------------------------------------
 USAGE
-  exit 1
+  exit "${1:-1}"
 }
 
 # Senza argomenti o con -h/--help -> mostra usage
-[[ $# -eq 0 || "${1:-}" == "-h" || "${1:-}" == "--help" ]] && usage
+[[ $# -eq 0 || "${1:-}" == "-h" || "${1:-}" == "--help" ]] && usage 0
 # Modalità multi-file: se il primo argomento è --files, attivo la modalità multi-file e raccolgo i parametri specifici per questa modalità.
 # CREATE_RUN accetta si|no e resta "si" per compatibilità con le versioni precedenti.
 MULTI_FILES_MODE=false
@@ -202,7 +199,7 @@ LOUDNESS_TARGET="-21.0"
 # un futuro cambio dell'algoritmo non puo' riutilizzare risultati obsoleti.
 ANALYZER_CACHE="${ANALYZER_CACHE:-1}"
 ANALYZER_CACHE_DIR="${ANALYZER_CACHE_DIR:-.clearvoice_analyzer_cache}"
-ANALYZER_CACHE_SCHEMA="classifier-rms-voiceband-ebur-full-v2"
+ANALYZER_CACHE_SCHEMA="classifier-rms-voiceband-ebur-lfe-bass-v5-persistence"
 ANALYZER_PROGRESS_INTERVAL="${ANALYZER_PROGRESS_INTERVAL:-10}"
 
 if ! [[ "$ANALYZER_CACHE" =~ ^[01]$ ]]; then
@@ -224,6 +221,41 @@ fi
 # da split/EQ/compressori/limiter della pipeline psicoacustica.
 VOLAMP_BASE="3.0"
 VOLAMP_MAX="4.5"
+
+# Bilanciamento LFE automatico: soglie iniziali conservative, da tarare con ascolti.
+# Finestre 0.5 s a 48 kHz; banda 20-120 Hz solo nel ramo analitico.
+LFE_WINDOW_SAMPLES=24000
+LFE_ACTIVE_GATE_DB=-60.0
+LFE_RELATIVE_GATE_DB=30.0
+LFE_MIN_ACTIVE_SECONDS=10.0
+LFE_MIN_ACTIVE_RATIO=0.05
+LFE_MAINS_GATE_DB=-60.0
+# Delta rispetto alla SOMMA delle energie dei cinque principali, non alla media.
+# Zona morta [-14,-6] dB. Non e' un target acustico/calibrazione del sub.
+LFE_VERY_WEAK_DB=-18.0
+LFE_WEAK_DB=-14.0
+LFE_HOT_DB=-6.0
+LFE_VERY_HOT_DB=-2.0
+LFE_BOOST_PEAK_CEILING_DB=-2.0
+LFE_BOOST_P95_CEILING_DB=-18.0
+LFE_ATMOS_COMPENSATION_DB=-1.0
+# Taratura sperimentale: persistenza relativa al tempo LFE attivo.
+# I tagli richiedono 30 s; gli aumenti conservano i gate 10 s / 5%.
+LFE_CUT_MIN_ACTIVE_SECONDS=30.0
+LFE_HOT_MIN_PERSISTENCE=0.25
+LFE_VERY_HOT_MIN_PERSISTENCE=0.50
+
+# Bass trim: proxy energetico, non simulazione del subwoofer/ambiente.
+# 20-120 Hz di tutti i canali (LFE pesato +10 dB SOLO nella misura)
+# rispetto a 250-5000 Hz dei cinque principali sulle stesse finestre.
+BASS_REFERENCE_GATE_DB=-60.0
+BASS_RELATIVE_GATE_DB=30.0
+BASS_MIN_ACTIVE_SECONDS=10.0
+BASS_MIN_ACTIVE_RATIO=0.05
+BASS_MIN_PERSISTENCE=0.25
+BASS_HOT_DB=6.0
+BASS_VERY_HOT_DB=9.0
+BASS_EXTREME_DB=12.0
 
 # Width Mid/Side sotto questa soglia = surround collassati/stretti (poca separazione L/R).
 # In quel caso, a parita' di Delta, una ricostruzione laterale (WIDE) rende di piu'
@@ -275,6 +307,10 @@ GLOBAL_METRIC_FILES=()
 GLOBAL_METRIC_PATHS=()
 GLOBAL_LOUDNESS_VALUES=()
 GLOBAL_VOLAMP_VALUES=()
+GLOBAL_LFE_GAIN_VALUES=()
+GLOBAL_LFE_CLASS_VALUES=()
+GLOBAL_BASS_TRIM_VALUES=()
+GLOBAL_BASS_CLASS_VALUES=()
 GLOBAL_WIDTH_VALUES=()
 GLOBAL_LRA_VALUES=()
 GLOBAL_PRESET_VALUES=()
@@ -625,7 +661,7 @@ analysis_cache_file() {
   canonical="$(realpath -- "$f" 2>/dev/null)" || return 1
   identity="$(stat -c '%s|%y' -- "$f" 2>/dev/null)" || return 1
   cache_hash="$(printf '%s\n' \
-    "${ANALYZER_CACHE_SCHEMA}|${canonical}|${identity}|stream=${stream}" | \
+    "${ANALYZER_CACHE_SCHEMA}|${canonical}|${identity}|stream=${stream}|lfe=${LFE_WINDOW_SAMPLES},${LFE_ACTIVE_GATE_DB},${LFE_RELATIVE_GATE_DB},${LFE_MAINS_GATE_DB},${LFE_HOT_DB},${LFE_VERY_HOT_DB},${LFE_ATMOS_COMPENSATION_DB}|bass=${BASS_REFERENCE_GATE_DB},${BASS_RELATIVE_GATE_DB},${BASS_HOT_DB}" | \
     sha256sum | awk '{print $1}')"
   [[ "$cache_hash" =~ ^[0-9a-fA-F]{64}$ ]] || return 1
   printf '%s/%s.metrics\n' "$ANALYZER_CACHE_DIR" "$cache_hash"
@@ -636,15 +672,42 @@ is_valid_metrics_record() {
   local -a fields
   [[ -n "$record" && "$record" != *$'\n'* && "$record" != *$'\r'* ]] || return 1
   IFS='|' read -r -a fields <<<"$record"
-  [[ ${#fields[@]} -eq 15 ]] || return 1
+  [[ ${#fields[@]} -eq 38 ]] || return 1
 
-  # I/LRA possono essere vuoti su materiale troppo breve; peak e i dodici RMS
-  # devono invece essere valori numerici oppure -inf.
-  for i in {2..14}; do
+  # I/LRA possono essere vuoti su materiale troppo breve; le metriche di
+  # livello (comprese LFE) devono essere numeriche oppure -inf.
+  for i in {2..19}; do
     value="${fields[$i]}"
     [[ "$value" == "-inf" ]] || is_finite_db "$value" || return 1
   done
-  return 0
+  for i in {20..22}; do
+    [[ "${fields[$i]}" =~ ^[0-9]+([.][0-9]+)?$ ]] || return 1
+  done
+  for i in {27..30}; do
+    [[ "${fields[$i]}" == "-inf" ]] || is_finite_db "${fields[$i]}" || return 1
+  done
+  for i in {31..33}; do
+    [[ "${fields[$i]}" =~ ^[0-9]+([.][0-9]+)?$ ]] || return 1
+  done
+  for i in {23..26}; do
+    [[ "${fields[$i]}" =~ ^[0-9]+([.][0-9]+)?$ ]] || return 1
+  done
+  case "${fields[34]}" in
+    INSUFFICIENT_DATA|VERY_WEAK|WEAK|BALANCED|HOT|VERY_HOT) ;;
+    *) return 1 ;;
+  esac
+  case "${fields[36]}" in
+    INSUFFICIENT_DATA|BALANCED|HOT|VERY_HOT|EXTREME) ;;
+    *) return 1 ;;
+  esac
+  is_finite_db "${fields[35]}" && is_finite_db "${fields[37]}" || return 1
+  awk -v seconds="${fields[20]}" -v ratio="${fields[21]}" -v count="${fields[22]}" -v gain="${fields[35]}" \
+    -v persistence="${fields[31]}" -v bass_seconds="${fields[32]}" -v bass_ratio="${fields[33]}" -v trim="${fields[37]}" \
+    -v hot_p="${fields[23]}" -v very_hot_p="${fields[24]}" \
+    -v atmos_hot_p="${fields[25]}" -v atmos_very_hot_p="${fields[26]}" \
+    'BEGIN { exit !(hot_p >= 0 && hot_p <= 1 && very_hot_p >= 0 && very_hot_p <= hot_p &&
+      atmos_hot_p >= 0 && atmos_hot_p <= 1 && atmos_very_hot_p >= 0 && atmos_very_hot_p <= atmos_hot_p && seconds >= 0 && ratio >= 0 && ratio <= 1 && count > 0 && count == int(count) && gain >= -2 && gain <= 2 &&
+      persistence >= 0 && persistence <= 1 && bass_seconds >= 0 && bass_ratio >= 0 && bass_ratio <= 1 && trim >= -3 && trim <= 0) }' 
 }
 
 store_metrics_cache() {
@@ -755,6 +818,220 @@ width_to_desc() {
   fi
 }
 
+# Raccoglie finestre sincronizzate: LFE e somma energetica FL/FR/FC/SL/SR.
+# P95: istogramma a 0.1 dB, pesato per campioni; nessun sort esterno/GNU asort.
+# Output: active RMS|P95|raw peak|bass mains|delta|secondi attivi|frazione attiva|finestre
+#         |persistenza HOT|VERY_HOT|HOT dopo Atmos|VERY_HOT dopo Atmos
+measure_lfe_windows() {
+  awk -v gate="$LFE_ACTIVE_GATE_DB" -v relative="$LFE_RELATIVE_GATE_DB" -v win="$LFE_WINDOW_SAMPLES" \
+    -v main_gate="$LFE_MAINS_GATE_DB" -v hot="$LFE_HOT_DB" -v very_hot="$LFE_VERY_HOT_DB" \
+    -v atmos="$LFE_ATMOS_COMPENSATION_DB" '
+    function finite(v) { return v ~ /^-?[0-9]+([.][0-9]+)?$/ }
+    function db(p) { return 10*log(p)/log(10) }
+    function flush(    c,p) {
+      if (!frame) return
+      if (samples <= 0 || samples > win) bad=1
+      for(c=1;c<=6;c++) if (!(c in rms) || (rms[c]!="-inf" && !finite(rms[c]))) bad=1
+      if (bad) return
+      n++; weights[n]=samples; total+=samples
+      lf[n]=rms[4]; mains[n]=0
+      for(c=1;c<=6;c++) if(c!=4 && rms[c]!="-inf") mains[n]+=10^(rms[c]/10)
+      if (finite(lf[n]) && (!have_max || lf[n]+0 > maximum)) {maximum=lf[n]+0; have_max=1}
+    }
+    index($0,"[astats@full ") {
+      if ($0 ~ /Channel:/) ch=$NF
+      else if(ch==4 && $0 ~ /Peak level dB:/) peak=$NF
+    }
+    index($0,"[ametadata@lfe_windows ") {
+      if ($0 ~ /frame:/) {
+        flush(); frame=1; samples=0
+        for(c in rms) delete rms[c]
+      } else if ($0 ~ /lavfi.astats.[1-6].RMS_level=/) {
+        key=$0; sub(/^.*lavfi.astats./,"",key); split(key,parts,"."); c=parts[1]
+        value=$0; sub(/^.*=/,"",value); rms[c]=value
+      } else if ($0 ~ /lavfi.astats.Overall.Number_of_samples=/) {
+        value=$0; sub(/^.*=/,"",value)
+        if (!finite(value)) bad=1
+        samples=value+0
+      }
+    }
+    END {
+      flush()
+      if(bad || !n || (peak!="-inf" && !finite(peak))) exit 1
+      threshold=gate
+      if(have_max && maximum-relative > threshold) threshold=maximum-relative
+      for(i=1;i<=n;i++) if(finite(lf[i]) && lf[i]+0 > threshold) {
+        w=weights[i]; active+=w; lp+=10^(lf[i]/10)*w; mp+=mains[i]*w
+        # Finestre senza bassi mains affidabili non confermano un eccesso.
+        # Restano nel denominatore: persistenza sul TOTALE del tempo LFE attivo.
+        if(mains[i]>0 && db(mains[i])>main_gate) {
+          d=lf[i]-db(mains[i])
+          if(d>hot) hot_samples+=w
+          if(d>very_hot) very_hot_samples+=w
+          if(d+atmos>hot) atmos_hot_samples+=w
+          if(d+atmos>very_hot) atmos_very_hot_samples+=w
+        }
+        # Arrotondamento per difetto anche per valori negativi; risoluzione 0.1 dB.
+        bin=int(lf[i]*10); if(bin > lf[i]*10) bin--
+        hist[bin]+=w
+        if(!have_bin || bin<lo) lo=bin
+        if(!have_bin || bin>hi) hi=bin
+        have_bin=1
+      }
+      if(!active) {printf "-inf|-inf|%s|-inf|-inf|0.000|0.000000|%d|0.000000|0.000000|0.000000|0.000000\n",peak,n; exit}
+      for(b=lo;b<=hi;b++) {cumulative+=hist[b]; if(cumulative >= .95*active) {p95=b/10; break}}
+      l=db(lp/active)
+      if(mp>0) printf "%.3f|%.1f|%s|%.3f|%.3f",l,p95,peak,db(mp/active),l-db(mp/active)
+      else printf "%.3f|%.1f|%s|-inf|-inf",l,p95,peak
+      printf "|%.3f|%.6f|%d",active/48000,active/total,n
+      printf "|%.6f|%.6f|%.6f|%.6f\n",hot_samples/active,very_hot_samples/active,atmos_hot_samples/active,atmos_very_hot_samples/active
+    }
+  ' "$1"
+}
+
+# Incrocia per indice e campioni i due rami a 48 kHz, senza dipendere
+# dall'ordine delle righe FFmpeg. Nessuna seconda decodifica.
+# Output: bass RMS|reference RMS|delta|P95 delta|persistenza|secondi|frazione attiva
+measure_bass_windows() {
+  awk -v gate="$BASS_REFERENCE_GATE_DB" -v relative="$BASS_RELATIVE_GATE_DB" -v hot="$BASS_HOT_DB" -v win="$LFE_WINDOW_SAMPLES" '
+    function finite(v) { return v ~ /^-?[0-9]+([.][0-9]+)?$/ }
+    function db(v) { return 10*log(v)/log(10) }
+    index($0,"[ametadata@lfe_windows ") || index($0,"[ametadata@bass_ref ") {
+      branch=(index($0,"[ametadata@bass_ref ")?2:1)
+      if($0 ~ /frame:/) {
+        value=$0; sub(/^.*frame:/,"",value); sub(/[[:space:]].*$/,"",value)
+        if(value !~ /^[0-9]+$/) {bad=1; next}
+        frame[branch]=value+1
+        if(frame[branch]>n[branch]) n[branch]=frame[branch]
+      } else if($0 ~ /lavfi.astats.[1-6].RMS_level=/) {
+        key=$0; sub(/^.*lavfi.astats./,"",key); split(key,parts,"."); c=parts[1]
+        value=$0; sub(/^.*=/,"",value)
+        if(value!="-inf" && !finite(value)) bad=1
+        rms[branch,frame[branch],c]=value
+      } else if($0 ~ /lavfi.astats.Overall.Number_of_samples=/) {
+        value=$0; sub(/^.*=/,"",value)
+        if(!finite(value) || value+0<=0 || value+0>win+0) bad=1
+        samples[branch,frame[branch]]=value+0
+      }
+    }
+    END {
+      if(bad || n[1]<=0 || n[1]!=n[2]) exit 1
+      for(i=1;i<=n[1];i++) {
+        if(samples[1,i]<=0 || samples[1,i]!=samples[2,i]) exit 1
+        total+=samples[1,i]
+        for(c=1;c<=6;c++) {
+          if(!((1,i,c) in rms) || !((2,i,c) in rms)) exit 1
+          if(rms[1,i,c]!="-inf") bass[i]+=(c==4?10:1)*10^(rms[1,i,c]/10)
+          if(c!=4 && rms[2,i,c]!="-inf") ref[i]+=10^(rms[2,i,c]/10)
+        }
+        if(ref[i]>0 && (!have_max || db(ref[i])>maximum)) {maximum=db(ref[i]); have_max=1}
+      }
+      threshold=gate
+      if(have_max && maximum-relative>threshold) threshold=maximum-relative
+      for(i=1;i<=n[1];i++) if(ref[i]>0 && db(ref[i])>threshold) {
+        w=samples[1,i]; active+=w; bp+=bass[i]*w; rp+=ref[i]*w
+        delta=(bass[i]>0?db(bass[i]/ref[i]):-120)
+        if(delta>hot) persistent+=w
+        bin=int(delta*10); if(bin>delta*10) bin--
+        hist[bin]+=w
+        if(!have_bin || bin<lo) lo=bin
+        if(!have_bin || bin>hi) hi=bin
+        have_bin=1
+      }
+      if(!active || bp<=0) {printf "-inf|-inf|-inf|-inf|0.000000|%.3f|%.6f\n",active/48000,active/total; exit}
+      for(b=lo;b<=hi;b++) {cumulative+=hist[b]; if(cumulative>=.95*active) {p95=b/10; break}}
+      printf "%.3f|%.3f|%.3f|%.1f|%.6f|%.3f|%.6f\n",db(bp/active),db(rp/active),db(bp/rp),p95,persistent/active,active/48000,active/total
+    }
+  ' "$1"
+}
+
+classify_bass_trim() {
+  awk -v delta="$1" -v persistence="$2" -v seconds="$3" -v ratio="$4" -v unsafe="$5" \
+    -v min_seconds="$BASS_MIN_ACTIVE_SECONDS" -v min_ratio="$BASS_MIN_ACTIVE_RATIO" -v min_persistence="$BASS_MIN_PERSISTENCE" \
+    -v hot="$BASS_HOT_DB" -v very_hot="$BASS_VERY_HOT_DB" -v extreme="$BASS_EXTREME_DB" '
+    BEGIN {
+      cls="INSUFFICIENT_DATA"; trim=0; reason="riferimento medio-alto insufficiente o layout/sicurezza incerti"
+      if(unsafe==0 && delta ~ /^-?[0-9]+([.][0-9]+)?$/ && seconds>=min_seconds && ratio>=min_ratio) {
+        cls="BALANCED"; reason="rapporto bassi/medio-alti nella zona neutra"
+        if(delta>hot && persistence<min_persistence) reason="bassi concentrati in poche finestre: nessun trim"
+        else if(persistence>=min_persistence) {
+          if(delta>extreme) {cls="EXTREME"; trim=-3}
+          else if(delta>very_hot) {cls="VERY_HOT"; trim=-2}
+          else if(delta>hot) {cls="HOT"; trim=-1}
+          if(trim<0) reason="energia bassa elevata e persistente: shelf statico 100 Hz"
+        }
+      }
+      printf "%s|%.1f|%s\n",cls,trim,reason
+    }'
+}
+
+# Evita boost LFE che contrastino il trim e limita a -3 dB la somma delle
+# nuove correzioni automatiche nel basso profondo (esclusa taratura Atmos).
+coordinate_bass_gains() {
+  awk -v lfe="$1" -v trim="$2" 'BEGIN {
+    if(trim<0) {
+      if(lfe>0) lfe=0
+      if(lfe+trim < -3) lfe=-3-trim
+    }
+    printf "%.1f\n",lfe
+  }'
+}
+
+# La classe descrive il rapporto misurato; il gain puo' essere azzerato dai guard rail.
+# Le decisioni vengono ricalcolate anche su cache HIT con le soglie correnti.
+classify_lfe_balance() {
+  local active="$1" p95="$2" peak="$3" mains="$4" delta="$5"
+  local seconds="$6" ratio="$7" volamp="$8" atmos="$9" unsafe="${10}"
+  local hot_p="${11}" very_hot_p="${12}"
+  awk -v active="$active" -v p95="$p95" -v peak="$peak" -v mains="$mains" -v delta="$delta" \
+    -v seconds="$seconds" -v ratio="$ratio" -v volamp="$volamp" -v atmos="$atmos" -v unsafe="$unsafe" \
+    -v min_seconds="$LFE_MIN_ACTIVE_SECONDS" -v min_ratio="$LFE_MIN_ACTIVE_RATIO" -v main_gate="$LFE_MAINS_GATE_DB" \
+    -v vw="$LFE_VERY_WEAK_DB" -v weak="$LFE_WEAK_DB" -v hot="$LFE_HOT_DB" -v vh="$LFE_VERY_HOT_DB" \
+    -v hot_p="$hot_p" -v very_hot_p="$very_hot_p" -v cut_seconds="$LFE_CUT_MIN_ACTIVE_SECONDS" \
+    -v hot_p_min="$LFE_HOT_MIN_PERSISTENCE" -v very_hot_p_min="$LFE_VERY_HOT_MIN_PERSISTENCE" \
+    -v ceiling="$LFE_BOOST_PEAK_CEILING_DB" -v p95_ceiling="$LFE_BOOST_P95_CEILING_DB" '
+    function finite(v) { return v ~ /^-?[0-9]+([.][0-9]+)?$/ }
+    BEGIN {
+      cls="INSUFFICIENT_DATA"; gain=0; reason="attivita LFE o riferimento bassi insufficienti"
+      if(unsafe==1) reason="layout incerto o controlli sicurezza 5.1 attivi"
+      else if(finite(active) && finite(p95) && finite(peak) && finite(mains) && finite(delta) &&
+              mains>main_gate) {
+        if(delta>hot) {
+          # La classe descrive la sorgente; il taglio considera il solo offset Atmos.
+          # VOLAMP e comune a LFE e mains, quindi si cancella nel delta.
+          cls=(delta>vh ? "VERY_HOT" : "HOT")
+          effective_delta=delta+atmos
+          reason="eccesso occasionale o gia compensato: nessun taglio LFE"
+          if(seconds<cut_seconds) {
+            cls="INSUFFICIENT_DATA"; reason="meno di 30 s di attivita LFE: nessun taglio"
+          } else if(!finite(hot_p) || !finite(very_hot_p) || hot_p<0 || hot_p>1 || very_hot_p<0 || very_hot_p>hot_p) {
+            cls="INSUFFICIENT_DATA"; reason="persistenza LFE non valida"
+          } else if(effective_delta>vh && very_hot_p>=very_hot_p_min) {
+            gain=-2; reason="eccesso LFE forte e persistente dopo compensazione"
+          } else if(effective_delta>hot && hot_p>=hot_p_min) {
+            gain=-1; reason="eccesso LFE persistente dopo compensazione"
+          }
+        } else if(seconds>=min_seconds && ratio>=min_ratio) {
+          cls="BALANCED"; reason="delta nella zona morta"
+          if(delta<vw) {cls="VERY_WEAK"; gain=2}
+          else if(delta<weak) {cls="WEAK"; gain=1}
+          if(gain>0) reason="delta fuori zona morta; correzione statica limitata"
+        }
+        if(gain>0) {
+          headroom=ceiling-peak-volamp-atmos
+          if(p95+volamp+atmos+gain > p95_ceiling) {
+            gain=0; reason="boost bloccato: P95 elevato dopo gain nominali"
+          } else if(headroom < gain) {
+            gain=int(headroom*2)/2
+            if(gain<0.5) {gain=0; reason="boost bloccato: margine picco insufficiente dopo gain nominali"}
+            else reason="boost ridotto al margine picco disponibile (step 0.5 dB)"
+          }
+        }
+      }
+      printf "%s|%.1f|%s\n",cls,gain,reason
+    }'
+}
+
 # ────────────────────────────────────────────────────────────────────────────────
 # Unica decodifica per tutte le metriche del classificatore:
 # - ebur128: loudness integrata, LRA e sample peak;
@@ -762,9 +1039,9 @@ width_to_desc() {
 # - Width Mid/Side dei surround;
 # - astats 250-5000 Hz sui sei canali.
 #
-# Le due istanze multicanale di astats sostituiscono dieci rami mono e misurano
-# soltanto RMS_level, l'unico dato usato dal classificatore.
-# Output: "I|LRA|PEAK|FL|FR|FC|SL|SR|MID|SIDE|VFL|VFR|VFC|VSL|VSR"
+# Astats full-band raccoglie anche il peak LFE; il ramo bassi emette solo
+# RMS per-canale e numero di campioni delle finestre.
+# Output: 15 metriche storiche | 12 LFE | 7 bassi | classe/gain LFE | classe/trim bassi.
 # ────────────────────────────────────────────────────────────────────────────────
 measure_classifier_metrics() {
   local f="$1" stream="$2"
@@ -779,11 +1056,13 @@ measure_classifier_metrics() {
   ffmpeg -y -nostdin -hide_banner -nostats -xerror -loglevel info \
     -stats_period "$ANALYZER_PROGRESS_INTERVAL" -progress "$progress_file" \
     -i "$f" \
-    -filter_complex "[0:${stream}]asplit=5[loud_in][full_in][mid_in][side_in][voice_in];\
-[full_in]astats@full=metadata=0:reset=0:measure_perchannel=RMS_level:measure_overall=none,anullsink;\
+    -filter_complex "[0:${stream}]asplit=7[loud_in][full_in][mid_in][side_in][voice_in][bass_in][bass_ref_in];\
+[full_in]astats@full=metadata=0:reset=0:measure_perchannel=RMS_level+Peak_level:measure_overall=none,anullsink;\
 [mid_in]pan=1c|c0=0.5*c4+0.5*c5,astats@mid=metadata=0:reset=0:measure_perchannel=RMS_level:measure_overall=none,anullsink;\
 [side_in]pan=1c|c0=0.5*c4-0.5*c5,astats@side=metadata=0:reset=0:measure_perchannel=RMS_level:measure_overall=none,anullsink;\
 [voice_in]highpass=f=250,lowpass=f=5000,astats@voice=metadata=0:reset=0:measure_perchannel=RMS_level:measure_overall=none,anullsink;\
+[bass_in]aformat=sample_rates=48000:sample_fmts=fltp,highpass=f=20:t=q:w=0.707,lowpass=f=120:t=q:w=0.707,asetnsamples=n=${LFE_WINDOW_SAMPLES}:p=0,astats@bass=metadata=1:reset=1:measure_perchannel=RMS_level:measure_overall=Number_of_samples,ametadata@lfe_windows=mode=print,anullsink;\
+[bass_ref_in]aformat=sample_rates=48000:sample_fmts=fltp,highpass=f=250,lowpass=f=5000,asetnsamples=n=${LFE_WINDOW_SAMPLES}:p=0,astats@bass_reference=metadata=1:reset=1:measure_perchannel=RMS_level:measure_overall=Number_of_samples,ametadata@bass_ref=mode=print,anullsink;\
 [loud_in]ebur128@loudness=peak=sample:framelog=verbose[loud_out]" \
     -map "[loud_out]" -vn -sn -f null - \
     >/dev/null 2>"$log_file" </dev/null &
@@ -812,7 +1091,17 @@ measure_classifier_metrics() {
     return 1
   fi
 
-  probe="$(<"$log_file")"
+  local lfe_metrics bass_metrics
+  lfe_metrics="$(measure_lfe_windows "$log_file")" || {
+    rm -f -- "$log_file" "$progress_file"
+    return 1
+  }
+  bass_metrics="$(measure_bass_windows "$log_file")" || {
+    rm -f -- "$log_file" "$progress_file"
+    return 1
+  }
+  # Evita di copiare tutte le finestre nella variabile e nei parser storici.
+  probe="$(awk '!index($0,"[ametadata@lfe_windows ") && !index($0,"[ametadata@bass_ref ")' "$log_file")"
   rm -f -- "$log_file" "$progress_file"
   probe="${probe//$'\r'/}"
 
@@ -850,7 +1139,7 @@ measure_classifier_metrics() {
   ' <<<"$probe")
 
   # Assegna la variabile locale del chiamante senza una subshell.
-  all_metrics="${i_val:-}|${lra_val:-}|${peak_val:-}|${rms_values}"
+  all_metrics="${i_val:-}|${lra_val:-}|${peak_val:-}|${rms_values}|${lfe_metrics}|${bass_metrics}|INSUFFICIENT_DATA|0.0|INSUFFICIENT_DATA|0.0"
 }
 
 # Media energetica in dB di due o tre valori RMS. I valori devono essere finiti.
@@ -895,6 +1184,16 @@ scan_delta() {
     warn "Stream [$target_stream] ha '${max_ch:-?}' canali (non 5.1). Delta richiede esattamente 6 canali. Saltato."
     return 1
   fi
+  # Alcuni MKV dichiarano sei canali ma il probe breve non raggiunge il primo
+  # pacchetto audio. Verifica il layout senza indovinarlo per il nuovo gain LFE.
+  if [[ -z "$layout" || "$layout" == "unknown" ]]; then
+    local confirmed_layout
+    confirmed_layout=$(ffprobe -v error -analyzeduration 20000000 -probesize 20000000 \
+      -select_streams "$target_stream" -show_entries stream=channel_layout \
+      -of default=nw=1:nk=1 "$f" 2>/dev/null </dev/null) || confirmed_layout=""
+    confirmed_layout="${confirmed_layout//$'\r'/}"
+    [[ -z "$confirmed_layout" ]] || layout="$confirmed_layout"
+  fi
   local display_layout="${layout:-unknown}"
   if [[ "$display_layout" == "unknown" ]]; then
     display_layout="5.1(side)"
@@ -906,7 +1205,7 @@ scan_delta() {
   IFS='|' read -r source_class source_evidence <<<"$source_probe"
   if [[ "$source_class" == "ATMOS" ]]; then
     echo -e "${C_ATMOS_FOUND} Atmos verificato nella traccia audio originale.\033[0m"
-    info "Compensazione sonora Atmos prevista nel processing: FC=+0.6 dB, LFE=-0.6 dB."
+    info "Compensazione sonora Atmos prevista nel processing: FC=+0.5 dB, LFE=-1.0 dB."
   else
     echo -e "${C_ATMOS_UNKNOWN} Atmos non verificato nella traccia audio originale.\033[0m"
   fi
@@ -924,11 +1223,17 @@ scan_delta() {
 
   # Loudness, LRA, peak, RMS scena, Width e banda voce condividono la stessa
   # decodifica full-duration: una sola lettura del file per episodio.
-  info "Misura unica: LUFS/LRA/peak, RMS scena, Width e banda voce 250-5000 Hz..."
+  info "Misura unica: LUFS/LRA/peak, RMS scena, Width, banda voce e finestre LFE/bassi..."
   local all_metrics="" cached_metrics="" cache_file="" cache_hit=0
   local i_full lra_full peak_full
   local rms_fl rms_fr rms_fc rms_sl rms_sr rms_mid rms_side
   local rms_vfl rms_vfr rms_vfc rms_vsl rms_vsr
+  local lfe_active lfe_p95 lfe_peak lfe_mains lfe_delta lfe_seconds lfe_ratio lfe_windows
+  local lfe_hot_p lfe_very_hot_p lfe_atmos_hot_p lfe_atmos_very_hot_p
+  local lfe_cut_hot_p lfe_cut_very_hot_p lfe_effective_delta
+  local lfe_class lfe_gain lfe_reason lfe_decision lfe_atmos=0 lfe_unsafe=0
+  local bass_rms bass_reference bass_delta bass_p95 bass_persistence bass_seconds bass_ratio
+  local bass_class bass_trim bass_reason bass_decision old_lfe_gain raw_metrics _decision
 
   cache_file="$(analysis_cache_file "$f" "$target_stream" || true)"
   if [[ -n "$cache_file" && -s "$cache_file" ]]; then
@@ -947,17 +1252,19 @@ scan_delta() {
       warn "Analisi FFmpeg non conclusiva. File saltato."
       return 1
     }
-    if is_valid_metrics_record "$all_metrics"; then
-      if [[ -n "$cache_file" ]]; then
-        store_metrics_cache "$cache_file" "$all_metrics" || \
-          warn "Impossibile aggiornare la cache per questo file."
-      fi
-    fi
+    is_valid_metrics_record "$all_metrics" || {
+      warn "Metriche incomplete/non valide. File saltato."
+      return 1
+    }
   fi
 
   IFS='|' read -r i_full lra_full peak_full \
     rms_fl rms_fr rms_fc rms_sl rms_sr rms_mid rms_side \
-    rms_vfl rms_vfr rms_vfc rms_vsl rms_vsr <<<"$all_metrics"
+    rms_vfl rms_vfr rms_vfc rms_vsl rms_vsr \
+    lfe_active lfe_p95 lfe_peak lfe_mains lfe_delta lfe_seconds lfe_ratio lfe_windows \
+    lfe_hot_p lfe_very_hot_p lfe_atmos_hot_p lfe_atmos_very_hot_p \
+    bass_rms bass_reference bass_delta bass_p95 bass_persistence bass_seconds bass_ratio \
+    lfe_class lfe_gain bass_class bass_trim <<<"$all_metrics"
 
   # Il sample peak distingue il vero silenzio dal valore sentinella -70 LUFS
   # restituito da ebur128 per una traccia digitalmente vuota.
@@ -1072,6 +1379,39 @@ scan_delta() {
     preset_reason="${preset_reason} (borderline sbilanciamento)"
   fi
 
+  [[ "$source_class" != "ATMOS" ]] || lfe_atmos="$LFE_ATMOS_COMPENSATION_DB"
+  lfe_unsafe="$forced_preset"
+  case "$layout" in "5.1(side)"|"5.1"|"5.1(back)") ;; *) lfe_unsafe=1 ;; esac
+  lfe_cut_hot_p="$lfe_hot_p"
+  lfe_cut_very_hot_p="$lfe_very_hot_p"
+  if [[ "$source_class" == "ATMOS" ]]; then
+    lfe_cut_hot_p="$lfe_atmos_hot_p"
+    lfe_cut_very_hot_p="$lfe_atmos_very_hot_p"
+  fi
+  lfe_effective_delta="$lfe_delta"
+  if is_finite_db "$lfe_delta"; then
+    lfe_effective_delta=$(awk -v d="$lfe_delta" -v a="$lfe_atmos" 'BEGIN {printf "%.3f",d+a}')
+  fi
+  lfe_decision=$(classify_lfe_balance "$lfe_active" "$lfe_p95" "$lfe_peak" "$lfe_mains" "$lfe_delta" \
+    "$lfe_seconds" "$lfe_ratio" "$volamp" "$lfe_atmos" "$lfe_unsafe" "$lfe_cut_hot_p" "$lfe_cut_very_hot_p")
+  IFS='|' read -r lfe_class lfe_gain lfe_reason <<<"$lfe_decision"
+  bass_decision=$(classify_bass_trim "$bass_delta" "$bass_persistence" "$bass_seconds" "$bass_ratio" "$lfe_unsafe")
+  IFS='|' read -r bass_class bass_trim bass_reason <<<"$bass_decision"
+  old_lfe_gain="$lfe_gain"
+  lfe_gain=$(coordinate_bass_gains "$lfe_gain" "$bass_trim")
+  [[ "$lfe_gain" == "$old_lfe_gain" ]] || lfe_reason="$lfe_reason; gain coordinato con Bass trim (budget -3 dB)"
+  # Ricalcola entrambe le decisioni anche su cache HIT; salva metriche + decisioni.
+  raw_metrics="$all_metrics"
+  for _decision in 1 2 3 4; do raw_metrics="${raw_metrics%|*}"; done
+  all_metrics="${raw_metrics}|${lfe_class}|${lfe_gain}|${bass_class}|${bass_trim}"
+  if [[ -n "$cache_file" ]]; then
+    store_metrics_cache "$cache_file" "$all_metrics" || warn "Impossibile aggiornare la cache"
+  fi
+  GLOBAL_LFE_GAIN_VALUES+=("$lfe_gain")
+  GLOBAL_LFE_CLASS_VALUES+=("$lfe_class")
+  GLOBAL_BASS_TRIM_VALUES+=("$bass_trim")
+  GLOBAL_BASS_CLASS_VALUES+=("$bass_class")
+
   # Accumulo risultati per verdetto stagionale e tabella finale. Se il preset è stato forzato, uso comunque il Delta reale per il verdetto stagionale, perché riflette la realtà del mix, ma segnalo il preset forzato nella tabella per chiarezza.
   GLOBAL_METRIC_VALUES+=("$delta_sur")
   GLOBAL_METRIC_FILES+=("$(basename "$f")")
@@ -1096,6 +1436,18 @@ scan_delta() {
 
   # Display dei risultati per il file, con colori e descrizioni. Se alcune metriche non sono misurabili, le segnalo come N/A. Se il preset è stato forzato, mostro comunque il preset forzato ma con la descrizione che indica la ragione.
   ok "Risultati Classifier per: $f"
+  info "LFE ANALYSIS (banda 20-120 Hz; finestre coincidenti da 0.5 s)"
+  info "Active RMS: $lfe_active dBFS | P95: $lfe_p95 dBFS | Peak full-band: $lfe_peak dBFS"
+  info "Bass mains (somma energie 5 canali): $lfe_mains dBFS | LFE Delta: $lfe_delta dB"
+  info "Attivita LFE: $lfe_seconds s | frazione: $lfe_ratio | finestre totali: $lfe_windows"
+  info "Compensazione Atmos: $lfe_atmos dB | Delta dopo compensazione: $lfe_effective_delta dB"
+  info "Persistenza per il taglio (frazione attivita LFE): HOT=$lfe_cut_hot_p | VERY_HOT=$lfe_cut_very_hot_p"
+  info "LFE Class: $lfe_class | LFE Gain: $lfe_gain dB | $lfe_reason"
+  info "BASS ANALYSIS (proxy energetico; LFE +10 dB solo nella misura)"
+  info "Bass RMS: $bass_rms dBFS | riferimento 250-5000 Hz: $bass_reference dBFS"
+  info "Bass Delta: $bass_delta dB | P95 delta: $bass_p95 dB | persistenza: $bass_persistence"
+  info "Finestre valide: $bass_seconds s | frazione: $bass_ratio"
+  info "Bass Class: $bass_class | Bass Trim: $bass_trim dB | $bass_reason"
   echo -e "  \033[1;33mRMS MAIN: \033[0m  ${rms_main} dBFS  (media energetica FL/FR/FC)"
   echo -e "  \033[1;33mRMS SUR:  \033[0m  ${rms_sur} dBFS  (media energetica SL/SR)"
   echo -e "  \033[1;37mDeltaSur: \033[0m  ${p_color}${delta_sur} dB\033[0m  (SUR - MAIN)"
@@ -1106,7 +1458,12 @@ scan_delta() {
   echo -e "  \033[1;36mWidth MS: \033[0m  ${width_ms} dB  (${width_desc}; SIDE - MID SL/SR)"
   echo -e "  \033[1;33mI(full):  \033[0m  ${i_full:-N/A} LUFS"
   echo -e "  \033[1;33mLRA:      \033[0m  ${lra_full:-N/A} LU  (solo cap volamp)"
-  echo -e "  \033[1;36mSource:   \033[0m  ${source_class}  (${source_evidence}; bias preset=${source_bias_applied})"
+  echo -e "  \033[1;36mAudio:    \033[0m  ${display_layout}"
+  if [[ "$source_class" == "ATMOS" ]]; then
+    echo -e "  \033[1;36mAtmos:    \033[0m  verificato (${source_evidence}; bias preset=${source_bias_applied})"
+  else
+    echo -e "  \033[1;36mAtmos:    \033[0m  non verificato (bias preset=${source_bias_applied})"
+  fi
   echo -e "  \033[1;37mMisure:   \033[0m  ${measured_preset}  | preferenza Atmos: ${source_bias_applied}"
   echo -e "  \033[1;37mPreset:   \033[0m  ${p_color}${preset}\033[0m  (${preset_reason})"
   echo -e "  \033[1;37mConfid.:  \033[0m  ${confidence}  | alternativa: ${alternative}"
@@ -1266,7 +1623,7 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
       echo ''
       echo '# ── COMANDI ──'
       echo 'BATCH_FAILURES=0'
-      echo "# Nota: l'ultimo parametro numerico e' il volamp consigliato per-file."
+      echo "# VOLAMP invariato; --lfe-gain e --bass-trim coordinati per-file."
   
       # Per ogni file genero un comando usando sempre il preset raffinato per-file. Escludo gli output già processati.
       for (( i=0; i<CNT; i++ )); do
@@ -1283,6 +1640,10 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
         [[ -z "$file_preset" ]] && file_preset="AEGIS"
         file_preset_lower="${file_preset,,}"
         file_volamp="${GLOBAL_VOLAMP_VALUES[$i]:-0}"
+        file_lfe_gain="${GLOBAL_LFE_GAIN_VALUES[$i]:-0.0}"
+        file_bass_trim="${GLOBAL_BASS_TRIM_VALUES[$i]:-0.0}"
+        echo "# Bass: ${GLOBAL_BASS_CLASS_VALUES[$i]} | trim ${file_bass_trim} dB"
+        echo "# LFE: ${GLOBAL_LFE_CLASS_VALUES[$i]} | gain ${file_lfe_gain} dB"
         file_loudness="${GLOBAL_LOUDNESS_VALUES[$i]:-N/A}"
         file_width="${GLOBAL_WIDTH_VALUES[$i]:-N/A}"
         file_lra="${GLOBAL_LRA_VALUES[$i]:-N/A}"
@@ -1293,14 +1654,16 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
         file_confidence="${GLOBAL_CONFIDENCE_VALUES[$i]:-N/A}"
         file_alternative="${GLOBAL_ALTERNATIVE_VALUES[$i]:--}"
         file_source_class="${GLOBAL_SOURCE_CLASS_VALUES[$i]:-UNKNOWN}"
+        file_atmos_status="non-verificato"
+        [[ "$file_source_class" != "ATMOS" ]] || file_atmos_status="verificato"
         file_source_evidence="${GLOBAL_SOURCE_EVIDENCE_VALUES[$i]:-nessun segnale Atmos}"
         file_source_bias="${GLOBAL_SOURCE_BIAS_VALUES[$i]:-no}"
         file_measured_preset="${GLOBAL_MEASURED_PRESET_VALUES[$i]:-N/A}"
         escaped_path=$(printf '%q' "${GLOBAL_METRIC_PATHS[$i]}")
   
         # Il commento conserva metriche, confidenza, alternativa e prova Atmos.
-        printf '"$PROC" "$CODEC" "$KEEP" "$BITRATE" %s %s %s || BATCH_FAILURES=$((BATCH_FAILURES + 1))  # Source=%s (%s) AtmosBias=%s MeasuredPreset=%s | DeltaSur=%s dB | DeltaFC=%s dB | VoiceDelta=%s dB | VoiceMask=%s dB | Balance=%s dB | Width=%s dB | conf=%s alt=%s | I=%s LUFS LRA=%s LU\n' \
-          "$file_preset_lower" "$file_volamp" "$escaped_path" "$file_source_class" "$file_source_evidence" "$file_source_bias" \
+        printf '"$PROC" "$CODEC" "$KEEP" "$BITRATE" %s %s --lfe-gain %s --bass-trim %s -- %s || BATCH_FAILURES=$((BATCH_FAILURES + 1))  # OutputAudio=5.1(side) Atmos=%s (%s) AtmosBias=%s MeasuredPreset=%s | DeltaSur=%s dB | DeltaFC=%s dB | VoiceDelta=%s dB | VoiceMask=%s dB | Balance=%s dB | Width=%s dB | conf=%s alt=%s | I=%s LUFS LRA=%s LU\n' \
+          "$file_preset_lower" "$file_volamp" "$file_lfe_gain" "$file_bass_trim" "$escaped_path" "$file_atmos_status" "$file_source_evidence" "$file_source_bias" \
           "$file_measured_preset" "${GLOBAL_METRIC_VALUES[$i]}" \
           "$file_delta_fc" "$file_delta_voice" "$file_voice_mask" "$file_balance" "$file_width" "$file_confidence" "$file_alternative" \
           "$file_loudness" "$file_lra"

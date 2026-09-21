@@ -14,7 +14,7 @@ set -uo pipefail
 # │   - Canali principali: highpass di sicurezza a 40 Hz                             │
 # │   - Voce: EQ sartoriale FC, dinamica piena, nessun compressore                   │
 # │   - Surround psicoacustici controllati                                           │
-# │   - LFE: volamp + compensazione Atmos + limiter picchi                         │
+# │   - LFE: volamp + balance statico + compensazione Atmos + limiter                │
 # │   - Pipeline leggibile: input -> split -> voice -> surround -> output            │
 # |   - gestione robusta dei sei canali anche con channel_layout=unknown             |
 # ╰──────────────────────────────────────────────────────────────────────────────────╯
@@ -50,8 +50,19 @@ MASTER_LIMITER_OPTS="limit=0.94:attack=2.5:release=50:level=0:latency=1"
 # Indipendente dal preset DSP; nessuna attivazione dal nome file.
 ATMOS_ORIGINAL_TITLE="EAC3 Atmos Original"
 ATMOS_ORIGINAL_TITLE_LEGACY="EAC3 Atmos (Original)"
-ATMOS_FC_GAIN_DB="0.6"
-ATMOS_LFE_GAIN_DB="-0.6"
+ATMOS_FC_GAIN_DB="0.5"
+ATMOS_LFE_GAIN_DB="-1.0"
+
+# Regola soltanto i rami SLh/SRh di SONAR e AEGIS, non il volume surround totale.
+# Default aumentato del 15% sul solo ramo verticale; normal ripristina il livello precedente.
+# Valori sperimentali, non altezza misurata.
+HEIGHT_MODE="${HEIGHT_MODE:-increased}"
+case "$HEIGHT_MODE" in
+  reduced) HEIGHT_GAIN_FILTER="volume=0.75," ;;
+  normal)  HEIGHT_GAIN_FILTER="" ;;
+  increased) HEIGHT_GAIN_FILTER="volume=1.15," ;;
+  *) err "HEIGHT_MODE non valido: usare reduced, normal o increased"; exit 1 ;;
+esac
 
 # FRONT_EQ: equalizzatore frontale condiviso, adattato a torri audio 3 vie.
 FRONT_EQ="equalizer=f=320:t=q:w=1.1:g=-0.4,equalizer=f=5000:t=q:w=1.4:g=0.4,highshelf=f=11000:t=q:w=0.7:g=0.4"
@@ -63,14 +74,14 @@ done
 
 usage() {
   cat <<'USAGE'
------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------
 UTILIZZO:
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh <ac3|eac3> <si|no> <bitrate> <preset> <volamp> <file|"">
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files <ac3|eac3> <si|no> <bitrate> <preset> <volamp> <file1> [file2 ...]
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh <codec> <keep> <bitrate> <preset> <volamp> <file|"">
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files <codec> <keep> <bitrate> <preset> <volamp> <file1> [file2 ...]
 
 PARAMETRI:
-  ac3|eac3  : Codec audio in uscita.
-  si|no     : Conserva file audio originale.
+  codec     : ac3 oppure eac3.
+  keep      : si conserva l'audio originale; no non lo conserva.
   file      : File input singolo. Se omesso o "" processa tutti file compatibili nella cartella.
   bitrate   : Es. 640k o 768k (default: 640k per AC3, 768k per EAC3).
   preset    : aegis | sonar | wide | aura | voice (default: sonar).
@@ -78,16 +89,12 @@ PARAMETRI:
               Valori consentiti: 0 .. 6.0.
               0 = OFF, default = 3.0 dB.
               Esempi pratici: 0 | 3.0 | 4.0 | 5.0 | 6.0
-
-MODALITA' --files:
-  Processa soltanto i file elencati. Bitrate, preset e volamp sono obbligatori
-  e in ordine fisso, cosi' i nomi dei file non risultano ambigui.
+              
+MODALITA' --files:  Processa soltanto i file elencati. 
 ESEMPIO:
   ./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 3.0 "film.mkv"
   ./aegis_sonar_wide_aura_voice_volamp_psycho.sh ac3 no 640k wide 3.0 ""
   ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files eac3 no 768k sonar 3.0 ep1.mkv ep4.mkv
-
-COMPATIBILITA': resta accettato il vecchio ordine codec keep file [bitrate] [preset] [volamp].
 
 PRESET DISPONIBILI:
   aegis     -> Simula NEURAL:X (DTS:X)  | Cupola Sonora
@@ -95,9 +102,9 @@ PRESET DISPONIBILI:
   wide      -> Simula Dolby 7.1         | Allargamento Laterale
   aura      -> Simula Dolby 6.1         | Allargamento Posteriore
   voice     -> Esalta i dialoghi (FC)   | EQ Sartoriale Voce
------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------
 USAGE
-  exit 1
+  exit "${1:-1}"
 }
 
 # Controllo se un token è un preset valido: deve essere uno dei nomi riconosciuti (aegis, sonar, wide, aura, voice).
@@ -113,7 +120,54 @@ is_bitrate_token() {
 }
 
 # Controllo argomenti e modalita' multi-file.
-[[ $# -eq 0 || "${1:-}" == "-h" || "${1:-}" == "--help" ]] && usage
+[[ $# -eq 0 || "${1:-}" == "-h" || "${1:-}" == "--help" ]] && usage 0
+# Opzione nominata rimossa prima del parser storico. -- protegge i nomi file
+# uguali a opzioni; usare ./--lfe-gain per un file con quel nome senza --.
+BASS_TRIM_DB="0.0"
+BASS_TRIM_SEEN=false
+LFE_GAIN_DB="0.0"
+LFE_GAIN_SEEN=false
+LFE_POSITIONAL=()
+while (( $# > 0 )); do
+  case "$1" in
+    --) shift; LFE_POSITIONAL+=("$@"); break ;;
+    --bass-trim)
+      [[ "$BASS_TRIM_SEEN" == false && $# -ge 2 ]] || {
+        err "--bass-trim richiede un valore e non puo' essere ripetuto"; exit 1;
+      }
+      BASS_TRIM_DB="$2"
+      BASS_TRIM_SEEN=true
+      shift 2 ;;
+    --lfe-gain)
+      [[ "$LFE_GAIN_SEEN" == false && $# -ge 2 ]] || {
+        err "--lfe-gain richiede un valore e non puo' essere ripetuto"; exit 1;
+      }
+      LFE_GAIN_DB="$2"
+      LFE_GAIN_SEEN=true
+      shift 2 ;;
+    *) LFE_POSITIONAL+=("$1"); shift ;;
+  esac
+done
+set -- "${LFE_POSITIONAL[@]}"
+if ! [[ "$LFE_GAIN_DB" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]] ||
+   ! awk -v g="$LFE_GAIN_DB" 'BEGIN { exit !(g >= -2 && g <= 2) }'; then
+  err "--lfe-gain non valido: usa un numero tra -2.0 e +2.0 dB"; exit 1
+fi
+LFE_GAIN_FILTER=""
+# Zero deve lasciare il filtergraph esattamente invariato.
+if awk -v g="$LFE_GAIN_DB" 'BEGIN { exit !(g != 0) }'; then
+  LFE_GAIN_FILTER="volume=${LFE_GAIN_DB}dB,"
+fi
+
+if ! [[ "$BASS_TRIM_DB" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]] ||
+   ! awk -v g="$BASS_TRIM_DB" 'BEGIN { exit !(g >= -3 && g <= 0) }'; then
+  err "--bass-trim non valido: usa un numero tra -3.0 e 0.0 dB"; exit 1
+fi
+BASS_TRIM_FILTER=""
+if awk -v g="$BASS_TRIM_DB" 'BEGIN { exit !(g < 0) }'; then
+  BASS_TRIM_FILTER="bass=g=${BASS_TRIM_DB}:f=100:t=q:w=0.707,"
+fi
+
 MULTI_FILES_MODE=false
 MULTI_FILES=()
 INPUT_FILE=""
@@ -288,6 +342,8 @@ info "Codec output:   $OUT_CODEC"
 info "Surround mode:  $SUR_MODE ($DESC)"
 info "Bitrate Target: $BITRATE"
 info "Final volamp:   $VOLAMP_LABEL"
+info "LFE balance:    ${LFE_GAIN_DB} dB (statico, prima del limiter)"
+info "Bass trim:      ${BASS_TRIM_DB} dB (low-shelf 100 Hz, tutti i canali)"
 
 # Identifica la traccia 5.1 migliore privilegiando lingua italiana e flag default.
 probe_audio_stream() {
@@ -376,7 +432,7 @@ detect_atmos_source() {
 }
 
 set_atmos_bed_compensation() {
-  local source_probe source_class source_evidence
+  local source_probe source_class source_evidence atmos_lfe_db="0.0"
   ATMOS_FC_GAIN_FILTER=""
   ATMOS_LFE_GAIN_FILTER=""
   source_probe=$(detect_atmos_source "$1")
@@ -384,10 +440,13 @@ set_atmos_bed_compensation() {
   if [[ "$source_class" == "ATMOS" ]]; then
     ATMOS_FC_GAIN_FILTER="volume=${ATMOS_FC_GAIN_DB}dB,"
     ATMOS_LFE_GAIN_FILTER="volume=${ATMOS_LFE_GAIN_DB}dB,"
+    atmos_lfe_db="$ATMOS_LFE_GAIN_DB"
     echo -e "${C_ATMOS_FOUND} Atmos verificato nella traccia audio originale. Compensazione FC=+${ATMOS_FC_GAIN_DB} dB, LFE=${ATMOS_LFE_GAIN_DB} dB.\033[0m"
   else
     echo -e "${C_ATMOS_UNKNOWN} Atmos non verificato nella traccia audio originale. Compensazione FC/LFE disattivata.\033[0m"
   fi
+  info "Atmos LFE compensation: ${atmos_lfe_db} dB (0 = OFF)"
+  info "Gain nominale LFE prima del limiter (escluso shelf): $(awk -v v="$VOLAMP_DB" -v l="$LFE_GAIN_DB" -v a="$atmos_lfe_db" 'BEGIN { printf "%+.2f", v+l+a }') dB"
 }
 
 # Costruisco la lista dei file da processare: se è stato specificato un file, lo uso. Altrimenti, cerco tutti i file compatibili nella cartella.
@@ -445,13 +504,13 @@ read -r -d '' SUR_FILTERS_SONAR <<'EOF' || true
 [SL]asplit=4[SLd_in][SLp_in][SLh_in][SLlate_in];
 [SLd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SLd];
 [SLp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=2.0,equalizer=f=11000:t=q:w=1.0:g=-1.2,volume=1.00[SLp];
-[SLh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=900:t=q:w=0.70,allpass=f=2200:t=q:w=0.70,equalizer=f=8000:t=q:w=2.5:g=0.8,equalizer=f=11000:t=q:w=1.2:g=1.0,volume=0.60[SLh];
+[SLh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=900:t=q:w=0.70,allpass=f=2200:t=q:w=0.70,equalizer=f=8000:t=q:w=2.5:g=0.8,equalizer=f=11000:t=q:w=1.2:g=1.0,__HEIGHT_GAIN_FILTER__volume=0.60[SLh];
 [SLlate_in]adelay=38,highpass=f=150,lowpass=f=1500,volume=0.58[SLlate];
 [SLd][SLp][SLh][SLlate]amix=inputs=4:weights='1 0.6 0.4 0.2':normalize=0,volume=1.05[SL_out];
 [SR]asplit=4[SRd_in][SRp_in][SRh_in][SRlate_in];
 [SRd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SRd];
 [SRp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=2.0,equalizer=f=11000:t=q:w=1.0:g=-1.2,volume=1.00[SRp];
-[SRh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=1050:t=q:w=0.70,allpass=f=2400:t=q:w=0.70,equalizer=f=8000:t=q:w=2.5:g=0.8,equalizer=f=11000:t=q:w=1.2:g=1.0,volume=0.60[SRh];
+[SRh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=1050:t=q:w=0.70,allpass=f=2400:t=q:w=0.70,equalizer=f=8000:t=q:w=2.5:g=0.8,equalizer=f=11000:t=q:w=1.2:g=1.0,__HEIGHT_GAIN_FILTER__volume=0.60[SRh];
 [SRlate_in]adelay=41,highpass=f=150,lowpass=f=1500,volume=0.58[SRlate];
 [SRd][SRp][SRh][SRlate]amix=inputs=4:weights='1 0.6 0.4 0.2':normalize=0,volume=1.05[SR_out];
 EOF
@@ -461,13 +520,13 @@ read -r -d '' SUR_FILTERS_AEGIS <<'EOF' || true
 [SL]asplit=4[SLd_in][SLp_in][SLh_in][SLlate_in];
 [SLd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SLd];
 [SLp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=1.6,equalizer=f=11000:t=q:w=1.0:g=-1.4,volume=0.95[SLp];
-[SLh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=900:t=q:w=0.70,allpass=f=2200:t=q:w=0.70,equalizer=f=8000:t=q:w=3.0:g=-4.0,equalizer=f=11000:t=q:w=1.2:g=0.6,volume=0.48[SLh];
+[SLh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=900:t=q:w=0.70,allpass=f=2200:t=q:w=0.70,equalizer=f=8000:t=q:w=3.0:g=-4.0,equalizer=f=11000:t=q:w=1.2:g=0.6,__HEIGHT_GAIN_FILTER__volume=0.48[SLh];
 [SLlate_in]adelay=39,highpass=f=150,lowpass=f=1300,volume=0.42[SLlate];
 [SLd][SLp][SLh][SLlate]amix=inputs=4:weights='1.05 0.80 0.70 0.45':normalize=0,volume=0.95[SL_out];
 [SR]asplit=4[SRd_in][SRp_in][SRh_in][SRlate_in];
 [SRd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SRd];
 [SRp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=1.6,equalizer=f=11000:t=q:w=1.0:g=-1.4,volume=0.95[SRp];
-[SRh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=1050:t=q:w=0.70,allpass=f=2400:t=q:w=0.70,equalizer=f=8000:t=q:w=3.0:g=-4.0,equalizer=f=11000:t=q:w=1.2:g=0.6,volume=0.48[SRh];
+[SRh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=1050:t=q:w=0.70,allpass=f=2400:t=q:w=0.70,equalizer=f=8000:t=q:w=3.0:g=-4.0,equalizer=f=11000:t=q:w=1.2:g=0.6,__HEIGHT_GAIN_FILTER__volume=0.48[SRh];
 [SRlate_in]adelay=42,highpass=f=150,lowpass=f=1300,volume=0.42[SRlate];
 [SRd][SRp][SRh][SRlate]amix=inputs=4:weights='1.05 0.80 0.70 0.45':normalize=0,volume=0.95[SR_out];
 EOF
@@ -546,6 +605,10 @@ set_preset_profile() {
       exit 1
       ;;
   esac
+  SUR_BLOCK="${SUR_BLOCK//__HEIGHT_GAIN_FILTER__/$HEIGHT_GAIN_FILTER}"
+  case "$SUR_MODE" in
+    sonar|aegis) info "Contributo verticale: $HEIGHT_MODE (sperimentale; output 5.1)" ;;
+  esac
 }
 
 # Funzione per costruire il blocco di split dei canali in ingresso con mapping posizionale.
@@ -580,7 +643,9 @@ EOF
 
 # Blocco finale di output:
 # - applica il volamp separatamente ai cinque canali principali;
-# - applica il volamp al LFE prima del limiter dedicato;
+# - LFE: volamp -> correzione statica --lfe-gain -> compensazione Atmos -> limiter;
+# - nessun passa-alto sul LFE; il preparatore Atmos non ne applica per default;
+#   ATMOS_HIGHPASS_HZ=20 nel preparatore e' una scelta opzionale e cumulativa;
 # - il file resta 5.1 con un solo canale LFE; l'eventuale doppio sub (5.2) e' gestito dall'AVR;
 # - unisce i sei canali in 5.1(side);
 # - mantiene il limiter finale come protezione globale;
@@ -588,12 +653,12 @@ EOF
 # - limita FC dopo il volamp e la compensazione.
 build_output_join_graph() {
   cat <<EOF
-[FLp]${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[FLf];
-[FRp]${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[FRf];
-[FCv]${FINAL_GAIN_FILTER}${ATMOS_FC_GAIN_FILTER}alimiter=${FC_LIMITER_OPTS},aformat=channel_layouts=mono[FCf];
-[LFE]aformat=channel_layouts=mono,${FINAL_GAIN_FILTER}${ATMOS_LFE_GAIN_FILTER}alimiter=limit=0.94:attack=2.0:release=120:level=0:latency=1[LFEf];
-[SL_final]${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[SLf];
-[SR_final]${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[SRf];
+[FLp]${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[FLf];
+[FRp]${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[FRf];
+[FCv]${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}${ATMOS_FC_GAIN_FILTER}alimiter=${FC_LIMITER_OPTS},aformat=channel_layouts=mono[FCf];
+[LFE]aformat=channel_layouts=mono,${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}${LFE_GAIN_FILTER}${ATMOS_LFE_GAIN_FILTER}alimiter=limit=0.94:attack=2.0:release=120:level=0:latency=1[LFEf];
+[SL_final]${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[SLf];
+[SR_final]${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[SRf];
 [FLf][FRf][FCf][LFEf][SLf][SRf]join=inputs=6:channel_layout=5.1(side):map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR,
 highshelf=f=12000:g=0.4:w=0.5:c=FL|FR|FC|SL|SR,alimiter=${MASTER_LIMITER_OPTS},aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=5.1(side)[aout]
 EOF

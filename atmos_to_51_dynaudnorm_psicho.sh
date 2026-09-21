@@ -13,15 +13,13 @@
 # │   primario da analizzare/elaborare con i preset psicoacustici.               │
 # │                                                                              │
 # │   UTILIZZO:                                                                  │
-# │     ./atmos_to_51_dynaudnorm_psicho.sh [bitrate] <file|directory|"">         │
-# │     ./atmos_to_51_dynaudnorm_psicho.sh --files <bitrate> <file1> [...]       │
+# │   ./atmos_to_51_dynaudnorm_psicho.sh [--force] [bitrate] <file|directory|""> │
+# │   ./atmos_to_51_dynaudnorm_psicho.sh --files <bitrate> <file1> [...]         │
 # │                                                                              │
 # │   PARAMETRI:                                                                 │
 # │     file    : File sorgente (mkv/mp4/m2ts), directory da processare          │
 # │               oppure "" per batch nella cartella corrente.                   │
 # │     bitrate : Bitrate traccia 5.1 (default: 640k).                           │
-# │                                                                              │
-# │   DIPENDENZE: ffmpeg, ffprobe (con supporto EAC3 JOC)                        │
 # ╰──────────────────────────────────────────────────────────────────────────────╯
 set -uo pipefail
 
@@ -49,19 +47,22 @@ VERIFY_MAX_OVERALL_DROP_DB="18.0"
 VERIFY_MAX_MAIN_CHANNEL_DROP_DB="24.0"
 VERIFY_MAX_LFE_DROP_DB="36.0"
 
-# Funzione per confermare sovrascrittura
+# Legge dallo stesso terminale dello script, senza riaprire /dev/tty.
+# In esecuzioni non interattive usare --force; nessuna attesa nascosta.
 confirm_overwrite() {
-  local target="$1"
-  local ans=""
-  if [[ ! -e /dev/tty ]]; then
-    warn "TTY non disponibile e '$target' esiste gia' -> skip automatico."
+  local target="$1" ans=""
+  if [[ ! -t 0 ]]; then
+    warn "Input non interattivo: '$target' esiste gia' -> skip. Usa --force per sovrascrivere."
     return 1
   fi
-  echo -ne "${C_WARN} '$target' esiste gia'. Sovrascrivere? [s/n/t]: "
-  if ! read -r ans < /dev/tty; then
-    warn "Impossibile leggere da /dev/tty -> skip automatico."
+  printf '%b' "${C_WARN} '$target' esiste gia'. Sovrascrivere? [s/n/t] (senza Invio): " >&2
+  if ! IFS= read -r -n 1 ans; then
+    printf '\n' >&2
+    warn "Input chiuso o non leggibile -> skip automatico."
     return 1
   fi
+  printf '\n' >&2
+  ans="${ans//$'\r'/}"
   case "${ans,,}" in
     t|tutti) OVERWRITE_ALL=true; info "Sovrascrittura automatica attivata."; return 0 ;;
     s|si|y|yes) info "Sovrascrivo."; return 0 ;;
@@ -74,14 +75,20 @@ usage() {
   cat <<'USAGE'
 ----------------------------------------------------------------------------------------
 UTILIZZO:
-  ./atmos_to_51_dynaudnorm_psicho.sh [bitrate] <file|directory|"">
-  ./atmos_to_51_dynaudnorm_psicho.sh --files <bitrate> <file1> [file2 ...]
+  ./atmos_to_51_dynaudnorm_psicho.sh [--force] [bitrate] <file|directory|"">
+  ./atmos_to_51_dynaudnorm_psicho.sh [--force] --files <bitrate> <file1> [file2 ...]
 
 PARAMETRI:
+  --force        : Primo argomento; sovrascrive senza domande (anche in batch).
   file|directory : File sorgente (mkv/mp4/m2ts), cartella contenente
                    file video da processare in batch, oppure "" per la
                    cartella corrente.
   bitrate        : Bitrate traccia EAC3 5.1 in uscita (default: 640k).
+
+FILTRO OPZIONALE:
+  ATMOS_HIGHPASS_HZ=0   Nessun passa-alto prima di dynaudnorm (default).
+  ATMOS_HIGHPASS_HZ=20  Passa-alto a 20 Hz su tutti i canali, incluso LFE.
+  Esempio: ATMOS_HIGHPASS_HZ=20 ./atmos_to_51_dynaudnorm_psicho.sh 640k film.mkv
 
 MODALITA' --files:
   Analizza e converte soltanto i file elencati. Il bitrate e' obbligatorio
@@ -93,18 +100,21 @@ ESEMPI:
   ./atmos_to_51_dynaudnorm_psicho.sh 768k ""             # batch nella cartella corrente
   ./atmos_to_51_dynaudnorm_psicho.sh --files 768k ep1.mkv ep4.mkv
 
-COMPATIBILITA': resta accettato anche il vecchio ordine <file> [bitrate].
-
 OUTPUT:
   <nome>-0.mkv con:
     • Traccia 1: EAC3 5.1 normalizzata (dynaudnorm, default)
     • Traccia 2: EAC3 Atmos originale (copia bit-perfect)
-
-DIPENDENZE: ffmpeg, ffprobe (con supporto EAC3 JOC)
 ----------------------------------------------------------------------------------------
 USAGE
   exit "$rc"
 }
+
+# --force deve precedere bitrate/input oppure --files.
+OVERWRITE_ALL=false
+if [[ "${1:-}" == "--force" ]]; then
+  OVERWRITE_ALL=true
+  shift
+fi
 
 # Help: nessun argomento o flag esplicito
 [[ $# -eq 0 || "${1:-}" =~ ^(-h|--help)$ ]] && usage
@@ -169,11 +179,18 @@ BITRATE="${BITRATE_KBPS}k"
 # compress=0     : compressione opzionale interna disabilitata
 # coupling=1     : canali accoppiati — preserva l'immagine stereo/surround
 # altboundary=0  : boundary mode standard
-DYNAUDNORM="highpass=f=20:t=q:w=0.707,dynaudnorm=framelen=500:gausssize=31:peak=0.92:maxgain=4:targetrms=0:compress=0:coupling=1:altboundary=0"
+DYNAUDNORM="dynaudnorm=framelen=500:gausssize=31:peak=0.92:maxgain=4:targetrms=0:compress=0:coupling=1:altboundary=0"
 
-# Nessun trattamento dedicato al solo LFE: highpass 20 Hz e dynaudnorm
-# si applicano a tutti i canali. Il processore finale gestisce gain e limiter LFE;
-# il filtraggio dedicato del sub resta affidato all'hardware.
+# Preserva il basso del bed originale per default. Il filtro opzionale
+# coinvolge tutti i canali, LFE incluso, prima del normalizzatore.
+ATMOS_HIGHPASS_HZ="${ATMOS_HIGHPASS_HZ:-0}"
+case "$ATMOS_HIGHPASS_HZ" in
+  0) ;;
+  20) DYNAUDNORM="highpass=f=20:t=q:w=0.707,${DYNAUDNORM}" ;;
+  *) err "ATMOS_HIGHPASS_HZ non valido: usa 0 (disattivato) oppure 20."; exit 1 ;;
+esac
+# Aegis applica 40 Hz ai canali principali; sul LFE gestisce gain e limiter.
+# Il filtro opzionale a 20 Hz si somma ai filtri dei passaggi successivi.
 
 # Probe chiave/valore: profilo, layout e lingua dalla stessa interrogazione.
 # Il mapping c0..c5 richiede esattamente sei canali: nessun downmix implicito.
@@ -352,157 +369,86 @@ verify_output_audio_signal() {
   return 0
 }
 
-# True Peak post-codec: stessa soglia e stesso retry limitato del processore 5.1.
-VERIFY_MAX_TRUE_PEAK_DB="-0.1"
-TRUE_PEAK_RETRY_MARGIN_DB="0.2"
-TRUE_PEAK_MAX_AUTO_TRIM_DB="3.0"
-
-# Estrae soltanto il Peak della sezione True peak dell'ultimo summary ebur128.
-# Il valore e l'unita' devono essere riconosciuti: nessun fallback a Sample Peak.
-measure_true_peak_db() {
-  awk '
-    /Summary:[[:space:]]*$/ { in_summary=1; expect_peak=0; tp=""; next }
-    !in_summary { next }
-    /^[[:space:]]*True peak:[[:space:]]*$/ { expect_peak=1; tp=""; next }
-    expect_peak {
-      if (NF == 0) next
-      if (NF == 3 && $1 == "Peak:" && $2 ~ /^[+-]?[0-9]+([.][0-9]+)?$/ &&
-          ($3 == "dBFS" || $3 == "dBTP")) tp=$2
-      expect_peak=0
-    }
-    END {
-      if (tp == "") exit 1
-      print tp
-    }
-  '
-}
-
-# Decodifica l'intero candidato AC3/EAC3: niente -ss/-t e nessuna finestra QC.
-# Un errore FFmpeg o un summary incompleto rendono la misura non conclusiva.
-measure_encoded_true_peak() {
-  local probe
-  probe="$(ffmpeg -hide_banner -nostdin -nostats -xerror -v info -i "$1" \
-    -map "0:a:0" -vn -sn -dn -af "ebur128=peak=true:framelog=verbose" \
-    -f null - 2>&1)" || return 1
-  probe="${probe//$'\r'/}"
-  printf '%s\n' "$probe" | measure_true_peak_db
-}
-
-
 verify_audio_candidate() {
-  local rc
-  VERIFY_FAILURE_KIND=""
-  VERIFY_OUTPUT_TRUE_PEAK=""
   VERIFY_REASON=""
   info "Verifica comparativa sull'intera traccia audio"
   verify_output_audio_signal "$1" "$INPUT_AUDIO_METRICS"
-  rc=$?
-  (( rc == 0 )) || return "$rc"
-  info "Verifica True Peak post-codec sull'intera traccia audio"
-  VERIFY_OUTPUT_TRUE_PEAK="$(measure_encoded_true_peak "$1")" || {
-    VERIFY_REASON="misura True Peak post-codec fallita o non conclusiva"
-    return 2
-  }
-  info "True Peak post-codec: ${VERIFY_OUTPUT_TRUE_PEAK} dBTP"
-  if awk -v tp="$VERIFY_OUTPUT_TRUE_PEAK" -v lim="$VERIFY_MAX_TRUE_PEAK_DB" \
-       'BEGIN { exit !(tp > lim) }'; then
-    VERIFY_FAILURE_KIND="true_peak"
-    VERIFY_REASON="True Peak ${VERIFY_OUTPUT_TRUE_PEAK} dBTP oltre ${VERIFY_MAX_TRUE_PEAK_DB} dBTP"
-    return 1
-  fi
-  return 0
 }
 
-# Conserva i timestamp sorgente anche nel candidato solo audio, cosi' il mux
-# mantiene l'offset audio/video. Il trim del retry segue tutto il DSP originale.
-encode_audio_candidate() {
-  local output_file="$1" graph="$2" trim="$3" output_label="[aout]"
-  if awk -v trim="$trim" 'BEGIN { exit !(trim > 0) }'; then
-    graph="${graph};[aout]volume=-${trim}dB[retry_out]"
-    output_label="[retry_out]"
-  fi
+# Come nella versione settembre: encoding e mux nello stesso processo.
+# Nessun candidato MKA intermedio e nessuna gestione forzata dei timestamp.
+encode_complete_candidate() {
+  local output_file="$1" graph="$2"
   local -a cmd=(ffmpeg -hide_banner -nostdin -stats -xerror -loglevel warning -y
-    -copyts -i "$CUR_FILE" -filter_complex "$graph"
-    -map "$output_label" -c:a:0 "$OUT_CODEC" -b:a:0 "$BITRATE"
+    -i "$CUR_FILE" -map_metadata 0 -map_chapters 0
+    -map "0:V:0?" -c:v copy -map "0:s?" -c:s copy -map "0:t?" -c:t copy
+    -filter_complex "$graph" -map "[aout]"
+    -c:a:0 "$OUT_CODEC" -b:a:0 "$BITRATE"
     -dialnorm -31 -ar:a:0 48000 -ac:a:0 6
     -metadata:s:a:0 "title=$FINAL_AUDIO_TITLE" -disposition:a:0 default
-    -avoid_negative_ts disabled)
-  [[ -n "$A_LANG" && "${A_LANG,,}" != "und" ]] && cmd+=(-metadata:s:a:0 "language=$A_LANG")
+    -map "0:$ORIGINAL_INDEX" -c:a:1 copy
+    -metadata:s:a:1 "title=$ORIGINAL_TITLE" -disposition:a:1 0)
+  if [[ -n "$A_LANG" && "${A_LANG,,}" != "und" ]]; then
+    cmd+=(-metadata:s:a:0 "language=$A_LANG" -metadata:s:a:1 "language=$A_LANG")
+  fi
   cmd+=("$output_file")
   "${cmd[@]}"
 }
 
-mux_verified_audio() {
-  local output_file="$1" audio_file="$2"
-  local -a cmd=(ffmpeg -hide_banner -nostdin -stats -xerror -loglevel warning -y
-    -copyts -i "$CUR_FILE" -i "$audio_file"
-    -map_metadata 0 -map_chapters 0
-    -map "0:V:0?" -c:v copy -map "0:s?" -c:s copy -map "0:t?" -c:t copy
-    -map "1:a:0" -c:a:0 copy
-    -metadata:s:a:0 "title=$FINAL_AUDIO_TITLE" -disposition:a:0 default
-    -avoid_negative_ts make_zero)
-  if [[ "$KEEP_ORIGINAL" == "si" ]]; then
-    cmd+=(-map "0:$ORIGINAL_INDEX" -c:a:1 copy
-      -metadata:s:a:1 "title=$ORIGINAL_TITLE" -disposition:a:1 0)
-  fi
-  if [[ -n "$A_LANG" && "${A_LANG,,}" != "und" ]]; then
-    cmd+=(-metadata:s:a:0 "language=$A_LANG")
-    [[ "$KEEP_ORIGINAL" == "si" ]] && cmd+=(-metadata:s:a:1 "language=$A_LANG")
-  fi
-  cmd+=("$output_file")
-  "${cmd[@]}"
+# Probe limitato: dynaudnorm puo' ritardare i primi pacchetti nel file.
+# Fino a 20 MB / 20 secondi di analisi; nessuna scansione integrale aggiuntiva.
+# Il segnale del candidato MKV viene verificato integralmente prima del probe.
+verify_mux_audio_layout() {
+  local probe field codec="" channels="" layout="" rate="" default=""
+  probe="$(ffprobe -v error -analyzeduration 20000000 -probesize 20000000 -select_streams a:0 \
+    -show_entries stream=codec_name,channels,channel_layout,sample_rate:stream_disposition=default \
+    -of default=noprint_wrappers=1 "$1" </dev/null)" || return 1
+  probe="${probe//$'\r'/}"
+  while IFS= read -r field; do
+    case "$field" in
+      codec_name=*) codec="${field#*=}" ;;
+      channels=*) channels="${field#*=}" ;;
+      channel_layout=*) layout="${field#*=}" ;;
+      sample_rate=*) rate="${field#*=}" ;;
+      DISPOSITION:default=*) default="${field#*=}" ;;
+    esac
+  done <<<"$probe"
+  [[ "$codec" == "eac3" && "$channels" == "6" && "$layout" == "5.1(side)" &&
+     "$rate" == "48000" && "$default" == "1" ]]
 }
 
 # Directory riservata atomicamente nella cartella dell'output: nessuna collisione
 # puo' far cancellare file altrui. Gli errori e le interruzioni conservano il debug.
-# Gli script restano autonomi: questo flusso e' identico nei due processori.
 process_verified_audio() {
-  local graph="$1" work_dir candidate first_candidate mux_file rc trim="0.0"
+  local graph="$1" work_dir mux_file rc
   work_dir="$(mktemp -d "$(dirname -- "$OUT_FILE")/.$(basename -- "${OUT_FILE%.mkv}").partial.XXXXXX")" || {
     err "Impossibile riservare la directory temporanea"
     return 1
   }
   info "Temporanei: $work_dir"
-  first_candidate="$work_dir/audio.mka"
-  candidate="$first_candidate"
   mux_file="$work_dir/mux.mkv"
-  if ! encode_audio_candidate "$candidate" "$graph" "$trim"; then
-    err "Encoding audio fallito; temporanei conservati: $work_dir"
+  info "Encoding e mux diretto (percorso versione settembre)"
+  if ! encode_complete_candidate "$mux_file" "$graph"; then
+    err "Encoding/mux fallito; temporanei conservati: $work_dir"
     return 1
   fi
-  verify_audio_candidate "$candidate"
+  verify_audio_candidate "$mux_file"
   rc=$?
-  if [[ "$rc" -eq 1 && "$VERIFY_FAILURE_KIND" == "true_peak" ]]; then
-    trim="$(awk -v tp="$VERIFY_OUTPUT_TRUE_PEAK" -v lim="$VERIFY_MAX_TRUE_PEAK_DB" \
-      -v margin="$TRUE_PEAK_RETRY_MARGIN_DB" -v maximum="$TRUE_PEAK_MAX_AUTO_TRIM_DB" \
-      'BEGIN { required=tp-lim+margin; printf "%.2f", (required < maximum ? required : maximum) }')"
-    info "Retry unico dalla sorgente: trim finale -${trim} dB (massimo ${TRUE_PEAK_MAX_AUTO_TRIM_DB} dB)"
-    candidate="$work_dir/audio.retry.mka"
-    if ! encode_audio_candidate "$candidate" "$graph" "$trim"; then
-      err "Retry audio fallito; temporanei conservati: $work_dir"
-      return 1
-    fi
-    verify_audio_candidate "$candidate"
-    rc=$?
-  fi
   if (( rc != 0 )); then
     err "Verifica rifiutata/non conclusiva: $VERIFY_REASON"
-    err "Nessun altro encode; output finale invariato. Temporanei: $work_dir"
+    err "Output finale invariato. Temporanei: $work_dir"
     return 1
   fi
-  info "Audio verificato: mux finale unico"
-  if ! mux_verified_audio "$mux_file" "$candidate"; then
-    err "Mux fallito; audio verificato e temporanei conservati: $work_dir"
+  if ! verify_mux_audio_layout "$mux_file"; then
+    err "Traccia primaria del mux non conforme (EAC3, 5.1(side), 48 kHz, default). Temporanei: $work_dir"
     return 1
   fi
   if ! mv -f -- "$mux_file" "$OUT_FILE"; then
     err "Pubblicazione fallita; temporanei conservati: $work_dir"
     return 1
   fi
-  # Soltanto file di questa esecuzione; mai pulizia ricorsiva o su nomi condivisi.
-  rm -f -- "$first_candidate" "$work_dir/audio.retry.mka" || warn "Pulizia audio incompleta: $work_dir"
   rmdir -- "$work_dir" || warn "Directory temporanea conservata: $work_dir"
-  ok "Creato e verificato (trim finale -${trim} dB): $OUT_FILE"
+  ok "Creato e verificato: $OUT_FILE"
   return 0
 }
 
@@ -552,11 +498,15 @@ FILES=("${FILTERED_FILES[@]}")
 (( ${#FILES[@]} == 0 )) && { err "Nessun file trovato."; exit 1; }
 # Mostra info
 info "Bitrate 5.1: $BITRATE"
+if [[ "$ATMOS_HIGHPASS_HZ" == "0" ]]; then
+  info "Passa-alto Atmos: disattivato (basso originale preservato prima della normalizzazione)"
+else
+  info "Passa-alto Atmos: 20 Hz su tutti i canali, LFE incluso"
+fi
 info "dynaudnorm:  $DYNAUDNORM"
 echo ""
 
 # Ciclo elaborazione
-OVERWRITE_ALL=false
 OK_COUNT=0
 ERR_COUNT=0
 SKIP_COUNT=0
@@ -610,7 +560,7 @@ for CUR_FILE in "${FILES[@]}"; do
   fi
 
   # Filter complex per traccia 5.1: mapping posizionale non distruttivo, poi
-  # dynaudnorm con coupling attivo. Nessun trattamento LFE: lo fa aegis.
+  # dynaudnorm con coupling attivo e passa-alto globale opzionale.
   FILTER_COMPLEX="[0:${A_IDX}]aformat=sample_rates=48000:sample_fmts=fltp,pan=5.1(side)|FL=c0|FR=c1|FC=c2|LFE=c3|SL=c4|SR=c5,${DYNAUDNORM}[aout]"
 
   # Il riferimento viene misurato prima dell'encode. Se la sorgente non e'
@@ -623,7 +573,6 @@ for CUR_FILE in "${FILES[@]}"; do
 
   OUT_CODEC="eac3"
   FINAL_AUDIO_TITLE="EAC3 5.1 Normalized"
-  KEEP_ORIGINAL="si"
   ORIGINAL_INDEX="$A_IDX"
   if [[ "$A_TYPE" == "atmos" ]]; then
     ORIGINAL_TITLE="EAC3 Atmos Original"
