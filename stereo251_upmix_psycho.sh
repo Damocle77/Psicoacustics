@@ -254,6 +254,7 @@ case "$MODE" in
     FC_LP="${FC_LP:-6500}"
     FC_EQ="${FC_EQ:-equalizer=f=260:t=q:w=1.15:g=-0.7,equalizer=f=650:t=q:w=1.0:g=-0.4,equalizer=f=1750:t=q:w=1.5:g=0.5,equalizer=f=2550:t=q:w=1.25:g=0.8,equalizer=f=3800:t=q:w=1.7:g=0.5,equalizer=f=6500:t=q:w=1.8:g=-0.6}"
 
+    # Il passa-alto a 20 Hz resta sul solo LFE sintetico (non sul bed originale).
     # LFE sintetico molto prudente: il sub riceve gia' bass management dal ricevitore.
     LFE_VOL="${LFE_VOL:-0.035}"
 

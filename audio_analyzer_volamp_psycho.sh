@@ -23,7 +23,7 @@ set -uo pipefail
 # │   Le misure RMS dei canali vengono raccolte in un solo passaggio FFmpeg.        │
 # │                                                                                 │
 # │   VERDETTO STAGIONALE:                                                          │
-# │   Verdetto: servono almeno 2/3 di consenso; parita'/spread > 4 dB -> MIXED.     │                │
+# │   Verdetto: servono almeno 2/3 di consenso; parita'/spread > 4 dB -> MIXED.     │
 # ╰─────────────────────────────────────────────────────────────────────────────────╯
 # Note:
 C_INFO="\033[0;36m[INFO]\033[0m"
@@ -238,7 +238,7 @@ LFE_HOT_DB=-6.0
 LFE_VERY_HOT_DB=-2.0
 LFE_BOOST_PEAK_CEILING_DB=-2.0
 LFE_BOOST_P95_CEILING_DB=-18.0
-LFE_ATMOS_COMPENSATION_DB=-1.0
+LFE_ATMOS_COMPENSATION_DB=-0.5
 # Taratura sperimentale: persistenza relativa al tempo LFE attivo.
 # I tagli richiedono 30 s; gli aumenti conservano i gate 10 s / 5%.
 LFE_CUT_MIN_ACTIVE_SECONDS=30.0
@@ -1205,7 +1205,7 @@ scan_delta() {
   IFS='|' read -r source_class source_evidence <<<"$source_probe"
   if [[ "$source_class" == "ATMOS" ]]; then
     echo -e "${C_ATMOS_FOUND} Atmos verificato nella traccia audio originale.\033[0m"
-    info "Compensazione sonora Atmos prevista nel processing: FC=+0.5 dB, LFE=-1.0 dB."
+    info "Compensazione sonora Atmos prevista nel processing: FC=+0.5 dB, LFE=${LFE_ATMOS_COMPENSATION_DB} dB."
   else
     echo -e "${C_ATMOS_UNKNOWN} Atmos non verificato nella traccia audio originale.\033[0m"
   fi

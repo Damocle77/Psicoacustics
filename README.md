@@ -13,6 +13,7 @@ Suite di script **Bash AWK + FFmpeg** per analizzare, normalizzare, correggere e
 - [Schema di riferimento](#schema-di-riferimento)
 - [Requisiti](#requisiti)
 - [Installazione](#installazione)
+- [Installazione Ambient](ambient/README.md#installazione)
 - [Script inclusi](#script-inclusi)
 - [Quick Start](#quick-start)
 - [1. Analyzer: analisi e classificazione 5.1](#1-audio_analyzer_volamp_psychosh)
@@ -63,6 +64,7 @@ Obiettivi principali:
 - **ffprobe**;
 - **Bash 4.x+**;
 - **awk** per analisi e controlli audio;
+- **jq 1.6+** per `ambient_analyzer.sh` e `ambient_render.sh` (non richiesto dagli script Psycho storici);
 - **mktemp** per i temporanei di analyzer, upmix, pre-processore Atmos e ASMR;
 - **GNU coreutils** per l’analyzer (`sha256sum`, `stat -c`, `realpath`, `mv -T`), oltre alle normali utility shell;
 - build FFmpeg con **libsoxr** per `stereo251_upmix...`;
@@ -77,6 +79,7 @@ Verifiche utili:
 ```bash
 ffmpeg -version
 ffprobe -version
+jq --version # necessario solo per il flusso Ambient
 ffmpeg -hide_banner -filters 2>/dev/null | grep -w bs2b
 ffmpeg -hide_banner -h filter=aresample 2>&1 | grep -i soxr
 ```
@@ -99,6 +102,21 @@ cd Sonary_Suite
 chmod +x *.sh
 ```
 
+Se si scarica lo ZIP, estrarlo completamente prima di eseguire gli script.
+Per Ambient **non basta copiare i due file `.sh`**: `ambient_analyzer.sh` e
+`ambient_render.sh` richiedono la cartella `ambient/` completa accanto a loro.
+Questa contiene `common.sh`, i filtri AWK/JQ e la sottocartella `profiles/`.
+Se si spostano gli script in `E:\Download`, copiare anche la cartella in
+`E:\Download\ambient`, senza appiattire le sottocartelle.
+
+I comandi di questa guida vanno eseguiti in Bash (su Windows: Git Bash, MSYS2
+o WSL). Per esempio, in Git Bash `cd /e/Download` apre `E:\Download`.
+Usare `bash nome_script.sh` oppure `./nome_script.sh`; racchiudere tra virgolette
+i percorsi dei file che contengono spazi.
+
+La [guida Ambient](ambient/README.md#installazione) mostra la struttura completa,
+le verifiche delle dipendenze e un esempio pronto per Git Bash.
+
 Controllo sintattico rapido:
 
 ```bash
@@ -118,6 +136,14 @@ done
 | `stereo251_upmix_psycho.sh` | Upmix stereo → 5.1 plausibile: matrice L-R, centro assist, LFE minimo, output atomico/verificato e preset `quad` dedicato alla musica |
 | `asmr_vr_intimate_psycho.sh` | Processing stereo per cuffie/ASMR/VR con BS2B, ITD opzionale, loudnorm post-DSP, LFO e output atomico/verificato |
 | `atmos_to_51_dynaudnorm_psicho.sh` | Prepara un MKV con EAC3 5.1 normalizzata come primaria e traccia Atmos/EAC3 originale copiata come secondaria |
+| `ambient_analyzer.sh` | Analizza una MKA Psycho 5.1 e genera metriche/score temporali in un JSON, senza effetti |
+| `ambient_render.sh` | Genera una MKA Immersive completa dal Psycho e dal JSON, con profilo manuale e strength |
+
+**Ambient è accantonato dopo le prove di ascolto:** nei test dell'utente,
+l'avvolgimento aggiunto ha penalizzato voce e precisione dei canali.
+Il workflow di riferimento usa l'uscita Psycho senza ulteriori passaggi Ambient.
+Script e [guida Ambient](ambient/README.md) restano conservati come esperimento;
+`jq` serve solo se si decide di rieseguirlo.
 
 > Nota naming: il file Atmos mantiene il nome storico `psicho`. Il README usa il nome reale del file.
 
@@ -262,10 +288,10 @@ Le soglie di delta sono strette (`>`); durata minima e percentuali includono il 
 LFE_CUT_MIN_ACTIVE_SECONDS=30.0
 LFE_HOT_MIN_PERSISTENCE=0.25
 LFE_VERY_HOT_MIN_PERSISTENCE=0.50
-LFE_ATMOS_COMPENSATION_DB=-1.0
+LFE_ATMOS_COMPENSATION_DB=-0.5
 ```
 
-Queste sono costanti nello script, non opzioni CLI. Per le sorgenti Atmos verificate, delta e persistenza usati per il taglio includono il **−1 dB LFE già previsto dal processore**. Per le altre sorgenti l'offset è zero. La cache conserva entrambe le coppie di persistenza, prima e dopo la compensazione. VOLAMP è comune a LFE e principali e si cancella nel rapporto.
+Queste sono costanti nello script, non opzioni CLI. Per le sorgenti Atmos verificate, delta e persistenza usati per il taglio includono il **−0,5 dB LFE già previsto dal processore**. Per le altre sorgenti l'offset è zero. La cache conserva entrambe le coppie di persistenza, prima e dopo la compensazione. VOLAMP è comune a LFE e principali e si cancella nel rapporto.
 
 La classe può quindi restare `VERY_HOT` mentre il gain è −1 o 0 dB. Il report mostra delta originale, delta dopo compensazione, offset Atmos, persistenza come frazione (`0.43` = 43%), attività, classe, gain e motivo. Il successivo coordinamento con Bass trim può ridurre ulteriormente il taglio LFE.
 
@@ -467,7 +493,7 @@ Motore principale per tracce **5.1 esistenti**.
 - air/decorrelation layer controllato;
 - Bass trim opzionale: low-shelf a 100 Hz sui sei canali prima dei limiter, da −3 a 0 dB;
 - trattamento LFE: volamp, correzione statica `--lfe-gain` ed eventuale compensazione Atmos prima del limiter dedicato; filtraggio dedicato affidato all’hardware;
-- compensazione del bed **FC +0,5 dB / LFE −1,0 dB**, con profilo EAC3 Atmos o marker originale, per tutti e cinque i preset;
+- compensazione del bed **FC +0,5 dB / LFE −0,5 dB**, con profilo EAC3 Atmos o marker originale, per tutti e cinque i preset;
 - diffusori mantenuti `Small`, con bass management e crossover a circa `110 Hz` affidati all'AVR; lo script applica ai canali principali solo un high-pass di sicurezza a `40 Hz`;
 - `FRONT_EQ` leggermente adattato alle torri senza widening o alterazioni della scena frontale;
 - volamp manuale `0–6.0 dB`, default **3.0 dB**;
@@ -513,7 +539,7 @@ Il batch non registra una scelta HEIGHT_MODE per file: eredita la variabile di a
 ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files eac3 no 768k sonar 3.0 --lfe-gain -0.5 -- "ep 1.mkv" "ep 2.mkv"
 ```
 
-Ordine: **LFE → eventuale Bass shelf → VOLAMP → LFE gain → compensazione Atmos → limiter LFE → join → limiter master**. Per esempio, `+4.0 -1.5 -1.0 = +1.5 dB` nominali prima del limiter. Il guadagno effettivo nei picchi può essere inferiore; l’eventuale Bass shelf introduce inoltre un’attenuazione dipendente dalla frequenza. Nei log le tre componenti e la loro somma sono separate. I vecchi comandi senza opzione mantengono gain LFE zero.
+Ordine: **LFE → eventuale Bass shelf → VOLAMP → LFE gain → compensazione Atmos → limiter LFE → join → limiter master**. Per esempio, `+4.0 -1.5 -0.5 = +2.0 dB` nominali prima del limiter. Il guadagno effettivo nei picchi può essere inferiore; l’eventuale Bass shelf introduce inoltre un’attenuazione dipendente dalla frequenza. Nei log le tre componenti e la loro somma sono separate. I vecchi comandi senza opzione mantengono gain LFE zero.
 
 ## Sintassi
 
@@ -545,7 +571,7 @@ split 5.1
 → eventuale Bass shelf sui sei canali
 → volamp individuale FL/FR/FC/SL/SR
 → FC: eventuale offset Atmos +0,5 dB → limiter dedicato
-→ LFE: volamp → --lfe-gain → eventuale offset Atmos −1,0 dB → limiter dedicato
+→ LFE: volamp → --lfe-gain → eventuale offset Atmos −0,5 dB → limiter dedicato
 → join 5.1(side)
 → high-shelf finale sui canali non-LFE
 → master limiter 5.1
@@ -571,7 +597,7 @@ LFE:
   eventuale Bass shelf
   volamp
   correzione --lfe-gain
-  volume −1,0 dB con profilo EAC3 Atmos o marker originale
+  volume −0,5 dB con profilo EAC3 Atmos o marker originale
   alimiter limit=0.94, attack=2 ms, release=120 ms, level=0, latency=1
 
 Master:
@@ -586,7 +612,7 @@ I limiter FC, LFE e master usano tutti `level=0`: non aggiungono auto-level al v
 
 La taratura richiesta nasce dal design del preset **Atmos Original** usato in questo workflow, che prevede una maggiore presenza del canale LFE. La compensazione riduce leggermente il LFE e sostiene il centrale nel bed elaborato, per riequilibrare il rapporto tra basso e dialoghi. Il workflow estende questa taratura alle sorgenti verificate tramite profilo EAC3 Atmos. Resta una scelta di taratura del progetto, non una proprietà generale attribuita al formato Dolby Atmos.
 
-Il processore aggiunge **+0,5 dB al FC** e **−1,0 dB al LFE**, dopo il volamp e prima dei rispettivi limiter, quando una traccia EAC3 del contenitore espone un profilo FFprobe contenente «Atmos», oppure, come fallback, una traccia audio porta uno dei marker affidabili. Il confronto usa il titolo completo, senza distinzione tra maiuscole e minuscole, e gestisce i terminatori CRLF di FFprobe su Windows.
+Il processore aggiunge **+0,5 dB al FC** e **−0,5 dB al LFE**, dopo il volamp e prima dei rispettivi limiter, quando una traccia EAC3 del contenitore espone un profilo FFprobe contenente «Atmos», oppure, come fallback, una traccia audio porta uno dei marker affidabili. Il confronto usa il titolo completo, senza distinzione tra maiuscole e minuscole, e gestisce i terminatori CRLF di FFprobe su Windows.
 
 | Prova rilevata sulle tracce audio dell'input | Compensazione |
 |---|---|
@@ -602,12 +628,12 @@ Valori configurabili in testa a `aegis_sonar_wide_aura_voice_volamp_psycho.sh`:
 
 ```bash
 ATMOS_FC_GAIN_DB="0.5"
-ATMOS_LFE_GAIN_DB="-1.0"
+ATMOS_LFE_GAIN_DB="-0.5"
 ```
 
-Per usare +0,5 dB sul centrale, modificare `ATMOS_FC_GAIN_DB` nello script. Questi parametri non sono argomenti CLI né override da variabili d'ambiente.
+Il centrale è già impostato a +0,5 dB. Per cambiare la taratura, modificare `ATMOS_FC_GAIN_DB` e `ATMOS_LFE_GAIN_DB` nel processore e mantenere `LFE_ATMOS_COMPENSATION_DB` in analyzer allineato al valore LFE. Questi parametri non sono argomenti CLI né override da variabili d'ambiente.
 
-Gli offset si sommano al volamp anche quando `volamp=0`. Per esempio, con `volamp=3.0`, `--lfe-gain 0` e `--bass-trim 0`, gli stadi di volume finale valgono complessivamente **+3,5 dB sul FC** e **+2,0 dB sul LFE**; EQ, gain del preset e intervento dei limiter concorrono al livello audio effettivo.
+Gli offset si sommano al volamp anche quando `volamp=0`. Per esempio, con `volamp=3.0`, `--lfe-gain 0` e `--bass-trim 0`, gli stadi di volume finale valgono complessivamente **+3,5 dB sul FC** e **+2,5 dB sul LFE**; EQ, gain del preset e intervento dei limiter concorrono al livello audio effettivo.
 
 Il controllo viene ripetuto per ogni file: nessuna prova Atmos disponibile (profilo o marker) lascia entrambi gli offset disattivati, senza ereditare lo stato del file precedente. Il log riporta l'attivazione con i valori applicati oppure la disattivazione.
 
@@ -1085,7 +1111,7 @@ Interpretazione:
 - `coupling=1`: stesso fattore di gain sui canali, preservando il bilanciamento surround;
 - `altboundary=0`: modalità boundary standard.
 
-Il preparatore non applica gli offset FC/LFE né un trattamento specifico al solo LFE: dynaudnorm coinvolge tutti i canali, mentre il passa-alto generale a `20 Hz` viene applicato solo se richiesto. Il successivo processore applica volamp e limiter al canale `.1`, oltre a FC +0,5 dB e LFE −1,0 dB quando trova il profilo EAC3 Atmos o il marker originale. Il filtraggio dedicato dell’LFE è affidato all’hardware.
+Il preparatore non applica gli offset FC/LFE né un trattamento specifico al solo LFE: dynaudnorm coinvolge tutti i canali, mentre il passa-alto generale a `20 Hz` viene applicato solo se richiesto. Il successivo processore applica volamp e limiter al canale `.1`, oltre a FC +0,5 dB e LFE −0,5 dB quando trova il profilo EAC3 Atmos o il marker originale. Il filtraggio dedicato dell’LFE è affidato all’hardware.
 
 ## Passa-alto: comportamento allineato della suite
 
@@ -1187,7 +1213,7 @@ Atmos/JOC
    - Atmos originale secondaria con titolo EAC3 Atmos Original
 → analyzer sul contenitore completo
 → processing psicoacustico opzionale con il preset scelto
-   - marker presente: FC +0,5 dB / LFE −1,0 dB prima dei limiter
+   - marker presente: FC +0,5 dB / LFE −0,5 dB prima dei limiter
 ```
 
 Il file dual-track resta il riferimento per la riproduzione Atmos non alterata. Il file psicoacustico è un'alternativa separata.

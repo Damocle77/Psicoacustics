@@ -51,7 +51,7 @@ MASTER_LIMITER_OPTS="limit=0.94:attack=2.5:release=50:level=0:latency=1"
 ATMOS_ORIGINAL_TITLE="EAC3 Atmos Original"
 ATMOS_ORIGINAL_TITLE_LEGACY="EAC3 Atmos (Original)"
 ATMOS_FC_GAIN_DB="0.5"
-ATMOS_LFE_GAIN_DB="-1.0"
+ATMOS_LFE_GAIN_DB="-0.5"
 
 # Regola soltanto i rami SLh/SRh di SONAR e AEGIS, non il volume surround totale.
 # Default aumentato del 15% sul solo ramo verticale; normal ripristina il livello precedente.
