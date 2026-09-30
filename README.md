@@ -6,16 +6,15 @@
 
 Suite di script **Bash AWK + FFmpeg** per analizzare, normalizzare, correggere e trasformare tracce audio stereo, 5.1 ed EAC3 Atmos/JOC in modo offline, ripetibile e controllato.
 
-> Non tutti i supereroi indossano un mantello. Alcuni lanciano `ffmpeg` e salvano i dialoghi dal multiverso del mix confuso.
+> Non tutti i supereroi indossano un mantello. Alcuni lanciano `ffmpeg` e salvano i dialoghi dal multiverso del mix sbagliato.
 
 ## Indice degli argomenti
 
 - [Schema di riferimento](#schema-di-riferimento)
 - [Requisiti](#requisiti)
 - [Installazione](#installazione)
-- [Installazione Ambient](ambient/README.md#installazione)
 - [Script inclusi](#script-inclusi)
-- [Quick Start](#quick-start)
+- [Quick Start](#quick-start-comandi-manuali)
 - [1. Analyzer: analisi e classificazione 5.1](#1-audio_analyzer_volamp_psychosh)
 - [2. Aegis / Sonar / Wide / Aura / Voice: processing 5.1](#2-aegis_sonar_wide_aura_voice_volamp_psychosh)
 - [3. Upmix stereo → 5.1](#3-stereo251_upmix_psychosh)
@@ -64,8 +63,7 @@ Obiettivi principali:
 - **ffprobe**;
 - **Bash 4.x+**;
 - **awk** per analisi e controlli audio;
-- **jq 1.6+** per `ambient_analyzer.sh` e `ambient_render.sh` (non richiesto dagli script Psycho storici);
-- **mktemp** per i temporanei di analyzer, upmix, pre-processore Atmos e ASMR;
+- **mktemp** per i temporanei di tutti e cinque gli script;
 - **GNU coreutils** per l’analyzer (`sha256sum`, `stat -c`, `realpath`, `mv -T`), oltre alle normali utility shell;
 - build FFmpeg con **libsoxr** per `stereo251_upmix...`;
 - build FFmpeg con **libbs2b** per `asmr_vr_intimate...`.
@@ -79,7 +77,6 @@ Verifiche utili:
 ```bash
 ffmpeg -version
 ffprobe -version
-jq --version # necessario solo per il flusso Ambient
 ffmpeg -hide_banner -filters 2>/dev/null | grep -w bs2b
 ffmpeg -hide_banner -h filter=aresample 2>&1 | grep -i soxr
 ```
@@ -103,19 +100,12 @@ chmod +x *.sh
 ```
 
 Se si scarica lo ZIP, estrarlo completamente prima di eseguire gli script.
-Per Ambient **non basta copiare i due file `.sh`**: `ambient_analyzer.sh` e
-`ambient_render.sh` richiedono la cartella `ambient/` completa accanto a loro.
-Questa contiene `common.sh`, i filtri AWK/JQ e la sottocartella `profiles/`.
-Se si spostano gli script in `E:\Download`, copiare anche la cartella in
-`E:\Download\ambient`, senza appiattire le sottocartelle.
+La versione di lavoro è costituita dai cinque script `.sh` e dal README nella cartella principale. Gli archivi `.rar` rimasti sono copie precedenti: non vengono aggiornati insieme ai file attivi e non vanno estratti sopra questi ultimi senza un confronto.
 
 I comandi di questa guida vanno eseguiti in Bash (su Windows: Git Bash, MSYS2
 o WSL). Per esempio, in Git Bash `cd /e/Download` apre `E:\Download`.
 Usare `bash nome_script.sh` oppure `./nome_script.sh`; racchiudere tra virgolette
 i percorsi dei file che contengono spazi.
-
-La [guida Ambient](ambient/README.md#installazione) mostra la struttura completa,
-le verifiche delle dipendenze e un esempio pronto per Git Bash.
 
 Controllo sintattico rapido:
 
@@ -136,14 +126,6 @@ done
 | `stereo251_upmix_psycho.sh` | Upmix stereo → 5.1 plausibile: matrice L-R, centro assist, LFE minimo, output atomico/verificato e preset `quad` dedicato alla musica |
 | `asmr_vr_intimate_psycho.sh` | Processing stereo per cuffie/ASMR/VR con BS2B, ITD opzionale, loudnorm post-DSP, LFO e output atomico/verificato |
 | `atmos_to_51_dynaudnorm_psicho.sh` | Prepara un MKV con EAC3 5.1 normalizzata come primaria e traccia Atmos/EAC3 originale copiata come secondaria |
-| `ambient_analyzer.sh` | Analizza una MKA Psycho 5.1 e genera metriche/score temporali in un JSON, senza effetti |
-| `ambient_render.sh` | Genera una MKA Immersive completa dal Psycho e dal JSON, con profilo manuale e strength |
-
-**Ambient è accantonato dopo le prove di ascolto:** nei test dell'utente,
-l'avvolgimento aggiunto ha penalizzato voce e precisione dei canali.
-Il workflow di riferimento usa l'uscita Psycho senza ulteriori passaggi Ambient.
-Script e [guida Ambient](ambient/README.md) restano conservati come esperimento;
-`jq` serve solo se si decide di rieseguirlo.
 
 > Nota naming: il file Atmos mantiene il nome storico `psicho`. Il README usa il nome reale del file.
 
@@ -501,9 +483,25 @@ Motore principale per tracce **5.1 esistenti**.
 - video, sottotitoli, capitoli e allegati copiati;
 - keep opzionale della traccia 5.1 selezionata;
 - DSP, codifica audio e mux in un unico processo FFmpeg, verso un MKV temporaneo;
-- nessuna verifica comparativa input/output, scansione True Peak post-codec o retry;
-- pubblicazione del file finale soltanto se encode/mux termina con successo;
+- verifica comparativa integrale sorgente/output: sample peak, RMS globale, numero di campioni e RMS per canale;
+- controllo della traccia primaria: codec richiesto, 6 canali, `5.1(side)`, 48 kHz e flag default;
+- pubblicazione del file finale soltanto dopo encode/mux e verifiche riusciti;
+- nessuna misura True Peak post-codec o retry;
 - contatori finali ed exit code non zero se almeno un file fallisce.
+
+## Definizione del surround diretto
+
+AEGIS, SONAR, WIDE e AURA applicano una lieve EQ parametrica ai soli rami diretti `SLd` e `SRd`, dopo il passa-alto a 40 Hz e prima del volume:
+
+```text
+equalizer=f=3200:t=q:w=1.2:g=0.3
+```
+
+Il boost di **+0,3 dB a 3200 Hz, Q 1,2** mira a rifinire la leggibilità degli effetti posteriori. È una rifinitura timbrica: la verticalità continua a dipendere dai rami HEIGHT esistenti e la larghezza dai delay, dagli allpass e dai rami decorrelati dei preset.
+
+Restano invariati i delay diretti (**0 ms** in AEGIS/SONAR, **1 ms** in WIDE/AURA), tutti i valori di volume e i rami di presenza, HEIGHT, riflessione tardiva, decorrelazione e ambienza. La decorrelazione finale mantiene la catena e i parametri esistenti. Nessuna modifica a FL/FR, FC, LFE, limiter, VOLAMP, gestione Atmos o controlli di pubblicazione.
+
+**VOICE è escluso**: i suoi surround mantengono soltanto `highpass=f=40:t=q:w=0.707,volume=0.88` nel blocco del preset.
 
 ## Contributo verticale SONAR / AEGIS
 
@@ -566,7 +564,8 @@ Compatibilità: resta accettato il vecchio ordine `<codec> <keep> <file|""> [bit
 ## Catena finale
 
 ```text
-split 5.1
+misura integrale della traccia sorgente (riferimento QC)
+→ split 5.1
 → EQ frontali / EQ centrale / processing surround (HEIGHT_MODE su SONAR/AEGIS)
 → eventuale Bass shelf sui sei canali
 → volamp individuale FL/FR/FC/SL/SR
@@ -578,7 +577,11 @@ split 5.1
 → formato finale 48 kHz / fltp
 → encoding AC3/EAC3 e mux nello stesso processo FFmpeg
 → MKV temporaneo
-→ pubblicazione MKV se FFmpeg termina con successo
+→ decodifica integrale della prima traccia audio del candidato
+→ sample peak / RMS globale / numero campioni / RMS FL FR FC LFE SL SR
+→ confronto con il riferimento sorgente
+→ verifica codec / 6 canali / 5.1(side) / 48 kHz / default
+→ pubblicazione MKV solo dopo il superamento di tutti i controlli
 ```
 
 Parametri principali:
@@ -652,11 +655,28 @@ Il file prodotto resta **5.1 con un solo canale LFE**. Un eventuale impianto **5
 
 ## Codifica e pubblicazione
 
-Il processore applica il DSP, codifica AC3/EAC3 e copia gli altri stream direttamente nel contenitore temporaneo `<nome_output>.partial.<pid>.<random>.mkv`, con un unico processo FFmpeg. Vengono copiati il primo stream video non allegato, sottotitoli, allegati, metadati e capitoli, oltre alla traccia originale selezionata se `keep=si`.
+Prima del DSP il processore decodifica integralmente la traccia sorgente selezionata e ne misura sample peak, RMS globale, numero di campioni e RMS dei sei canali con `astats`, a 48 kHz. Il riferimento serve alla successiva verifica comparativa post-codec.
 
-Il file temporaneo viene rinominato con il nome finale soltanto se FFmpeg termina con successo. In caso di errore di encode/mux o pubblicazione, il file finale non viene sostituito e il temporaneo disponibile resta per il debug.
+Il DSP, la codifica AC3/EAC3 e il mux avvengono in un unico processo FFmpeg, verso `mux.mkv` nella directory univoca `.<nome_output>.partial.<casuale>/`, riservata con `mktemp` accanto all'output. Vengono copiati il primo stream video non allegato, sottotitoli, allegati, metadati e capitoli, oltre alla traccia originale selezionata se `keep=si`.
 
-Questa versione **non esegue un confronto audio input/output né una misura True Peak post-codec**. Non usa `VERIFY_SCAN_SECONDS`, candidati separati `.mka`, retry o trim automatici. I limiter FC, LFE e master restano attivi; il loro limite non certifica il picco ricostruito dopo la codifica. Il comando imposta `-xerror`: gli errori rilevati da FFmpeg interrompono encode/mux e impediscono la pubblicazione.
+Dopo l'encode, la prima traccia audio del candidato viene decodificata **per intero** e misurata con gli stessi criteri. Il confronto con la sorgente applica questi limiti conservativi di integrità:
+
+| Controllo | Soglia |
+|---|---:|
+| Sample peak output quasi muto | rifiuto se `<= -80 dBFS` |
+| Scostamento massimo del numero di campioni | maggiore fra `2%` della sorgente e `4800` campioni (`100 ms` a 48 kHz) |
+| Perdita massima RMS globale | `18 dB` |
+| Canale sorgente considerato attivo | RMS `> -65 dBFS` |
+| Perdita massima RMS FL/FR/FC/SL/SR attivi | `24 dB` |
+| Perdita massima RMS LFE attivo | `36 dB` |
+
+Output digitalmente silenzioso, canali attivi diventati silenziosi, errori di decodifica, metriche incomplete/non valide e conteggi non positivi bloccano la pubblicazione. Un canale già inattivo nella sorgente non impone un livello minimo all'output. La tolleranza minima sui campioni copre padding AC3/EAC3 e code dei delay nei clip brevi.
+
+Segue il controllo strutturale della prima traccia: **codec richiesto (`ac3` o `eac3`), 6 canali, `5.1(side)`, 48 kHz e flag default**. Il probe usa fino a 20 MB / 20 secondi di analisi iniziale; non aggiunge un'altra scansione integrale.
+
+Il candidato viene rinominato con il nome finale soltanto dopo encode/mux e tutti i controlli riusciti. In caso di errore o verifica non conclusiva, il file finale non viene sostituito e i temporanei disponibili restano per il debug: `mux.mkv`, `filter_complex.txt`, `input-astats.log` e `output-astats.log`. Dopo la pubblicazione i temporanei vengono rimossi. Anche le interruzioni conservano i temporanei; `INT` e `TERM` terminano con codice `130` e `143`.
+
+Il QC aggiunge due decodifiche integrali, una della sorgente e una del candidato. **Il True Peak post-codec non viene misurato**: `astats` misura il sample peak. Non vengono usati `VERIFY_SCAN_SECONDS`, candidati separati `.mka`, retry o trim automatici. I limiter FC, LFE e master restano attivi; il loro limite non certifica il picco ricostruito dopo la codifica. Encode/mux e decodifiche di misura usano `-xerror`: gli errori rilevati da FFmpeg impediscono la pubblicazione.
 
 ## Decorrelazione
 
@@ -847,6 +867,12 @@ La lingua viene propagata sia alla traccia processata sia, quando `keep=si`, all
 # Default: EAC3, 448k, TO51
 ./stereo251_upmix_psycho.sh eac3 no
 ```
+
+## Limiti della matrice e downmix stereo
+
+Il preset `to51` usa una matrice fissa: il centrale deriva da `L+R`, i surround soprattutto da `L-R` e `R-L`. Non riconosce i dialoghi e non isola soltanto il contenuto comune ai due canali. Un suono presente solo a sinistra contribuisce quindi anche al centrale e a entrambi i surround. In dual-mono la componente laterale si annulla, ma resta il piccolo rear bed; con `L=-R` si annullano centrale e LFE sintetici, mentre i surround restano attivi.
+
+La somma successiva in stereo dei canali filtrati e ritardati può modificare timbro e bilanciamento rispetto alla sorgente. Per ascolto stereo conservare la traccia originale con `keep=si`. Valutare eventuali modifiche a centrale, rear bed e ritardi con confronti a volume pareggiato sia in 5.1 sia in downmix: aumentare indiscriminatamente i surround non risolve i limiti della matrice.
 
 ## Tuning tramite ambiente
 
@@ -1152,7 +1178,7 @@ L'encoder EAC3 viene verificato prima di elaborare i file. Il confronto fra bed 
 
 Un canale attivo diventato silenzioso viene rifiutato. Errori di decodifica, metriche incomplete e conteggi non positivi bloccano la pubblicazione.
 
-La catena di encoding e mux riprende la versione `atmos_to_51_dynaudnorm_psicho_settembre.sh`: un solo processo FFmpeg legge la sorgente, applica `aformat`, mapping posizionale e dynaudnorm, quindi scrive direttamente il candidato MKV con video, sottotitoli, allegati, audio normalizzato e audio originale. Non viene creato un MKA intermedio e non vengono forzati `copyts` o `avoid_negative_ts`.
+La catena di encoding e mux usa un solo processo FFmpeg legge la sorgente, applica `aformat`, mapping posizionale e dynaudnorm, quindi scrive direttamente il candidato MKV con video, sottotitoli, allegati, audio normalizzato e audio originale. Non viene creato un MKA intermedio e non vengono forzati `copyts` o `avoid_negative_ts`.
 
 Il controllo True Peak post-codec e il relativo retry con trim sono stati rimossi per ridurre i tempi di elaborazione. Resta il confronto integrale fra sorgente e prima traccia del candidato MKV contro audio muto, canali persi, attenuazioni eccessive e durata incoerente. Il True Peak dopo la codifica non viene verificato.
 
@@ -1246,7 +1272,7 @@ Stereo
 | `stereo251_upmix_psycho.sh` | Medio/Alto | upmix, SOXR, controlli integrali e possibile retry audio; mux unico |
 | `asmr_vr_intimate_psycho.sh` | Medio/Alto | loudnorm, BS2B, controlli integrali e possibile retry audio; mux unico |
 | `atmos_to_51_dynaudnorm_psicho.sh` | Medio/Alto | dynaudnorm, confronto per-canale integrale; mux unico |
-| `aegis_sonar_wide_aura_voice_volamp_psycho.sh` | Alto | DSP 5.1, codifica audio e mux completo in un unico processo; nessuna scansione QC successiva |
+| `aegis_sonar_wide_aura_voice_volamp_psycho.sh` | Alto | DSP 5.1, codifica audio e mux completo in un unico processo; due decodifiche integrali per il QC comparativo sorgente/output, più controllo codec/layout |
 
 Il costo effettivo dipende da durata, codec sorgente, CPU, storage e build FFmpeg.
 

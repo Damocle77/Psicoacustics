@@ -63,7 +63,6 @@ PRESET:
     - FC assist, filtrato e controllato.
     - Surround principalmente da side-matrix L-R + rear-bed mono molto attenuato.
     - Migliore per film/serie/anime stereo larghi o action.
-
   quad:
     - FL -> SL e FR -> SR con delay Haas, banda limitata e volume prudente.
     - FC e LFE molto leggeri.

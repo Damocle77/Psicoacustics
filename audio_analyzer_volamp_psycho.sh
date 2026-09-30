@@ -68,7 +68,7 @@ usage() {
 -----------------------------------------------------------------------------------------------
 UTILIZZO:
   ./audio_analyzer_volamp_psycho.sh <codec> <keep> <bitrate> <run> <file|directory|"">
-  ./audio_analyzer_volamp_psycho.sh --files <codec> <keep> <bitrate> <run> <file1> [file2 ...]
+  ./audio_analyzer_volamp_psycho.sh --files <codec> <keep> <bitrate> <run> <file1> [file2...]
 
 MODALITA' INPUT:
   file      : Analizza un singolo file multimediale.
@@ -218,7 +218,7 @@ fi
 
 # Make-up gain minimo del processore.
 # Non rappresenta una sorgente "bassa": compensa la perdita percepita introdotta
-# da split/EQ/compressori/limiter della pipeline psicoacustica.
+# da split/EQ/limiter della pipeline psicoacustica.
 VOLAMP_BASE="3.0"
 VOLAMP_MAX="4.5"
 

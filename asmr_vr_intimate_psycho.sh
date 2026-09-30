@@ -63,6 +63,7 @@ VERIFY_MIN_SAMPLE_RATIO="0.98"
 
 show_help() {
   cat <<'EOF'
+-----------------------------------------------------------------------------
 UTILIZZO:
   ./asmr_vr_intimate_psycho.sh [opzioni] <file1> [file2 ...]
 
@@ -90,6 +91,7 @@ NOTE:
   Codec/bitrate configurabili: default AAC 320k per massima fedelta'.
   La selezione stream e' score-based (allineata a aegis/analyzer/upmix):
   priorita' a tracce stereo (2ch), lingua italiana, poi flag default.
+-----------------------------------------------------------------------------
 EOF
   exit 0
 }
@@ -389,7 +391,7 @@ verify_output_audio_signal() {
   return 0
 }
 
-# True Peak post-codec: ceiling del preset, retry limitato come nel processore 5.1.
+# True Peak post-codec: ceiling del preset e un solo retry con trim limitato.
 # Il valore whisper iniziale viene aggiornato dalla selezione preset.
 VERIFY_MAX_TRUE_PEAK_DB="-2.0"
 TRUE_PEAK_RETRY_MARGIN_DB="0.2"

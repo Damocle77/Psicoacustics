@@ -76,7 +76,7 @@ usage() {
 ----------------------------------------------------------------------------------------
 UTILIZZO:
   ./atmos_to_51_dynaudnorm_psicho.sh [--force] [bitrate] <file|directory|"">
-  ./atmos_to_51_dynaudnorm_psicho.sh [--force] --files <bitrate> <file1> [file2 ...]
+  ./atmos_to_51_dynaudnorm_psicho.sh [--force] --files <bitrate> <file1> [file2...]
 
 PARAMETRI:
   --force        : Primo argomento; sovrascrive senza domande (anche in batch).

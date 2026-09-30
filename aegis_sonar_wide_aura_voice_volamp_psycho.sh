@@ -53,6 +53,19 @@ ATMOS_ORIGINAL_TITLE_LEGACY="EAC3 Atmos (Original)"
 ATMOS_FC_GAIN_DB="0.5"
 ATMOS_LFE_GAIN_DB="-0.5"
 
+# Guard rail della verifica comparativa tra sorgente e traccia DSP post-codec.
+# Soglie di integrita' conservative, non obiettivi di loudness: tollerano EQ,
+# bass trim e limiter. Un canale sorgente inattivo non impone un livello minimo all'output.
+VERIFY_SILENCE_PEAK_DB="-80.0"
+VERIFY_MAX_SAMPLE_DELTA_RATIO="0.02"
+VERIFY_ACTIVE_INPUT_RMS_DB="-65.0"
+VERIFY_MAX_OVERALL_DROP_DB="18.0"
+VERIFY_MAX_MAIN_CHANNEL_DROP_DB="24.0"
+VERIFY_MAX_LFE_DROP_DB="36.0"
+
+# Tolleranza minima di 100 ms per padding AC3/EAC3 e code dei delay sui clip brevi.
+VERIFY_MIN_SAMPLE_DELTA="4800"
+
 # Regola soltanto i rami SLh/SRh di SONAR e AEGIS, non il volume surround totale.
 # Default aumentato del 15% sul solo ramo verticale; normal ripristina il livello precedente.
 # Valori sperimentali, non altezza misurata.
@@ -76,8 +89,8 @@ usage() {
   cat <<'USAGE'
 -----------------------------------------------------------------------------------------------------------------------
 UTILIZZO:
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh <codec> <keep> <bitrate> <preset> <volamp> <file|"">
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files <codec> <keep> <bitrate> <preset> <volamp> <file1> [file2 ...]
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh <codec> <keep> <bitrate> <preset> <volamp> [--lfe-gain <dB>] [--bass-trim <dB>] <file|"">
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files <codec> <keep> <bitrate> <preset> <volamp> <file1> [file2...]
 
 PARAMETRI:
   codec     : ac3 oppure eac3.
@@ -89,6 +102,10 @@ PARAMETRI:
               Valori consentiti: 0 .. 6.0.
               0 = OFF, default = 3.0 dB.
               Esempi pratici: 0 | 3.0 | 4.0 | 5.0 | 6.0
+  --lfe-gain  : Correzione statica LFE da -2.0 a +2.0 dB (default: 0.0).
+                Separata dalla compensazione Atmos automatica di -0.5 dB.
+  --bass-trim : Low-shelf a 100 Hz sui sei canali, da -3.0 a 0.0 dB (default: 0.0).
+  --          : Termina le opzioni; protegge i nomi file che iniziano con --.
               
 MODALITA' --files:  Processa soltanto i file elencati. 
 ESEMPIO:
@@ -499,16 +516,18 @@ EOF
 # BLOCCHI SURROUND
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
+# Presenza +0.3 dB a 3.2 kHz (Q=1.2) solo sui rami diretti SLd/SRd dei quattro preset.
+# VOICE conserva HPF e volume originali.
 # SONAR: cupola sonora con boost verticale, più presenza medio-alta per SL/SR, e un layer di decorrelazione a basso livello per aria.
 read -r -d '' SUR_FILTERS_SONAR <<'EOF' || true
 [SL]asplit=4[SLd_in][SLp_in][SLh_in][SLlate_in];
-[SLd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SLd];
+[SLd_in]adelay=0,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.3,volume=0.95[SLd];
 [SLp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=2.0,equalizer=f=11000:t=q:w=1.0:g=-1.2,volume=1.00[SLp];
 [SLh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=900:t=q:w=0.70,allpass=f=2200:t=q:w=0.70,equalizer=f=8000:t=q:w=2.5:g=0.8,equalizer=f=11000:t=q:w=1.2:g=1.0,__HEIGHT_GAIN_FILTER__volume=0.60[SLh];
 [SLlate_in]adelay=38,highpass=f=150,lowpass=f=1500,volume=0.58[SLlate];
 [SLd][SLp][SLh][SLlate]amix=inputs=4:weights='1 0.6 0.4 0.2':normalize=0,volume=1.05[SL_out];
 [SR]asplit=4[SRd_in][SRp_in][SRh_in][SRlate_in];
-[SRd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SRd];
+[SRd_in]adelay=0,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.3,volume=0.95[SRd];
 [SRp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=2.0,equalizer=f=11000:t=q:w=1.0:g=-1.2,volume=1.00[SRp];
 [SRh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=1050:t=q:w=0.70,allpass=f=2400:t=q:w=0.70,equalizer=f=8000:t=q:w=2.5:g=0.8,equalizer=f=11000:t=q:w=1.2:g=1.0,__HEIGHT_GAIN_FILTER__volume=0.60[SRh];
 [SRlate_in]adelay=41,highpass=f=150,lowpass=f=1500,volume=0.58[SRlate];
@@ -518,13 +537,13 @@ EOF
 # AEGIS: cupola sonora con boost più bilanciato e meno artificiale, più presenza medio-alta per SL/SR, e un layer di decorrelazione a basso livello per aria.
 read -r -d '' SUR_FILTERS_AEGIS <<'EOF' || true
 [SL]asplit=4[SLd_in][SLp_in][SLh_in][SLlate_in];
-[SLd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SLd];
+[SLd_in]adelay=0,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.3,volume=0.95[SLd];
 [SLp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=1.6,equalizer=f=11000:t=q:w=1.0:g=-1.4,volume=0.95[SLp];
 [SLh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=900:t=q:w=0.70,allpass=f=2200:t=q:w=0.70,equalizer=f=8000:t=q:w=3.0:g=-4.0,equalizer=f=11000:t=q:w=1.2:g=0.6,__HEIGHT_GAIN_FILTER__volume=0.48[SLh];
 [SLlate_in]adelay=39,highpass=f=150,lowpass=f=1300,volume=0.42[SLlate];
 [SLd][SLp][SLh][SLlate]amix=inputs=4:weights='1.05 0.80 0.70 0.45':normalize=0,volume=0.95[SL_out];
 [SR]asplit=4[SRd_in][SRp_in][SRh_in][SRlate_in];
-[SRd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SRd];
+[SRd_in]adelay=0,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.3,volume=0.95[SRd];
 [SRp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=1.6,equalizer=f=11000:t=q:w=1.0:g=-1.4,volume=0.95[SRp];
 [SRh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=1050:t=q:w=0.70,allpass=f=2400:t=q:w=0.70,equalizer=f=8000:t=q:w=3.0:g=-4.0,equalizer=f=11000:t=q:w=1.2:g=0.6,__HEIGHT_GAIN_FILTER__volume=0.48[SRh];
 [SRlate_in]adelay=42,highpass=f=150,lowpass=f=1300,volume=0.42[SRlate];
@@ -534,12 +553,12 @@ EOF
 # WIDE: allargamento laterale più marcato, con boost più evidente sulle sub-bande filtrate, e un layer di decorrelazione a basso livello per aria.
 read -r -d '' SUR_FILTERS_WIDE <<'EOF' || true
 [SL]asplit=3[SLd_in][SLe_in][SLx_in];
-[SLd_in]adelay=1,highpass=f=40:t=q:w=0.707,volume=1.00[SLd];
+[SLd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.3,volume=1.00[SLd];
 [SLe_in]adelay=9,highpass=f=280,lowpass=f=7000,allpass=f=1200:t=q:w=0.65,volume=0.42[SLe];
 [SLx_in]adelay=22,highpass=f=600,lowpass=f=5000,allpass=f=700:t=q:w=0.70,allpass=f=2600:t=q:w=0.70,volume=0.17[SLx];
 [SLd][SLe][SLx]amix=inputs=3:weights='1.00 0.90 0.80':normalize=0,lowshelf=f=250:g=0.5:t=q:w=0.7,highshelf=f=3500:g=0.1:t=q:w=0.8,volume=1.00[SL_out];
 [SR]asplit=3[SRd_in][SRe_in][SRx_in];
-[SRd_in]adelay=1,highpass=f=40:t=q:w=0.707,volume=1.00[SRd];
+[SRd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.3,volume=1.00[SRd];
 [SRe_in]adelay=10,highpass=f=280,lowpass=f=7000,allpass=f=1350:t=q:w=0.65,volume=0.42[SRe];
 [SRx_in]adelay=24,highpass=f=600,lowpass=f=5000,allpass=f=820:t=q:w=0.70,allpass=f=2400:t=q:w=0.70,volume=0.17[SRx];
 [SRd][SRe][SRx]amix=inputs=3:weights='1.00 0.90 0.80':normalize=0,lowshelf=f=250:g=0.5:t=q:w=0.7,highshelf=f=3500:g=0.1:t=q:w=0.8,volume=1.00[SR_out];
@@ -548,11 +567,11 @@ EOF
 # AURA: allargamento posteriore. Due layer (diretto + allpass decorrelato), presenza medio-alta contenuta. Il più morbido tra i preset spaziali.
 read -r -d '' SUR_FILTERS_AURA <<'EOF' || true
 [SL]asplit=2[SLd_in][SLa_in];
-[SLd_in]adelay=1,highpass=f=40:t=q:w=0.707,volume=1.00[SLd];
+[SLd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.3,volume=1.00[SLd];
 [SLa_in]adelay=8,highpass=f=800,lowpass=f=4500,allpass=f=1400:t=q:w=0.65,volume=0.22[SLa];
 [SLd][SLa]amix=inputs=2:weights='1.00 0.85':normalize=0,volume=0.95[SL_out];
 [SR]asplit=2[SRd_in][SRa_in];
-[SRd_in]adelay=1,highpass=f=40:t=q:w=0.707,volume=1.00[SRd];
+[SRd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.3,volume=1.00[SRd];
 [SRa_in]adelay=9,highpass=f=800,lowpass=f=4500,allpass=f=1550:t=q:w=0.65,volume=0.22[SRa];
 [SRd][SRa]amix=inputs=2:weights='1.00 0.85':normalize=0,volume=0.95[SR_out];
 EOF
@@ -674,7 +693,7 @@ build_filter_complex() {
 }
 
 # Codifica la traccia DSP e copia gli altri stream nello stesso processo FFmpeg.
-# Il contenitore MKV temporaneo viene pubblicato solo se FFmpeg termina con successo.
+# Il contenitore MKV temporaneo passa poi le verifiche audio e struttura prima della pubblicazione.
 encode_and_mux_output() {
   local output_file="$1" filter_complex="$2" orig_title
   local -a cmd=(ffmpeg -hide_banner -nostdin -stats -xerror -loglevel warning -y)
@@ -702,6 +721,196 @@ encode_and_mux_output() {
   cmd+=( "$output_file" )
   "${cmd[@]}"
 }
+
+# Misura peak, RMS, campioni e RMS per-canale.
+measure_audio_signal() {
+  local f="$1" map_spec="$2" log_file="$3" expected_channels=6 metrics
+  # Decodifica integrale con errore fatale; il log resta disponibile in caso di rifiuto.
+  LC_ALL=C ffmpeg -hide_banner -nostdin -nostats -xerror -v info -i "$f" \
+    -map "$map_spec" -vn -sn -dn \
+    -af "aformat=sample_rates=48000:sample_fmts=fltp,astats=metadata=0:reset=0" \
+    -f null - >/dev/null 2>"$log_file" || return 1
+
+  metrics="$(tr -d '\r' <"$log_file" | awk -v expected="$expected_channels" '
+    /Channel:/ { channel=$NF; overall=0; next }
+    /] Overall$/ { overall=1; channel=0; next }
+    /Peak level dB:/ { if (overall) overall_peak=$NF; next }
+    /RMS level dB:/ {
+      if (overall) overall_rms=$NF
+      else if (channel >= 1 && channel <= expected) channel_rms[channel]=$NF
+      next
+    }
+    /Number of samples:/ { if (overall) samples=$NF; next }
+    END {
+      if (overall_peak == "" || overall_rms == "" || samples == "") exit 1
+      for (i=1; i<=expected; i++) if (channel_rms[i] == "") exit 1
+      printf "%s|%s|%s", overall_peak, overall_rms, samples
+      for (i=1; i<=expected; i++) printf "|%s", channel_rms[i]
+      printf "\n"
+    }
+  ')" || return 1
+
+  [[ -n "$metrics" ]] || return 1
+  printf '%s\n' "$metrics"
+}
+
+is_finite_db() {
+  [[ "$1" =~ ^-?[0-9]+([.][0-9]+)?$ ]]
+}
+
+verify_output_audio_signal() {
+  local f="$1" input_metrics="$2" log_file="$3" output_metrics
+  local -a in_m out_m channel_names=(FL FR FC LFE SL SR)
+  local input_peak input_rms input_samples output_peak output_rms output_samples
+  local i input_channel_rms output_channel_rms max_drop
+
+  output_metrics="$(measure_audio_signal "$f" "0:a:0" "$log_file")" || {
+    VERIFY_REASON="decodifica output fallita o metriche astats incomplete"
+    return 2
+  }
+
+  IFS='|' read -r -a in_m <<<"$input_metrics"
+  IFS='|' read -r -a out_m <<<"$output_metrics"
+  [[ ${#in_m[@]} -eq 9 && ${#out_m[@]} -eq 9 ]] || {
+    VERIFY_REASON="numero di metriche input/output inatteso"
+    return 2
+  }
+
+  input_peak="${in_m[0]}"; input_rms="${in_m[1]}"; input_samples="${in_m[2]}"
+  output_peak="${out_m[0]}"; output_rms="${out_m[1]}"; output_samples="${out_m[2]}"
+
+  if [[ "$output_peak" == "-inf" || "$output_rms" == "-inf" ]]; then
+    VERIFY_REASON="output digitalmente silenzioso"
+    return 1
+  fi
+  if ! is_finite_db "$input_peak" || ! is_finite_db "$input_rms" || \
+     ! is_finite_db "$output_peak" || ! is_finite_db "$output_rms" || \
+     ! [[ "$input_samples" =~ ^[0-9]+([.][0-9]+)?$ && "$output_samples" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    VERIFY_REASON="metriche globali non numeriche"
+    return 2
+  fi
+
+  if awk -v i="$input_samples" -v o="$output_samples" 'BEGIN { exit !(i <= 0 || o <= 0) }'; then
+    VERIFY_REASON="numero di campioni nullo/non valido"
+    return 2
+  fi
+  if awk -v v="$output_peak" -v lim="$VERIFY_SILENCE_PEAK_DB" 'BEGIN { exit !(v <= lim) }'; then
+    VERIFY_REASON="picco output troppo basso (${output_peak} dBFS)"
+    return 1
+  fi
+  if awk -v i="$input_rms" -v o="$output_rms" -v lim="$VERIFY_MAX_OVERALL_DROP_DB" \
+       'BEGIN { exit !((i-o) > lim) }'; then
+    VERIFY_REASON="perdita RMS globale eccessiva: input=${input_rms} dBFS, output=${output_rms} dBFS"
+    return 1
+  fi
+  if awk -v i="$input_samples" -v o="$output_samples" -v d="$VERIFY_MAX_SAMPLE_DELTA_RATIO" \
+       -v floor="$VERIFY_MIN_SAMPLE_DELTA" \
+       'BEGIN { tolerance=i*d; if (tolerance < floor) tolerance=floor;
+                exit !(o < i-tolerance || o > i+tolerance) }'; then
+    VERIFY_REASON="durata incoerente: campioni input=${input_samples}, output=${output_samples}"
+    return 1
+  fi
+
+  for i in {0..5}; do
+    input_channel_rms="${in_m[$((i+3))]}"
+    output_channel_rms="${out_m[$((i+3))]}"
+
+    if { [[ "$input_channel_rms" != "-inf" ]] && ! is_finite_db "$input_channel_rms"; } || \
+       { [[ "$output_channel_rms" != "-inf" ]] && ! is_finite_db "$output_channel_rms"; }; then
+      VERIFY_REASON="metrica canale ${channel_names[$i]} non numerica"
+      return 2
+    fi
+    # Un canale sorgente sotto questa soglia e' considerato intenzionalmente inattivo.
+    [[ "$input_channel_rms" == "-inf" ]] && continue
+    if ! awk -v v="$input_channel_rms" -v lim="$VERIFY_ACTIVE_INPUT_RMS_DB" \
+         'BEGIN { exit !(v > lim) }'; then
+      continue
+    fi
+    if [[ "$output_channel_rms" == "-inf" ]]; then
+      VERIFY_REASON="canale ${channel_names[$i]} attivo in input ma silenzioso in output"
+      return 1
+    fi
+
+    max_drop="$VERIFY_MAX_MAIN_CHANNEL_DROP_DB"
+    [[ $i -eq 3 ]] && max_drop="$VERIFY_MAX_LFE_DROP_DB"
+    if awk -v src="$input_channel_rms" -v dst="$output_channel_rms" -v lim="$max_drop" \
+         'BEGIN { exit !((src-dst) > lim) }'; then
+      VERIFY_REASON="canale ${channel_names[$i]} attenuato eccessivamente: input=${input_channel_rms} dBFS, output=${output_channel_rms} dBFS"
+      return 1
+    fi
+  done
+
+  info "Verifica audio: peak ${input_peak}→${output_peak} dBFS; RMS ${input_rms}→${output_rms} dBFS; campioni ${input_samples}→${output_samples}"
+  return 0
+}
+
+# Controllo strutturale della traccia DSP primaria nel candidato MKV.
+# Fino a 20 MB / 20 secondi di analisi; nessuna scansione integrale aggiuntiva.
+# Il segnale del candidato MKV viene verificato integralmente prima del probe.
+verify_mux_audio_layout() {
+  local probe field codec="" channels="" layout="" rate="" default=""
+  probe="$(ffprobe -v error -analyzeduration 20000000 -probesize 20000000 -select_streams a:0 \
+    -show_entries stream=codec_name,channels,channel_layout,sample_rate:stream_disposition=default \
+    -of default=noprint_wrappers=1 "$1" </dev/null)" || return 1
+  probe="${probe//$'\r'/}"
+  while IFS= read -r field; do
+    case "$field" in
+      codec_name=*) codec="${field#*=}" ;;
+      channels=*) channels="${field#*=}" ;;
+      channel_layout=*) layout="${field#*=}" ;;
+      sample_rate=*) rate="${field#*=}" ;;
+      DISPOSITION:default=*) default="${field#*=}" ;;
+    esac
+  done <<<"$probe"
+  [[ "$codec" == "$OUT_CODEC" && "$channels" == "6" && "$layout" == "5.1(side)" &&
+     "$rate" == "48000" && "$default" == "1" ]]
+}
+
+# Riserva i temporanei sullo stesso filesystem dell'output; pubblica solo dopo
+# la verifica completa. Errori e interruzioni lasciano candidato, graph e log.
+process_verified_output() {
+  local graph="$1" work_dir mux_file input_metrics
+  work_dir="$(mktemp -d "$(dirname -- "$OUT_FILE")/.$(basename -- "${OUT_FILE%.mkv}").partial.XXXXXX")" || {
+    err "Impossibile riservare la directory temporanea"
+    return 1
+  }
+  info "Temporanei: $work_dir"
+  mux_file="$work_dir/mux.mkv"
+  printf '%s\n' "$graph" >"$work_dir/filter_complex.txt" || return 1
+
+  info "Misura di riferimento sull'intera traccia sorgente"
+  input_metrics="$(measure_audio_signal "$CUR_FILE" "0:${A_STREAM_INDEX}" "$work_dir/input-astats.log")" || {
+    err "Sorgente non misurabile; output finale invariato. Temporanei: $work_dir"
+    return 1
+  }
+  if ! encode_and_mux_output "$mux_file" "$graph"; then
+    err "Encoding/mux fallito; output finale invariato. Temporanei: $work_dir"
+    return 1
+  fi
+  VERIFY_REASON=""
+  info "Verifica comparativa post-codec sull'intera traccia audio"
+  if ! verify_output_audio_signal "$mux_file" "$input_metrics" "$work_dir/output-astats.log"; then
+    err "Verifica rifiutata/non conclusiva: $VERIFY_REASON"
+    err "Output finale invariato. Temporanei: $work_dir"
+    return 1
+  fi
+  if ! verify_mux_audio_layout "$mux_file"; then
+    err "Traccia primaria non conforme ($OUT_CODEC, 5.1(side), 48 kHz, default). Temporanei: $work_dir"
+    return 1
+  fi
+  if ! mv -f -- "$mux_file" "$OUT_FILE"; then
+    err "Pubblicazione fallita; temporanei conservati: $work_dir"
+    return 1
+  fi
+  # Solo file creati da questa esecuzione nella directory riservata da mktemp.
+  rm -f -- "$work_dir/filter_complex.txt" "$work_dir/input-astats.log" "$work_dir/output-astats.log"
+  rmdir -- "$work_dir" || warn "Directory temporanea conservata: $work_dir"
+  ok "Creato e verificato: $OUT_FILE"
+  return 0
+}
+
+trap 'warn "Interrotto: output non verificati e temporanei conservati per il debug"; exit 130' INT
+trap 'warn "Terminato: output non verificati e temporanei conservati per il debug"; exit 143' TERM
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 # CICLO ELABORAZIONE
@@ -815,27 +1024,10 @@ for CUR_FILE in "${FILES[@]}"; do
     fi
   fi
 
-  # DSP, encode audio e mux producono un unico MKV temporaneo.
-  TMP_OUT_FILE="${OUT_FILE%.mkv}.partial.$$.${RANDOM}.mkv"
-  if [[ -e "$TMP_OUT_FILE" ]]; then
-    err "Contenitore temporaneo già esistente, impossibile procedere in sicurezza: $TMP_OUT_FILE"
-    ((ERR_COUNT++))
-    continue
-  fi
-
   FILTER_COMPLEX="$(build_filter_complex)"
-
-  # Pubblico il file finale solo dopo il completamento riuscito di encode/mux.
-  if encode_and_mux_output "$TMP_OUT_FILE" "$FILTER_COMPLEX"; then
-    if mv -f -- "$TMP_OUT_FILE" "$OUT_FILE"; then
-      ok "Creato con mux unico: $OUT_FILE"
-      ((OK_COUNT++))
-    else
-      err "Encode/mux completato, ma pubblicazione del file finale fallita: $TMP_OUT_FILE"
-      ((ERR_COUNT++))
-    fi
+  if process_verified_output "$FILTER_COMPLEX"; then
+    ((OK_COUNT++))
   else
-    warn "Errore su: $CUR_FILE (eventuale MKV temporaneo incompleto: $TMP_OUT_FILE)"
     ((ERR_COUNT++))
   fi
 done
