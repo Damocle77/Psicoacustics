@@ -280,10 +280,12 @@ PRESET_BORDERLINE_MARGIN="0.7"
 # - sotto STRONG_GATE un AURA puo' essere promosso a SONAR;
 # - sotto SOFT_GATE resta AURA ma SONAR diventa alternativa;
 # - Width troppo stretta impedisce la promozione automatica a SONAR.
-ATMOS_SONAR_STRONG_GATE="-10.5"
+ATMOS_SONAR_STRONG_GATE="-10.0"
 ATMOS_SONAR_SOFT_GATE="-8.5"
 
-# Preferenza Atmos: AURA diventa SONAR, salvo borderline voce/width.
+# Preferenza Atmos graduata: AURA puo' diventare SONAR solo sotto STRONG_GATE,
+# con width compatibile e senza alternative VOICE/WIDE/CHECK; sotto SOFT_GATE
+# SONAR e' solo un'alternativa, altrimenti AURA resta invariata.
 # AEGIS resta invariato con SONAR come alternativa di ascolto.
 # Il preset misurato resta disponibile separatamente dalla scelta finale.
 ATMOS_ORIGINAL_TITLE="EAC3 Atmos Original"
@@ -525,8 +527,15 @@ classify_preset_v6() {
       preset="VOICE"; color="\033[1;33m"; reason="surround dominanti con voce centrale non prominente"; alt=spatial;
       if ((ds-domgate) <= margin || (domvoicegate-dv) <= margin) confidence="bassa";
     } else if (ds < sonargate) {
-      preset="SONAR"; color="\033[1;31m"; reason="surround molto arretrati";
-      if ((sonargate-ds) <= margin) { confidence="bassa"; alt="AURA"; }
+      preset="SONAR"; color="\033[1;31m";
+      if (w != "" && w < wgate) {
+        confidence="bassa";
+        alt="WIDE";
+        reason="surround molto arretrati e contemporaneamente stretti/collassati";
+      } else {
+        reason="surround molto arretrati";
+        if ((sonargate-ds) <= margin) { confidence="bassa"; alt="AURA"; }
+      }
     } else if (w != "" && w < wgate) {
       preset="WIDE"; color="\033[1;32m"; reason="surround stretti o collassati";
       if ((wgate-w) <= margin) {

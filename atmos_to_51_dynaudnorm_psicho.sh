@@ -13,7 +13,7 @@
 # │   primario da analizzare/elaborare con i preset psicoacustici.               │
 # │                                                                              │
 # │   UTILIZZO:                                                                  │
-# │   ./atmos_to_51_dynaudnorm_psicho.sh [--force] [bitrate] <file|directory|""> │
+# │   ./atmos_to_51_dynaudnorm_psicho.sh [bitrate] <file|directory|"">         │
 # │   ./atmos_to_51_dynaudnorm_psicho.sh --files <bitrate> <file1> [...]         │
 # │                                                                              │
 # │   PARAMETRI:                                                                 │
@@ -48,11 +48,11 @@ VERIFY_MAX_MAIN_CHANNEL_DROP_DB="24.0"
 VERIFY_MAX_LFE_DROP_DB="36.0"
 
 # Legge dallo stesso terminale dello script, senza riaprire /dev/tty.
-# In esecuzioni non interattive usare --force; nessuna attesa nascosta.
+# In esecuzioni non interattive gli output esistenti vengono saltati.
 confirm_overwrite() {
   local target="$1" ans=""
   if [[ ! -t 0 ]]; then
-    warn "Input non interattivo: '$target' esiste gia' -> skip. Usa --force per sovrascrivere."
+    warn "Input non interattivo: '$target' esiste gia' -> skip."
     return 1
   fi
   printf '%b' "${C_WARN} '$target' esiste gia'. Sovrascrivere? [s/n/t] (senza Invio): " >&2
@@ -75,11 +75,10 @@ usage() {
   cat <<'USAGE'
 ----------------------------------------------------------------------------------------
 UTILIZZO:
-  ./atmos_to_51_dynaudnorm_psicho.sh [--force] [bitrate] <file|directory|"">
-  ./atmos_to_51_dynaudnorm_psicho.sh [--force] --files <bitrate> <file1> [file2...]
+  ./atmos_to_51_dynaudnorm_psicho.sh [bitrate] <file|directory|"">
+  ./atmos_to_51_dynaudnorm_psicho.sh --files <bitrate> <file1> [file2...]
 
 PARAMETRI:
-  --force        : Primo argomento; sovrascrive senza domande (anche in batch).
   file|directory : File sorgente (mkv/mp4/m2ts), cartella contenente
                    file video da processare in batch, oppure "" per la
                    cartella corrente.
@@ -93,6 +92,10 @@ FILTRO OPZIONALE:
 MODALITA' --files:
   Analizza e converte soltanto i file elencati. Il bitrate e' obbligatorio
   per separare in modo non ambiguo i parametri dai nomi dei file.
+
+OUTPUT ESISTENTI:
+  Chiede conferma: s = sovrascrivi, n = salta, t = tutti (senza Invio).
+  In esecuzioni non interattive i file esistenti vengono saltati.
 
 ESEMPI:
   ./atmos_to_51_dynaudnorm_psicho.sh 640k film.mkv       # singolo file
@@ -109,23 +112,14 @@ USAGE
   exit "$rc"
 }
 
-# --force deve precedere bitrate/input oppure --files.
+# La sovrascrittura di tutti gli output si abilita soltanto dalla conferma.
 OVERWRITE_ALL=false
-if [[ "${1:-}" == "--force" ]]; then
-  OVERWRITE_ALL=true
-  shift
-fi
 
 # Help: nessun argomento o flag esplicito
 [[ $# -eq 0 || "${1:-}" =~ ^(-h|--help)$ ]] && usage
-# Check dipendenze
-for _bin in ffmpeg ffprobe awk mktemp; do
-  command -v "$_bin" &>/dev/null || { err "$_bin non trovato nel PATH"; exit 1; }
-done
-
-if ! ffmpeg -hide_banner -encoders 2>/dev/null | grep -E '^[[:space:]]*A[.A-Z]*[[:space:]]+eac3[[:space:]]' >/dev/null; then
-  err "Encoder FFmpeg eac3 non disponibile in questa build."
-  exit 1
+if [[ "${1:-}" == -* && "${1:-}" != "--files" ]]; then
+  err "Opzione non riconosciuta: $1"
+  usage 1
 fi
 
 # Parametri. In modalita' --files la sintassi e' volutamente fissa:
@@ -140,6 +134,7 @@ if [[ "${1:-}" == "--files" ]]; then
   MULTI_FILES=("$@")
   INPUT_ARG=""
 else
+  (( $# <= 2 )) || { err "Troppi argomenti: per piu' file usa --files."; usage 1; }
   # Sintassi canonica: [bitrate] <input>. Se il primo token non e' un bitrate,
   # mantengo la compatibilita' con il vecchio ordine <input> [bitrate].
   if (( $# == 2 )) && [[ "${1:-}" =~ ^[0-9]+([kKmM])?$ ]]; then
@@ -151,24 +146,27 @@ else
   fi
 fi
 # Normalizzazione e validazione bitrate EAC3 5.1.
-[[ "$BITRATE" =~ ^[0-9]+([kKmM])?$ ]] || { err "Bitrate '$BITRATE' non valido. Es: 640k, 768k."; exit 1; }
-BITRATE_LC="${BITRATE,,}"
-if [[ "$BITRATE_LC" =~ ^([0-9]+)$ ]]; then
-  BITRATE_KBPS="${BASH_REMATCH[1]}"
-elif [[ "$BITRATE_LC" =~ ^([0-9]+)k$ ]]; then
-  BITRATE_KBPS="${BASH_REMATCH[1]}"
-elif [[ "$BITRATE_LC" =~ ^([0-9]+)m$ ]]; then
-  BITRATE_KBPS="$(( ${BASH_REMATCH[1]} * 1000 ))"
-else
-  err "Bitrate '$BITRATE' non valido. Es: 640k, 768k."
-  exit 1
-fi
+# Limita le cifre significative prima dell'aritmetica per evitare overflow;
+# la base 10 esplicita impedisce di interpretare gli zeri iniziali come ottale.
+[[ "$BITRATE" =~ ^0*([0-9]{1,3})([kKmM]?)$ ]] || { err "Bitrate '$BITRATE' non valido. Es: 640k, 768k."; exit 1; }
+BITRATE_KBPS="$(( 10#${BASH_REMATCH[1]} ))"
+[[ "${BASH_REMATCH[2],,}" == "m" ]] && BITRATE_KBPS="$(( BITRATE_KBPS * 1000 ))"
 if (( BITRATE_KBPS < 256 || BITRATE_KBPS > 768 || ((BITRATE_KBPS - 256) % 64) != 0 )); then
   err "Bitrate EAC3 5.1 non consentito: ${BITRATE_KBPS}k"
   err "Consentiti: 256k, 320k, 384k, 448k, 512k, 576k, 640k, 704k, 768k"
   exit 1
 fi
 BITRATE="${BITRATE_KBPS}k"
+
+# Check dipendenze dopo la validazione dei parametri.
+for _bin in ffmpeg ffprobe awk mktemp grep dirname basename mv rmdir; do
+  command -v "$_bin" &>/dev/null || { err "$_bin non trovato nel PATH"; exit 1; }
+done
+
+if ! ffmpeg -hide_banner -encoders 2>/dev/null | grep -E '^[[:space:]]*A[.A-Z]*[[:space:]]+eac3[[:space:]]' >/dev/null; then
+  err "Encoder FFmpeg eac3 non disponibile in questa build."
+  exit 1
+fi
 
 # Dynaudnorm: parametri conservativi per normalizzazione domestica/notturna
 # framelen=500   : finestra 500ms — buon compromesso reattività/smoothness
@@ -427,7 +425,7 @@ process_verified_audio() {
   }
   info "Temporanei: $work_dir"
   mux_file="$work_dir/mux.mkv"
-  info "Encoding e mux diretto (percorso versione settembre)"
+  info "Encoding e mux diretto"
   if ! encode_complete_candidate "$mux_file" "$graph"; then
     err "Encoding/mux fallito; temporanei conservati: $work_dir"
     return 1

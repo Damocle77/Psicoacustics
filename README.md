@@ -389,13 +389,15 @@ Nella modalità `--files`, il token dopo il bitrate viene interpretato come `run
 | 7 | `DeltaSur < -7 dB` | `aura` | surround moderatamente arretrati, intervento posteriore morbido |
 | 8 | altrimenti | `aegis` | scena equilibrata, trattamento DTS:X-like bilanciato |
 
+Nel ramo `SONAR`, `DeltaSur < -13 dB` continua a selezionare `SONAR`: se nello stesso caso `Width MS < -7 dB`, `WIDE` viene riportato come alternativa diagnostica e la confidence diventa bassa, con motivo "surround molto arretrati e contemporaneamente stretti/collassati". Questa alternativa ha precedenza su `AURA` per SONAR borderline; non viene applicato alcun processing combinato.
+
 Surround muti, centrale silenzioso o sbilanciamento SL/SR elevato attivano gli override di sicurezza. Se la banda 250-5000 Hz è praticamente vuota, `VoiceDelta` e `VoiceMask` vengono ignorati e resta attivo il controllo full-band.
 
 Il discriminante Atmos dell'analyzer usa il profilo E-AC-3 esposto da FFprobe oppure il marker affidabile della traccia originale. Se il classifier ha scelto `AURA`, applica queste regole:
 
 | Condizione | Risultato |
 |---|---|
-| `DeltaSur < -10.5 dB` e `Width MS >= -7 dB` | promozione a `SONAR`, confidenza bassa, alternativa `AURA` |
+| `DeltaSur < -10.0 dB` e `Width MS >= -7 dB` | promozione a `SONAR`, confidenza bassa, alternativa `AURA` |
 | promozione non applicabile e `DeltaSur < -8.5 dB` | resta `AURA`, confidenza bassa, alternativa `SONAR` |
 | altrimenti | resta `AURA` |
 | preset misurato `AEGIS` | resta `AEGIS`, alternativa di ascolto `SONAR` |
@@ -1102,14 +1104,7 @@ EAC3 Original
 
 Questo titolo da solo non attiva la compensazione FC/LFE del processore. Quando la sorgente è riconosciuta come Atmos, il preparatore scrive invece `EAC3 Atmos Original`: è il marker che abilita gli offset nel successivo processing del bed.
 
-Per sovrascrivere senza domande, anche in esecuzione non interattiva, mettere `--force` come primo argomento:
-
-```bash
-./atmos_to_51_dynaudnorm_psicho.sh --force 640k "film.mkv"
-./atmos_to_51_dynaudnorm_psicho.sh --force --files 640k ep1.mkv ep2.mkv
-```
-
-La conferma interattiva legge dal terminale dello script: premere `s`, `n` o `t` senza Invio. Senza input interattivo e senza `--force`, i file esistenti vengono saltati senza attese.
+La conferma interattiva legge dal terminale dello script: premere `s` per sovrascrivere, `n` per saltare o `t` per sovrascrivere tutti gli output successivi, senza Invio. Senza input interattivo, i file esistenti vengono saltati senza attese.
 
 ## Dynaudnorm
 
