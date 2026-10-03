@@ -2,7 +2,7 @@
 set -uo pipefail
 
 # ╭──────────────────────────────────────────────────────────────────────────────────╮
-# │   aegis_sonar_wide_aura_voice_volamp_psycho.sh - Settembre 2026                  │
+# │   aegis_sonar_wide_aura_voice_volamp_psycho.sh - Ottobre 2026                    │
 # │   By Sandro (D@mocle77) Sabbioni                                                 │
 # │                                                                                  │
 # │   Motore di processing audio offline per tracce 5.1 (EAC3/AC3).                  │
@@ -553,12 +553,12 @@ EOF
 # WIDE: allargamento laterale più marcato, con boost più evidente sulle sub-bande filtrate, e un layer di decorrelazione a basso livello per aria.
 read -r -d '' SUR_FILTERS_WIDE <<'EOF' || true
 [SL]asplit=3[SLd_in][SLe_in][SLx_in];
-[SLd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.3,volume=1.00[SLd];
+[SLd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.1,volume=1.00[SLd];
 [SLe_in]adelay=9,highpass=f=280,lowpass=f=7000,allpass=f=1200:t=q:w=0.65,volume=0.42[SLe];
 [SLx_in]adelay=22,highpass=f=600,lowpass=f=5000,allpass=f=700:t=q:w=0.70,allpass=f=2600:t=q:w=0.70,volume=0.17[SLx];
 [SLd][SLe][SLx]amix=inputs=3:weights='1.00 0.90 0.80':normalize=0,lowshelf=f=250:g=0.5:t=q:w=0.7,highshelf=f=3500:g=0.1:t=q:w=0.8,volume=1.00[SL_out];
 [SR]asplit=3[SRd_in][SRe_in][SRx_in];
-[SRd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.3,volume=1.00[SRd];
+[SRd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.1,volume=1.00[SRd];
 [SRe_in]adelay=10,highpass=f=280,lowpass=f=7000,allpass=f=1350:t=q:w=0.65,volume=0.42[SRe];
 [SRx_in]adelay=24,highpass=f=600,lowpass=f=5000,allpass=f=820:t=q:w=0.70,allpass=f=2400:t=q:w=0.70,volume=0.17[SRx];
 [SRd][SRe][SRx]amix=inputs=3:weights='1.00 0.90 0.80':normalize=0,lowshelf=f=250:g=0.5:t=q:w=0.7,highshelf=f=3500:g=0.1:t=q:w=0.8,volume=1.00[SR_out];
@@ -567,11 +567,11 @@ EOF
 # AURA: allargamento posteriore. Due layer (diretto + allpass decorrelato), presenza medio-alta contenuta. Il più morbido tra i preset spaziali.
 read -r -d '' SUR_FILTERS_AURA <<'EOF' || true
 [SL]asplit=2[SLd_in][SLa_in];
-[SLd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.3,volume=1.00[SLd];
+[SLd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.4,volume=1.00[SLd];
 [SLa_in]adelay=8,highpass=f=800,lowpass=f=4500,allpass=f=1400:t=q:w=0.65,volume=0.22[SLa];
 [SLd][SLa]amix=inputs=2:weights='1.00 0.85':normalize=0,volume=0.95[SL_out];
 [SR]asplit=2[SRd_in][SRa_in];
-[SRd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.3,volume=1.00[SRd];
+[SRd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.4,volume=1.00[SRd];
 [SRa_in]adelay=9,highpass=f=800,lowpass=f=4500,allpass=f=1550:t=q:w=0.65,volume=0.22[SRa];
 [SRd][SRa]amix=inputs=2:weights='1.00 0.85':normalize=0,volume=0.95[SR_out];
 EOF

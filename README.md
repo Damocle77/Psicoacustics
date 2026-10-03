@@ -2,7 +2,7 @@
   <img src="psico_logo.png" width="700" alt="Sonary Suite Logo">
 </p>
 
-# 🎧 Psychoacoustic Suite - Settembre 2026
+# 🎧 Psychoacoustic Suite - Ottobre 2026
 
 Suite di script **Bash AWK + FFmpeg** per analizzare, normalizzare, correggere e trasformare tracce audio stereo, 5.1 ed EAC3 Atmos/JOC in modo offline, ripetibile e controllato.
 
@@ -493,13 +493,25 @@ Motore principale per tracce **5.1 esistenti**.
 
 ## Definizione del surround diretto
 
-AEGIS, SONAR, WIDE e AURA applicano una lieve EQ parametrica ai soli rami diretti `SLd` e `SRd`, dopo il passa-alto a 40 Hz e prima del volume:
+AEGIS e SONAR applicano una lieve EQ parametrica ai soli rami diretti `SLd` e `SRd`, dopo il passa-alto a 40 Hz e prima del volume:
 
 ```text
 equalizer=f=3200:t=q:w=1.2:g=0.3
 ```
 
-Il boost di **+0,3 dB a 3200 Hz, Q 1,2** mira a rifinire la leggibilità degli effetti posteriori. È una rifinitura timbrica: la verticalità continua a dipendere dai rami HEIGHT esistenti e la larghezza dai delay, dagli allpass e dai rami decorrelati dei preset.
+WIDE applica invece **+0,1 dB a 3200 Hz, Q 1,2** ai rami diretti `SLd_in` e `SRd_in`, per ridurre leggermente la presenza dei surround in questa zona:
+
+```text
+equalizer=f=3200:t=q:w=1.2:g=0.1
+```
+
+AURA applica **+0,4 dB a 3200 Hz, Q 1,2** agli stessi rami diretti `SLd_in` e `SRd_in`:
+
+```text
+equalizer=f=3200:t=q:w=1.2:g=0.4
+```
+
+Il boost di **+0,3 dB a 3200 Hz, Q 1,2** in AEGIS e SONAR mira a rifinire la leggibilità degli effetti posteriori. È una rifinitura timbrica: la verticalità continua a dipendere dai rami HEIGHT esistenti e la larghezza dai delay, dagli allpass e dai rami decorrelati dei preset.
 
 Restano invariati i delay diretti (**0 ms** in AEGIS/SONAR, **1 ms** in WIDE/AURA), tutti i valori di volume e i rami di presenza, HEIGHT, riflessione tardiva, decorrelazione e ambienza. La decorrelazione finale mantiene la catena e i parametri esistenti. Nessuna modifica a FL/FR, FC, LFE, limiter, VOLAMP, gestione Atmos o controlli di pubblicazione.
 

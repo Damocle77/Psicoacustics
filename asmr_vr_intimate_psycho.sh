@@ -2,7 +2,7 @@
 set -uo pipefail
 
 # ╭──────────────────────────────────────────────────────────────────────────────╮
-# │   asmr_vr_intimate_psycho.sh - Settembre 2026                                │
+# │   asmr_vr_intimate_psycho.sh - Ottobre 2026                                  │
 # │   By Sandro (D@mocle77) Sabbioni                                             │
 # │                                                                              │
 # │   Processing binaurale ottimizzato per ASMR / VR / contenuto intimo.         │
