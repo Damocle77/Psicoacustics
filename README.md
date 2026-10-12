@@ -6,7 +6,7 @@
 
 Suite di script **Bash AWK + FFmpeg** per analizzare, normalizzare, correggere e trasformare tracce audio stereo, 5.1 ed EAC3 Atmos/JOC in modo offline, ripetibile e controllato.
 
-> Non tutti i supereroi indossano un mantello. Alcuni lanciano `ffmpeg` e salvano i dialoghi dal multiverso del mix sbagliato.
+>Non tutti gli eroi indossano un mantello. Alcuni impugnano `ffmpeg` e riscrivono le leggi del suono. **Perché nel multiverso del caos sonoro, ogni voce merita di essere ascoltata.*.
 
 ## Indice degli argomenti
 
