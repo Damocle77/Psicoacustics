@@ -15,7 +15,7 @@ set -uo pipefail
 # │   - Voce: EQ sartoriale FC, dinamica piena, nessun compressore                   │
 # │   - Surround psicoacustici controllati                                           │
 # │   - LFE: volamp + balance statico + compensazione Atmos + limiter                │
-# │   - Pipeline leggibile: input -> split -> voice -> surround -> output            │
+# │   - Pipeline leggibile: input -> split -> voce -> surround -> output             │
 # |   - gestione robusta dei sei canali anche con channel_layout=unknown             |
 # ╰──────────────────────────────────────────────────────────────────────────────────╯
 
@@ -40,7 +40,7 @@ DECORR_GAIN_SONAR="0.055"
 DECORR_GAIN_AURA="0.048"
 DECORR_GAIN_WIDE="0.042"
 DECORR_GAIN_AEGIS="0.034"
-DECORR_GAIN_VOICE="0"
+DECORR_GAIN_VOICEITA="0"
 
 # Peak catcher senza makeup gain: il gain nominale resta quello del VOLAMP.
 FC_LIMITER_OPTS="limit=0.94:attack=1.5:release=60:level=0:latency=1"
@@ -89,7 +89,7 @@ usage() {
   cat <<'USAGE'
 -----------------------------------------------------------------------------------------------------------------------
 UTILIZZO:
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh <codec> <keep> <bitrate> <preset> <volamp> [--lfe-gain <dB>] [--bass-trim <dB>] <file|"">
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh <codec> <keep> <bitrate> <preset> <volamp> <file|"">
   ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files <codec> <keep> <bitrate> <preset> <volamp> <file1> [file2...]
 
 PARAMETRI:
@@ -97,7 +97,7 @@ PARAMETRI:
   keep      : si conserva l'audio originale; no non lo conserva.
   file      : File input singolo. Se omesso o "" processa tutti file compatibili nella cartella.
   bitrate   : Es. 640k o 768k (default: 640k per AC3, 768k per EAC3).
-  preset    : aegis | sonar | wide | aura | voice (default: sonar).
+  preset    : aegis | sonar | wide | aura | voiceita (default: sonar).
   volamp    : Gain finale opzionale in dB prima del limiter.
               Valori consentiti: 0 .. 6.0.
               0 = OFF, default = 3.0 dB.
@@ -105,7 +105,6 @@ PARAMETRI:
   --lfe-gain  : Correzione statica LFE da -2.0 a +2.0 dB (default: 0.0).
                 Separata dalla compensazione Atmos automatica di -0.5 dB.
   --bass-trim : Low-shelf a 100 Hz sui sei canali, da -3.0 a 0.0 dB (default: 0.0).
-  --          : Termina le opzioni; protegge i nomi file che iniziano con --.
               
 MODALITA' --files:  Processa soltanto i file elencati. 
 ESEMPIO:
@@ -118,16 +117,16 @@ PRESET DISPONIBILI:
   sonar     -> Simula ATMOS (5.1.2)     | Boost Verticale
   wide      -> Simula Dolby 7.1         | Allargamento Laterale
   aura      -> Simula Dolby 6.1         | Allargamento Posteriore
-  voice     -> Esalta i dialoghi (FC)   | EQ Sartoriale Voce
+  voiceita  -> Dialoghi Italiani (5.1)  | EQ Canale Centrale Surround senza effetti spaziali
 -----------------------------------------------------------------------------------------------------------------------
 USAGE
   exit "${1:-1}"
 }
 
-# Controllo se un token è un preset valido: deve essere uno dei nomi riconosciuti (aegis, sonar, wide, aura, voice).
+# Controllo se un token è un preset valido: deve essere uno dei nomi riconosciuti (aegis, sonar, wide, aura, voiceita).
 is_preset_name() {
   case "$1" in
-    aegis|sonar|wide|aura|voice) return 0 ;;
+    aegis|sonar|wide|aura|voiceita) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -269,8 +268,8 @@ SUR_MODE="${SUR_MODE:-sonar}"
 
 # Controllo preset: deve essere uno dei nomi validi.
 case "$SUR_MODE" in
-  aegis|sonar|wide|aura|voice) ;;
-  *) err "Preset '$SUR_MODE' non riconosciuto. Validi: aegis, sonar, wide, aura, voice."; exit 1 ;;
+  aegis|sonar|wide|aura|voiceita) ;;
+  *) err "Preset '$SUR_MODE' non riconosciuto. Validi: aegis, sonar, wide, aura, voiceita."; exit 1 ;;
 esac
 # Controllo codec e flag keep_orig.
 case "$OUT_CODEC" in ac3|eac3) ;; *) err "Codec deve essere ac3 o eac3"; exit 1 ;; esac
@@ -351,7 +350,7 @@ case "$SUR_MODE" in
   sonar) DESC="Simula ATMOS (5.1.2) | Boost Verticale" ;;
   wide)  DESC="Simula Dolby 7.1 | Allargamento Laterale" ;;
   aura)  DESC="Simula Dolby 6.1 | Allargamento Posteriore" ;;
-  voice) DESC="Esalta la voce   | EQ Sartoriale Voce" ;;
+  voiceita) DESC="VOICEITA | Priorità ai dialoghi italiani, EQ centrale e surround senza espansione (manuale)" ;;
 esac
 
 # Log dei parametri finali: utile per confermare cosa è stato interpretato dallo script, soprattutto con parsing flessibile.
@@ -508,8 +507,10 @@ EOF
 read -r -d '' VOICE_DELTA_AURA <<'EOF' || true
 [FC_pre]volume=2.5dB,equalizer=f=1650:t=q:w=1.6:g=0.8,equalizer=f=2450:t=q:w=1.3:g=1.4,equalizer=f=3800:t=q:w=2.0:g=0.9,equalizer=f=6800:t=q:w=2.0:g=-1.0,volume=0.96[FCv];
 EOF
-read -r -d '' VOICE_DELTA_VOICEONLY <<'EOF' || true
-[FC_pre]volume=2.9dB,equalizer=f=1650:t=q:w=1.6:g=1.0,equalizer=f=2450:t=q:w=1.3:g=1.8,equalizer=f=3800:t=q:w=2.0:g=1.1,equalizer=f=5200:t=q:w=2.0:g=-0.5,equalizer=f=6800:t=q:w=2.0:g=-1.1,volume=0.95[FCv];
+# VOICEITA: priorità ai dialoghi italiani con riduzione delle medio-basse e presenza moderata.
+# Catena FC autonoma; non sommare VOICE_EQ_BASE. Taratura fissa da valutare all'ascolto.
+read -r -d '' VOICE_DELTA_VOICEITA <<'EOF' || true
+[FC]highpass=f=40:t=q:w=0.707,volume=3.1dB,equalizer=f=150:t=q:w=1.1:g=0.2,equalizer=f=300:t=q:w=1.0:g=-1.0,equalizer=f=450:t=q:w=1.2:g=-0.6,equalizer=f=1650:t=q:w=1.6:g=0.7,equalizer=f=2450:t=q:w=1.3:g=1.4,equalizer=f=3800:t=q:w=2.0:g=0.9,volume=0.95[FCv];
 EOF
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -517,7 +518,7 @@ EOF
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 # Presenza +0.3 dB a 3.2 kHz (Q=1.2) solo sui rami diretti SLd/SRd dei quattro preset.
-# VOICE conserva HPF e volume originali.
+# VOICEITA: HPF e presenza +0.3 dB, senza attenuazione o processing spaziale.
 # SONAR: cupola sonora con boost verticale, più presenza medio-alta per SL/SR, e un layer di decorrelazione a basso livello per aria.
 read -r -d '' SUR_FILTERS_SONAR <<'EOF' || true
 [SL]asplit=4[SLd_in][SLp_in][SLh_in][SLlate_in];
@@ -576,10 +577,10 @@ read -r -d '' SUR_FILTERS_AURA <<'EOF' || true
 [SRd][SRa]amix=inputs=2:weights='1.00 0.85':normalize=0,volume=0.95[SR_out];
 EOF
 
-# VOICE-ONLY: preset rescue per esaltare i dialoghi quando il mix è critico e non si vuole alterare il surround. Solo HPF a 40 Hz e volume leggermente ridotto per SL/SR.
-read -r -d '' SUR_FILTERS_VOICEONLY <<'EOF' || true
-[SL]highpass=f=40:t=q:w=0.707,volume=0.88[SL_out];
-[SR]highpass=f=40:t=q:w=0.707,volume=0.88[SR_out];
+# VOICEITA: surround a livello nominale, con HPF ed EQ lieve; nessuna espansione spaziale.
+read -r -d '' SUR_FILTERS_VOICEITA <<'EOF' || true
+[SL]highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.3[SL_out];
+[SR]highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.3[SR_out];
 EOF
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -613,11 +614,11 @@ set_preset_profile() {
       DECORR_GAIN="$DECORR_GAIN_WIDE"
       MODE_TITLE="WIDE"
       ;;
-    voice)
-      SUR_BLOCK="$SUR_FILTERS_VOICEONLY"
-      VOICE_BLOCK="${VOICE_EQ_BASE}${VOICE_DELTA_VOICEONLY}"
-      DECORR_GAIN="$DECORR_GAIN_VOICE"
-      MODE_TITLE="VOICE"
+    voiceita)
+      SUR_BLOCK="$SUR_FILTERS_VOICEITA"
+      VOICE_BLOCK="${VOICE_DELTA_VOICEITA}"
+      DECORR_GAIN="$DECORR_GAIN_VOICEITA"
+      MODE_TITLE="VOICEITA"
       ;;
     *)
       err "Preset '$SUR_MODE' non riconosciuto."
@@ -925,8 +926,8 @@ for CUR_FILE in "${FILES[@]}"; do
   # Se è stato specificato un file di input, lo uso. Altrimenti, controllo se il file è già stato processato (nome con suffisso _AC3_ o _EAC3_ + preset). Se sì, skippo il file e loggo un warning.
   if [[ -z "$INPUT_FILE" ]]; then
     case "$(basename "$CUR_FILE")" in
-      *_AC3_Aegis.mkv|*_AC3_Sonar.mkv|*_AC3_Wide.mkv|*_AC3_Aura.mkv|*_AC3_Voice.mkv|\
-      *_EAC3_Aegis.mkv|*_EAC3_Sonar.mkv|*_EAC3_Wide.mkv|*_EAC3_Aura.mkv|*_EAC3_Voice.mkv)
+      *_AC3_Aegis.mkv|*_AC3_Sonar.mkv|*_AC3_Wide.mkv|*_AC3_Aura.mkv|*_AC3_Voice.mkv|*_AC3_Voiceita.mkv|\
+      *_EAC3_Aegis.mkv|*_EAC3_Sonar.mkv|*_EAC3_Wide.mkv|*_EAC3_Aura.mkv|*_EAC3_Voice.mkv|*_EAC3_Voiceita.mkv)
         warn "File già processato → salto: $CUR_FILE"
         continue
         ;;

@@ -6,7 +6,7 @@
 
 Suite di script **Bash AWK + FFmpeg** per analizzare, normalizzare, correggere e trasformare tracce audio stereo, 5.1 ed EAC3 Atmos/JOC in modo offline, ripetibile e controllato.
 
-> Non tutti i supereroi indossano un mantello. Alcuni lanciano `ffmpeg` e salvano i dialoghi dal multiverso dai mix confusi.
+> Non tutti i supereroi indossano un mantello. Alcuni lanciano `ffmpeg` e salvano i dialoghi dal multiverso del mix sbagliato.
 
 ## Indice degli argomenti
 
@@ -16,7 +16,7 @@ Suite di script **Bash AWK + FFmpeg** per analizzare, normalizzare, correggere e
 - [Script inclusi](#script-inclusi)
 - [Quick Start](#quick-start-comandi-manuali)
 - [1. Analyzer: analisi e classificazione 5.1](#1-audio_analyzer_volamp_psychosh)
-- [2. Aegis / Sonar / Wide / Aura / Voice: processing 5.1](#2-aegis_sonar_wide_aura_voice_volamp_psychosh)
+- [2. Aegis / Sonar / Wide / Aura / Voiceita: processing 5.1](#2-aegis_sonar_wide_aura_voice_volamp_psychosh)
 - [3. Upmix stereo → 5.1](#3-stereo251_upmix_psychosh)
 - [4. ASMR / VR: processing per cuffie](#4-asmr_vr_intimate_psychosh)
 - [5. Atmos: preparazione EAC3 5.1](#5-atmos_to_51_dynaudnorm_psichosh)
@@ -122,7 +122,7 @@ done
 | Script | Scopo |
 |---|---|
 | `audio_analyzer_volamp_psycho.sh` | Classifier per 5.1: Delta surround/centro, banda voce, mascheramento, width, target `-21 LUFS`, volamp automatico **3.0–4.5 dB** e batch opzionale |
-| `aegis_sonar_wide_aura_voice_volamp_psycho.sh` | Processore 5.1 con preset `aegis`, `sonar`, `wide`, `aura`, `voice`, EQ voce, surround psicoacustici, controllo LFE e compensazione FC/LFE attivata dal profilo EAC3 Atmos o dal marker originale |
+| `aegis_sonar_wide_aura_voice_volamp_psycho.sh` | Processore 5.1 con preset `aegis`, `sonar`, `wide`, `aura`, `voiceita`, EQ voce, surround psicoacustici, controllo LFE e compensazione FC/LFE attivata dal profilo EAC3 Atmos o dal marker originale |
 | `stereo251_upmix_psycho.sh` | Upmix stereo → 5.1 plausibile: matrice L-R, centro assist, LFE minimo, output atomico/verificato e preset `quad` dedicato alla musica |
 | `asmr_vr_intimate_psycho.sh` | Processing stereo per cuffie/ASMR/VR con BS2B, ITD opzionale, loudnorm post-DSP, LFO e output atomico/verificato |
 | `atmos_to_51_dynaudnorm_psicho.sh` | Prepara un MKV con EAC3 5.1 normalizzata come primaria e traccia Atmos/EAC3 originale copiata come secondaria |
@@ -181,10 +181,12 @@ traccia possono inoltre nascondere singole scene problematiche. Il preset
 suggerito resta un'indicazione di bilanciamento, non una misura certificata
 dell'intelligibilità.
 
-Il preset **VOICE** mantiene la priorità al centrale con EQ dedicata e surround
-contenuti, senza decorrelazione aggiunta. Tratta tutto il centrale, inclusi gli
-effetti: non isola i dialoghi. La taratura è fissa, non adattata automaticamente
-alla voce di ogni film.
+Il preset **VOICEITA** dà priorità ai dialoghi italiani con una taratura dedicata
+del canale centrale e surround senza espansione spaziale. È una scelta manuale
+da provare quando il parlato sembra impastato o poco in primo piano.
+L'analyzer misura il bilanciamento dei canali, ma non determina quanto siano
+comprensibili le parole: per questo non seleziona automaticamente VOICEITA.
+La scelta si basa sull'ascolto del film e sulle preferenze personali.
 
 ## Caratteristiche
 
@@ -195,8 +197,8 @@ alla voce di ogni film.
 - cache persistente delle metriche, invalidata automaticamente quando cambia il file, lo stream o lo schema analitico;
 - discriminante Atmos tramite profilo E-AC-3 ufficiale esposto da FFprobe, con marker stabile del pre-processore come fallback;
 - target loudness interno: **`-21.0 LUFS`**;
-- fake-5.1 gate: se i surround sono virtualmente muti, forza `voice`;
-- priorità a `voice` quando il centro è debole o mascherato nella banda 250-5000 Hz;
+- fake-5.1 gate: surround virtualmente muti, centrale silenzioso o SL/SR sbilanciati bloccano la pubblicazione del batch;
+- debolezza e mascheramento del centrale restano diagnostici; i preset automatici sono solo AEGIS, SONAR, WIDE e AURA;
 - `sonar` per surround molto arretrati, `aura` per arretramento moderato;
 - `wide` quando SL/SR risultano stretti o collassati, `aegis` per mix equilibrati;
 - verdetto stagionale modale con almeno **2/3 di consenso**; altrimenti `MIXED`;
@@ -209,7 +211,6 @@ alla voce di ogni film.
   - AEGIS arancione;
   - WIDE verde;
   - AURA viola/magenta;
-  - VOICE giallo.
 
 ## Sintassi
 
@@ -380,18 +381,14 @@ Nella modalità `--files`, il token dopo il bitrate viene interpretato come `run
 
 | Priorità | Condizione principale | Preset | Interpretazione |
 |---:|---|---|---|
-| 1 | `DeltaFC < -9 dB` | `voice` | centro full-band anormalmente debole |
-| 2 | `VoiceDelta < -4.5 dB` | `voice` | voce centrale poco prominente |
-| 3 | `VoiceMask > -1.5 dB` | `voice` | banda voce esposta al mascheramento posteriore |
-| 4 | `DeltaSur > 1 dB` e `VoiceDelta < 0 dB`, con banda voce valida | `voice` | surround dominanti con voce centrale non prominente |
-| 5 | `DeltaSur < -13 dB` | `sonar` | surround molto arretrati, trattamento Atmos-like più energico |
-| 6 | `Width MS < -7 dB` | `wide` | surround stretti/collassati, allargamento laterale |
-| 7 | `DeltaSur < -7 dB` | `aura` | surround moderatamente arretrati, intervento posteriore morbido |
-| 8 | altrimenti | `aegis` | scena equilibrata, trattamento DTS:X-like bilanciato |
+| 1 | `DeltaSur < -13 dB` | `sonar` | surround molto arretrati, trattamento Atmos-like più energico |
+| 2 | `Width MS < -7 dB` | `wide` | surround stretti/collassati, allargamento laterale |
+| 3 | `DeltaSur < -7 dB` | `aura` | surround moderatamente arretrati, intervento posteriore morbido |
+| 4 | altrimenti | `aegis` | scena equilibrata, trattamento DTS:X-like bilanciato |
 
 Nel ramo `SONAR`, `DeltaSur < -13 dB` continua a selezionare `SONAR`: se nello stesso caso `Width MS < -7 dB`, `WIDE` viene riportato come alternativa diagnostica e la confidence diventa bassa, con motivo "surround molto arretrati e contemporaneamente stretti/collassati". Questa alternativa ha precedenza su `AURA` per SONAR borderline; non viene applicato alcun processing combinato.
 
-Surround muti, centrale silenzioso o sbilanciamento SL/SR elevato attivano gli override di sicurezza. Se la banda 250-5000 Hz è praticamente vuota, `VoiceDelta` e `VoiceMask` vengono ignorati e resta attivo il controllo full-band.
+Surround virtualmente muti (RMS < −65 dBFS o un canale a −inf), centrale silenzioso (−inf) o sbilanciamento SL/SR ≥ 10 dB bloccano il batch con un warning e richiedono controllo manuale. Le metriche restano nel report; nessun comando CHECK viene generato. Le soglie voce restano diagnostiche, anche vicino ai confini; se la banda è vuota vengono indicate N/A.
 
 Il discriminante Atmos dell'analyzer usa il profilo E-AC-3 esposto da FFprobe oppure il marker affidabile della traccia originale. Se il classifier ha scelto `AURA`, applica queste regole:
 
@@ -402,7 +399,7 @@ Il discriminante Atmos dell'analyzer usa il profilo E-AC-3 esposto da FFprobe op
 | altrimenti | resta `AURA` |
 | preset misurato `AEGIS` | resta `AEGIS`, alternativa di ascolto `SONAR` |
 
-`VOICE`, `WIDE` e le alternative di sicurezza `VOICE`, `WIDE` o `CHECK` impediscono gli override Atmos. La compensazione di volume FC/LFE del processore è indipendente dagli override del preset: viene attivata dal profilo EAC3 Atmos oppure dal marker completo della traccia originale, come descritto in [Compensazione del bed Atmos](#compensazione-del-bed-atmos). `bias preset=no` non disabilita gli offset.
+`WIDE` e la sua alternativa impediscono gli override Atmos. Le anomalie gravi bloccano il batch prima della pubblicazione. La compensazione di volume FC/LFE del processore è indipendente dagli override del preset: viene attivata dal profilo EAC3 Atmos oppure dal marker completo della traccia originale, come descritto in [Compensazione del bed Atmos](#compensazione-del-bed-atmos). `bias preset=no` non disabilita gli offset.
 
 Il riepilogo di tutti i preset separa `Audio` (layout della traccia selezionata, ad esempio `5.1(side)`) da `Atmos` (`verificato` o `non verificato`). Nei commenti del batch, `OutputAudio=5.1(side)` indica il layout prodotto dal processore.
 
@@ -456,7 +453,7 @@ Il processore controlla il profilo EAC3 Atmos e il marker direttamente nel file 
 
 I messaggi Atmos e di mapping visualizzati durante `run_processing.sh` provengono dal processore indicato da `PROC`. Per aggiornare queste descrizioni basta aggiornare lo script del processore usato dal batch; non serve rigenerare il batch.
 
-Il batch usa sempre il preset per-file, derivato da `DeltaSur`, `DeltaFC`, `VoiceDelta`, `VoiceMask`, balance, `Width MS` ed eventuali override di sicurezza. Il P25 di `DeltaSur` è soltanto diagnostico; il verdetto stagionale richiede almeno 2/3 di consenso e non sostituisce mai il preset scritto nelle singole righe del batch.
+Il batch usa sempre il preset per-file, derivato dalla classificazione spaziale `DeltaSur` e `Width MS`, con diagnostica `DeltaFC`, `VoiceDelta`, `VoiceMask` e controllo di sicurezza balance. Il P25 di `DeltaSur` è soltanto diagnostico; il verdetto stagionale richiede almeno 2/3 di consenso e non sostituisce mai il preset scritto nelle singole righe del batch.
 
 ---
 
@@ -467,7 +464,7 @@ Motore principale per tracce **5.1 esistenti**.
 ## Caratteristiche
 
 - input 5.1, output AC3/EAC3 5.1(side);
-- preset `aegis`, `sonar`, `wide`, `aura`, `voice`;
+- preset `aegis`, `sonar`, `wide`, `aura`, `voiceita`;
 - selezione stream score-based: entrano solo tracce a 6 canali; lingua italiana `+300`, flag default `+200`; la durata del container non entra nel punteggio;
 - layout gestiti: `5.1`, `5.1(back)`, `5.1(side)`;
 - con sei canali e layout assente o `unknown`, il log mostra `5.1(side)`, indicando il mapping posizionale adottato (`FC=c2`, `SL=c4`, `SR=c5`); questa descrizione non modifica i metadati della sorgente. La stessa convenzione è usata dall'analyzer e dal preparatore Atmos;
@@ -515,7 +512,68 @@ Il boost di **+0,3 dB a 3200 Hz, Q 1,2** in AEGIS e SONAR mira a rifinire la leg
 
 Restano invariati i delay diretti (**0 ms** in AEGIS/SONAR, **1 ms** in WIDE/AURA), tutti i valori di volume e i rami di presenza, HEIGHT, riflessione tardiva, decorrelazione e ambienza. La decorrelazione finale mantiene la catena e i parametri esistenti. Nessuna modifica a FL/FR, FC, LFE, limiter, VOLAMP, gestione Atmos o controlli di pubblicazione.
 
-**VOICE è escluso**: i suoi surround mantengono soltanto `highpass=f=40:t=q:w=0.707,volume=0.88` nel blocco del preset.
+### VOICEITA — priorità ai dialoghi italiani
+
+<p align="left">
+  <img src="voceita_diagram.png" width="900" alt="Diagramma del processing audio del preset VOICEITA">
+</p>
+
+**VOICEITA è un preset manuale pensato per favorire la leggibilità del parlato italiano.**
+Sul centrale riduce parte delle medio-basse e aggiunge una presenza moderata
+nella gamma vocale, con l'obiettivo di rendere le parole più distinguibili
+mantenendo il corpo della voce. I surround ricevono una lieve EQ, senza
+espansione spaziale aggiunta.
+
+È una variante da confrontare con gli altri preset quando i dialoghi risultano
+impastati o poco in primo piano, soprattutto nell'ascolto domestico a volume
+medio/basso. AEGIS, SONAR, WIDE e AURA combinano l'EQ del centrale con diverse
+elaborazioni spaziali dei surround; VOICEITA concentra la propria taratura sul
+parlato e mantiene i surround a livello nominale.
+
+La taratura è fissa e agisce su **tutto il canale centrale**, inclusi musica ed
+effetti presenti: non separa la voce. Il nome indica la destinazione della
+taratura, non un riconoscimento della lingua o del doppiaggio. Il risultato
+va valutato su dialoghi reali, confrontando i preset a volume percepito
+pareggiato; un miglioramento non è garantito su ogni mix.
+
+**Livello del centrale.** Il gain dedicato è `volume=2.9dB`, seguito da
+`volume=0.95`: circa **+2,45 dB netti esclusa l'EQ, prima dei guadagni condivisi**.
+Il gain di 2,9 dB mantiene la voce meno in primo piano rispetto alla taratura
+a 3,0/3,1 dB. Il bell a 150 Hz passa da +0,2 a −1,2 dB per alleggerire
+il corpo del centrale a volume sostenuto; la taratura va valutata all'ascolto.
+Questo parametro è distinto dal **VOLAMP**, che regola il guadagno comune ai
+canali. Restano attivi i limiter e le eventuali compensazioni Atmos condivise.
+
+**EQ del centrale (FC).** Catena autonoma, senza sommare `VOICE_EQ_BASE`:
+
+| Filtro | Frequenza | Gain | Q |
+|---|---:|---:|---:|
+| Passa-alto | 40 Hz | — | 0,707 |
+| Bell | 150 Hz | −1,2 dB | 1,1 |
+| Bell | 300 Hz | −1,0 dB | 1,0 |
+| Bell | 450 Hz | −0,6 dB | 1,2 |
+| Bell | 1650 Hz | +0,7 dB | 1,6 |
+| Bell | 2450 Hz | +1,4 dB | 1,3 |
+| Bell | 3800 Hz | +0,9 dB | 2,0 |
+
+I tagli a **300 e 450 Hz** mirano a mitigare il parlato gonfio e impastato
+(effetto "patata"); i rialzi a **1650, 2450 e 3800 Hz** favoriscono
+l'articolazione e la presenza delle consonanti. La catena dedicata non
+aggiunge filtri a 1100, 5200, 6800 o 7200 Hz.
+
+**Surround (SL/SR).** Solo passa-alto a 40 Hz Q 0,707 e bell a 3200 Hz
++0,3 dB Q 1,2. Nessuna attenuazione dedicata, delay, allpass o decorrelazione.
+Restano applicati VOLAMP, bass trim e processing finale condiviso.
+
+**Selezione manuale.** Scegliere `voiceita` nel processore oppure sostituire
+solo il nome del preset in una riga del batch generato dall'analyzer,
+conservando VOLAMP, `--lfe-gain` e `--bass-trim` calcolati per il file.
+L'analyzer continua a selezionare esclusivamente AEGIS, SONAR, WIDE o AURA:
+le sue metriche non misurano direttamente la comprensibilità delle parole.
+
+Il vecchio token CLI `voice` non è accettato. Gli output `_AC3_Voiceita.mkv`
+e `_EAC3_Voiceita.mkv`, oltre ai vecchi `_Voice.mkv`, vengono riconosciuti
+per lo skip automatico.
 
 ## Contributo verticale SONAR / AEGIS
 
@@ -527,7 +585,7 @@ Il processore usa **`HEIGHT_MODE=increased` per impostazione predefinita**: molt
 | `HEIGHT_MODE=normal` | 1,00; nessun filtro aggiunto, livello precedente |
 | `HEIGHT_MODE=increased` | **1,15; default** |
 
-Il controllo riguarda solo **SONAR e AEGIS**. WIDE, AURA e VOICE mantengono il proprio processing. Ritardi, EQ e ramo di ambienza non vengono regolati da questa variabile. L'output resta 5.1: il fattore non indica una percentuale di altezza percepita né un aumento del volume dell'intero surround.
+Il controllo riguarda solo **SONAR e AEGIS**. WIDE, AURA e VOICEITA mantengono il proprio processing. Ritardi, EQ e ramo di ambienza non vengono regolati da questa variabile. L'output resta 5.1: il fattore non indica una percentuale di altezza percepita né un aumento del volume dell'intero surround.
 
 ```bash
 # Usa increased automaticamente, salvo una variabile HEIGHT_MODE già esportata
@@ -557,9 +615,9 @@ Ordine: **LFE → eventuale Bass shelf → VOLAMP → LFE gain → compensazione
 
 ```bash
 ./aegis_sonar_wide_aura_voice_volamp_psycho.sh \
-  <ac3|eac3> <si|no> <bitrate> <preset> <volamp> [--lfe-gain <dB>] [--bass-trim <dB>] <file|"">
+  <ac3|eac3> <si|no> <bitrate> <preset> <volamp> <file|"">
 ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files \
-  <ac3|eac3> <si|no> <bitrate> <preset> <volamp> [--lfe-gain <dB>] [--bass-trim <dB>] <file1> [file2 ...]
+  <ac3|eac3> <si|no> <bitrate> <preset> <volamp> <file1> [file2 ...]
 ```
 
 Compatibilità: resta accettato il vecchio ordine `<codec> <keep> <file|""> [bitrate] [preset] [volamp]`. Nel vecchio formato il parsing è flessibile: l'ultimo valore numerico fra `0` e `6.0` è il volamp; un numero `>=32` può essere interpretato come bitrate senza suffisso.
@@ -571,7 +629,7 @@ Compatibilità: resta accettato il vecchio ordine `<codec> <keep> <file|""> [bit
 | `codec` | `ac3`, `eac3` | obbligatorio | codec in uscita |
 | `keep` | `si`, `no` | obbligatorio | conserva la traccia sorgente selezionata |
 | `bitrate` | `256k–640k` AC3; `256k–768k` EAC3, step da `64k` | `640k` AC3, `768k` EAC3 | valori fuori range vengono rifiutati prima dell'encoding |
-| `preset` | `aegis`, `sonar`, `wide`, `aura`, `voice` | `sonar` | modalità DSP |
+| `preset` | `aegis`, `sonar`, `wide`, `aura`, `voiceita` | `sonar` | modalità DSP |
 | `volamp` | `0–6.0` | `3.0` | make-up gain per-canale prima del join; sul LFE precede il limiter dedicato |
 | `file` | file o stringa vuota | cartella corrente | `""` usa la cartella corrente |
 
@@ -639,7 +697,7 @@ Il processore aggiunge **+0,5 dB al FC** e **−0,5 dB al LFE**, dopo il volamp 
 | Solo `EAC3 Original`, senza profilo EAC3 Atmos | disattivata |
 | Nessun profilo EAC3 Atmos e nessun marker esatto | disattivata |
 
-Il marker può essere sulla traccia originale secondaria mentre viene elaborata la 5.1 normalizzata primaria. La scelta di `aegis`, `sonar`, `wide`, `aura` o `voice` non cambia questa regola. Il profilo EAC3 Atmos ha priorità sul marker. Il nome del file o un titolo generico contenente «Atmos» non attivano gli offset.
+Il marker può essere sulla traccia originale secondaria mentre viene elaborata la 5.1 normalizzata primaria. La scelta di `aegis`, `sonar`, `wide`, `aura` o `voiceita` non cambia questa regola. Il profilo EAC3 Atmos ha priorità sul marker. Il nome del file o un titolo generico contenente «Atmos» non attivano gli offset.
 
 Valori configurabili in testa a `aegis_sonar_wide_aura_voice_volamp_psycho.sh`:
 
@@ -700,7 +758,7 @@ segnali coerenti, `wide` e `aura` mostrano un'attenuazione marcata a 500 Hz,
 alla quale contribuisce il ritardo di 1 ms sul ramo surround diretto. Questo
 risultato non descrive tutti i mix reali e non indica un errore di decodifica,
 ma richiede un controllo dedicato se l'output sarà ascoltato soprattutto in
-stereo. `voice` non aggiunge questi ritardi né decorrelazione.
+stereo. `voiceita` non aggiunge questi ritardi né decorrelazione.
 
 Per valutare la decorrelazione restano necessari confronti su estratti reali con volume pareggiato, anche in downmix stereo.
 
@@ -710,7 +768,7 @@ Per valutare la decorrelazione restano necessari confronti su estratti reali con
 | `aura` | `0.048` |
 | `wide` | `0.042` |
 | `aegis` | `0.034` |
-| `voice` | `0` |
+| `voiceita` | `0` |
 
 ## Esempi
 
@@ -722,7 +780,7 @@ Per valutare la decorrelazione restano necessari confronti su estratti reali con
   eac3 no 768k wide 3.5 "film.mkv"
 
 ./aegis_sonar_wide_aura_voice_volamp_psycho.sh \
-  ac3 si 640k voice 3.0 "film.mkv"
+  ac3 si 640k voiceita 3.0 "film.mkv"
 
 # Batch nella cartella corrente
 ./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 no 768k sonar 3.0 ""
@@ -735,7 +793,8 @@ Per valutare la decorrelazione restano necessari confronti su estratti reali con
 <nome>_EAC3_Aegis.mkv
 <nome>_EAC3_Wide.mkv
 <nome>_EAC3_Aura.mkv
-<nome>_EAC3_Voice.mkv
+<nome>_EAC3_Voiceita.mkv
+<nome>_AC3_Voiceita.mkv
 ```
 
 ---
@@ -1152,7 +1211,7 @@ Il preparatore non applica gli offset FC/LFE né un trattamento specifico al sol
 |---|---|
 | Atmos → 5.1 | Nessun passa-alto per default; `ATMOS_HIGHPASS_HZ=20` abilita 20 Hz su tutti i canali, LFE incluso. |
 | Stereo → 5.1 | Il passa-alto a 20 Hz resta sul solo LFE sintetico, sia in `to51` sia in `quad`. |
-| Aegis / Sonar / Wide / Aura / Voice | Restano i passa-alto a 40 Hz dei canali principali e gli altri filtri dei preset; sul LFE gain e limiter, senza passa-alto dedicato. |
+| Aegis / Sonar / Wide / Aura / Voiceita | Restano i passa-alto a 40 Hz dei canali principali e gli altri filtri dei preset; sul LFE gain e limiter, senza passa-alto dedicato. |
 | ASMR | Restano i passa-alto vocali dei preset a 60/70/80 Hz. |
 | Analyzer | Misura il segnale; non applica un passa-alto al file da pubblicare. |
 
@@ -1233,7 +1292,7 @@ Lingua e metadata principali vengono propagati. Lo script mantiene contatori `OK
 AC3/EAC3 5.1
 → audio_analyzer_volamp_psycho.sh
 → run_processing.sh
-→ aegis/sonar/wide/aura/voice
+→ aegis/sonar/wide/aura (VOICEITA selezionabile solo manualmente)
 ```
 
 ## Sorgente Atmos/JOC
@@ -1392,13 +1451,13 @@ Oppure:
 
 Il risultato contiene la 5.1 normalizzata come traccia default e l'originale come seconda traccia. Per Atmos non alterato selezionare la seconda. Per il processing passare il MKV completo: la prima traccia viene elaborata e il marker `EAC3 Atmos Original` sulla seconda abilita gli offset FC/LFE con qualsiasi preset. Il solo fallback `EAC3 Original`, senza profilo EAC3 Atmos nel contenitore, lascia la compensazione disattivata.
 
-## L'analyzer forza VOICE
+## L'analyzer blocca il processing automatico
 
 ```text
-Surround virtualmente muti: falso 5.1 / front-heavy. Forzo VOICE.
+Surround virtualmente muti: processing automatico bloccato.
 ```
 
-È una protezione: evita preset di ricostruzione aggressivi su canali surround quasi silenziosi.
+Controllare il mix manualmente. Il batch non viene aggiornato; non eseguire un batch precedente per questa analisi.
 
 ## Il volamp sembra alto
 

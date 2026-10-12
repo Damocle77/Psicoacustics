@@ -18,7 +18,7 @@ set -uo pipefail
 # │     - Width    = RMS(SIDE) - RMS(MID)                                           │
 # │                                                                                 │
 # │   DECISIONE: silenzio/falso 5.1 -> sicurezza; voce debole o mascherata          │
-# │   -> VOICE; surround molto arretrati -> SONAR; surround stretti                 │
+# │   -> diagnostica; surround molto arretrati -> SONAR; surround stretti           │
 # │   -> WIDE; moderatamente arretrati -> AURA; mix equilibrato -> AEGIS.           │
 # │   Le misure RMS dei canali vengono raccolte in un solo passaggio FFmpeg.        │
 # │                                                                                 │
@@ -86,13 +86,13 @@ PARAMETRI:
             no     Esegue solo l'analisi senza creare/modificare il batch.
 ESEMPI:
   ./audio_analyzer_volamp_psycho.sh eac3 no 768k si "film.mkv"
-  ./audio_analyzer_volamp_psycho.sh eac3 si 768k no .
   ./audio_analyzer_volamp_psycho.sh eac3 no 768k si ""
   ./audio_analyzer_volamp_psycho.sh --files eac3 no 768k no ep1.mkv ep4.mkv
 
 REGOLAZIONI AUTOMATICHE:
-  L'analizzatore sceglie preset, volume e correzioni LFE/bassi per ogni file.
-  Con run=si salva tutto in run_processing.sh: basta poi eseguire il batch.
+  Analyzer seleziona esclusivamente AEGIS, SONAR, WIDE o AURA come preset filtro.
+  VOICEITA: preset manuale per dare priorita' ai dialoghi italiani, con EQ del centrale
+  e surround senza espansione spaziale. La scelta richiede una valutazione all'ascolto.
 -----------------------------------------------------------------------------------------------
 USAGE
   exit "${1:-1}"
@@ -259,7 +259,7 @@ BASS_EXTREME_DB=12.0
 
 # Width Mid/Side sotto questa soglia = surround collassati/stretti (poca separazione L/R).
 # In quel caso, a parita' di Delta, una ricostruzione laterale (WIDE) rende di piu'
-# di AURA/AEGIS. Non tocca SONAR (deficit estremo) ne' VOICE.
+# di AURA/AEGIS. Non tocca SONAR (deficit estremo) con diagnostica voce separata.
 WIDTH_WIDE_GATE="-7.0"
 
 # Classificatore: l'energia full-band descrive la scena; la banda 250-5000 Hz
@@ -284,7 +284,7 @@ ATMOS_SONAR_STRONG_GATE="-10.0"
 ATMOS_SONAR_SOFT_GATE="-8.5"
 
 # Preferenza Atmos graduata: AURA puo' diventare SONAR solo sotto STRONG_GATE,
-# con width compatibile e senza alternative VOICE/WIDE/CHECK; sotto SOFT_GATE
+# con width compatibile e senza alternative WIDE; sotto SOFT_GATE
 # SONAR e' solo un'alternativa, altrimenti AURA resta invariata.
 # AEGIS resta invariato con SONAR come alternativa di ascolto.
 # Il preset misurato resta disponibile separatamente dalla scelta finale.
@@ -372,8 +372,8 @@ fi
 FILTERED_FILES=()
 for f in "${FILES[@]}"; do
   case "$f" in
-    *_AC3_Aegis.mkv|*_AC3_Sonar.mkv|*_AC3_Wide.mkv|*_AC3_Aura.mkv|*_AC3_Voice.mkv|\
-    *_EAC3_Aegis.mkv|*_EAC3_Sonar.mkv|*_EAC3_Wide.mkv|*_EAC3_Aura.mkv|*_EAC3_Voice.mkv)
+    *_AC3_Aegis.mkv|*_AC3_Sonar.mkv|*_AC3_Wide.mkv|*_AC3_Aura.mkv|*_AC3_Voice.mkv|*_AC3_Voiceita.mkv|\
+    *_EAC3_Aegis.mkv|*_EAC3_Sonar.mkv|*_EAC3_Wide.mkv|*_EAC3_Aura.mkv|*_EAC3_Voice.mkv|*_EAC3_Voiceita.mkv)
       info "Skip output gia' processato: $f"
       continue
       ;;
@@ -487,12 +487,13 @@ preset_color() {
     AEGIS) echo "\033[38;5;208m" ;;   # arancione (ANSI 256 colori)
     WIDE)  echo "\033[1;32m" ;;       # verde
     AURA)  echo "\033[1;35m" ;;       # viola/magenta
-    VOICE) echo "\033[1;33m" ;;       # giallo
     *)     echo "\033[1;37m" ;;       # bianco
   esac
 }
 
-# Classificatore: priorita' alla voce, poi alla correzione spaziale.
+# Classificatore automatico: quattro preset spaziali; la voce resta diagnostica.
+# VOICEITA richiede una valutazione all'ascolto: le metriche non misurano l'intelligibilita'.
+# Resta esclusivamente manuale, mai primario/alternativo/fallback.
 # Output: PRESET|COLORE|CONFIDENCE|ALTERNATIVE|REASON
 classify_preset_v6() {
   local delta_sur="$1" delta_fc="$2" delta_voice="$3" voice_mask="$4" width="$5"
@@ -514,19 +515,7 @@ classify_preset_v6() {
     hasvoice=(dv != "" && vm != "");
     spatial=spatial_preset(ds, w);
 
-    if (df < fcgate) {
-      preset="VOICE"; color="\033[1;33m"; reason="centro full-band anormalmente debole"; alt=spatial;
-      if ((fcgate-df) <= margin) confidence="bassa";
-    } else if (hasvoice && dv < vgate) {
-      preset="VOICE"; color="\033[1;33m"; reason="voce centrale debole nella banda 250-5000 Hz"; alt=spatial;
-      if ((vgate-dv) <= margin) confidence="bassa";
-    } else if (hasvoice && vm > vmaskgate) {
-      preset="VOICE"; color="\033[1;33m"; reason="banda voce mascherata dai surround"; alt=spatial;
-      if ((vm-vmaskgate) <= margin) confidence="bassa";
-    } else if (hasvoice && ds > domgate && dv < domvoicegate) {
-      preset="VOICE"; color="\033[1;33m"; reason="surround dominanti con voce centrale non prominente"; alt=spatial;
-      if ((ds-domgate) <= margin || (domvoicegate-dv) <= margin) confidence="bassa";
-    } else if (ds < sonargate) {
+    if (ds < sonargate) {
       preset="SONAR"; color="\033[1;31m";
       if (w != "" && w < wgate) {
         confidence="bassa";
@@ -551,21 +540,18 @@ classify_preset_v6() {
       if ((ds-auragate) <= margin) { confidence="bassa"; alt="AURA"; }
     }
 
-    # Un preset spaziale diventa incerto vicino a una soglia della voce.
-    if (preset != "VOICE" && (df-fcgate) >= 0 && (df-fcgate) <= margin) {
-      confidence="bassa"; alt="VOICE"; reason=reason " (borderline centro full-band)";
-    }
-    if (preset != "VOICE" && hasvoice && (dv-vgate) >= 0 && (dv-vgate) <= margin) {
-      confidence="bassa"; alt="VOICE"; reason=reason " (borderline prominenza voce)";
-    }
-    if (preset != "VOICE" && hasvoice && (vmaskgate-vm) >= 0 && (vmaskgate-vm) <= margin) {
-      confidence="bassa"; alt="VOICE"; reason=reason " (borderline mascheramento voce)";
-    }
-    if (preset != "VOICE" && hasvoice && ds > domgate && dv >= domvoicegate &&
-        (dv-domvoicegate) <= margin) {
-      confidence="bassa"; alt="VOICE"; reason=reason " (surround dominanti, voce borderline)";
-    }
-    if (preset != "VOICE" && preset != "SONAR" && w != "" &&
+    # Debolezza/mascheramento: diagnostica senza cambiare preset o alternativa.
+    if (df < fcgate) reason=reason "; centro full-band anormalmente debole";
+    else if ((df-fcgate) <= margin) reason=reason " (borderline centro full-band)";
+    if (hasvoice && dv < vgate) reason=reason "; voce centrale debole nella banda 250-5000 Hz";
+    else if (hasvoice && (dv-vgate) <= margin) reason=reason " (borderline prominenza voce)";
+    if (hasvoice && vm > vmaskgate) reason=reason "; banda voce mascherata dai surround";
+    else if (hasvoice && (vmaskgate-vm) <= margin) reason=reason " (borderline mascheramento voce)";
+    if (hasvoice && ds > domgate && dv < domvoicegate)
+      reason=reason "; surround dominanti con voce centrale non prominente";
+    else if (hasvoice && ds > domgate && (dv-domvoicegate) <= margin)
+      reason=reason " (surround dominanti, voce borderline)";
+    if (preset != "SONAR" && w != "" &&
         (w-wgate) >= 0 && (w-wgate) <= margin) {
       confidence="bassa"; alt="WIDE"; reason=reason " (borderline width)";
     }
@@ -578,7 +564,7 @@ classify_preset_v6() {
 # Le metriche reali restano prioritarie.
 #
 # Regole:
-# - VOICE / WIDE / CHECK non vengono mai sovrascritti dal bias Atmos.
+# - WIDE e la sua alternativa non vengono mai sovrascritti dal bias Atmos.
 # - AURA molto vicina a SONAR + width sana -> promozione SONAR.
 # - AURA intermedia -> resta AURA, SONAR come alternativa.
 # - AURA vicina ad AEGIS -> resta AURA.
@@ -600,13 +586,8 @@ apply_atmos_discriminator() {
     return
   fi
 
-  # I segnali di sicurezza / intelligibilita' / width hanno priorita'
-  # assoluta rispetto alla provenienza del master.
-  if [[ "$preset" == "VOICE" || \
-        "$preset" == "WIDE"  || \
-        "$alternative" == "VOICE" || \
-        "$alternative" == "WIDE"  || \
-        "$alternative" == "CHECK" ]]; then
+  # La width ha priorita' rispetto alla provenienza del master.
+  if [[ "$preset" == "WIDE" || "$alternative" == "WIDE" ]]; then
     printf '%s|%s|%s|%s|%s
 ' \
       "$preset" "$color" "$confidence" "$alternative" "$reason"
@@ -1307,7 +1288,7 @@ scan_delta() {
 
   # Prominenza del parlato e rischio di mascheramento nella banda utile alla
   # voce. Se tutta la banda e' praticamente vuota, non la usiamo per decidere:
-  # il classificatore ricade sul controllo full-band del centrale.
+  # la classificazione spaziale resta disponibile.
   local vfl_math vfr_math vfc_math vsl_math vsr_math
   vfl_math=$(db_floor_for_math "$rms_vfl") || { warn "RMS voice-band FL non misurabile. File saltato."; return 1; }
   vfr_math=$(db_floor_for_math "$rms_vfr") || { warn "RMS voice-band FR non misurabile. File saltato."; return 1; }
@@ -1341,17 +1322,17 @@ scan_delta() {
   local forced_preset=0 preset_raw
   if [[ "$rms_sl" == "-inf" || "$rms_sr" == "-inf" ]] || \
      awk -v sur="$rms_sur" -v gate="$SUR_FAKE_RMS_GATE" 'BEGIN { exit !(sur < gate) }'; then
-    warn "Surround virtualmente muti (${rms_sur} dBFS RMS): forzo VOICE."
+    warn "Surround virtualmente muti (${rms_sur} dBFS RMS): processing automatico bloccato."
     forced_preset=1
-    preset_raw="VOICE|\033[1;33m|bassa|-|surround virtualmente muti"
+    preset_raw="BLOCCATO|\033[1;33m|bassa|-|surround virtualmente muti"
   elif [[ "$rms_fc" == "-inf" ]]; then
-    warn "Canale centrale silenzioso: forzo VOICE e richiedo controllo manuale."
+    warn "Canale centrale silenzioso: processing automatico bloccato; controllo manuale richiesto."
     forced_preset=1
-    preset_raw="VOICE|\033[1;33m|bassa|CHECK|centro silenzioso"
+    preset_raw="BLOCCATO|\033[1;33m|bassa|-|centro silenzioso"
   elif awk -v b="$balance_sur" -v gate="$SUR_BALANCE_WARN_DB" 'BEGIN { exit !(b >= gate) }'; then
-    warn "Sbilanciamento SL/SR elevato (${balance_sur} dB): VOICE prudenziale, controllo manuale consigliato."
+    warn "Sbilanciamento SL/SR elevato (${balance_sur} dB): processing automatico bloccato; controllo manuale richiesto."
     forced_preset=1
-    preset_raw="VOICE|\033[1;33m|bassa|CHECK|sbilanciamento SL/SR"
+    preset_raw="BLOCCATO|\033[1;33m|bassa|-|sbilanciamento SL/SR"
   else
     preset_raw=$(classify_preset_v6 "$delta_sur" "$delta_fc" "$delta_voice" "$voice_mask" "$width_ms")
   fi
@@ -1384,7 +1365,7 @@ scan_delta() {
      awk -v b="$balance_sur" -v gate="$SUR_BALANCE_WARN_DB" -v margin="$PRESET_BORDERLINE_MARGIN" \
        'BEGIN { exit !(b < gate && (gate-b) <= margin) }'; then
     confidence="bassa"
-    alternative="CHECK"
+    alternative="-"
     preset_reason="${preset_reason} (borderline sbilanciamento)"
   fi
 
@@ -1421,7 +1402,8 @@ scan_delta() {
   GLOBAL_BASS_TRIM_VALUES+=("$bass_trim")
   GLOBAL_BASS_CLASS_VALUES+=("$bass_class")
 
-  # Accumulo risultati per verdetto stagionale e tabella finale. Se il preset è stato forzato, uso comunque il Delta reale per il verdetto stagionale, perché riflette la realtà del mix, ma segnalo il preset forzato nella tabella per chiarezza.
+  # Accumulo metriche e decisioni per-file. Le anomalie restano diagnostiche;
+  # il codice di ritorno impedisce di pubblicare un batch non sicuro.
   GLOBAL_METRIC_VALUES+=("$delta_sur")
   GLOBAL_METRIC_FILES+=("$(basename "$f")")
   GLOBAL_METRIC_PATHS+=("$f")
@@ -1475,10 +1457,12 @@ scan_delta() {
   fi
   echo -e "  \033[1;37mMisure:   \033[0m  ${measured_preset}  | preferenza Atmos: ${source_bias_applied}"
   echo -e "  \033[1;37mPreset:   \033[0m  ${p_color}${preset}\033[0m  (${preset_reason})"
-  echo -e "  \033[1;37mConfid.:  \033[0m  ${confidence}  | alternativa: ${alternative}"
   echo -e "  \033[1;37mVolume:   \033[0m  \033[1;36m${volume_status}\033[0m"
   echo -e "  \033[1;37mVolamp:   \033[0m  \033[1;36m${volamp} dB\033[0m  (${volamp_desc}${volamp_note})"
   echo ""
+  # Le metriche restano nel report, ma il ciclo principale impedisce il batch.
+  if (( forced_preset != 0 )); then return 1; fi
+  return 0
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -1539,7 +1523,7 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
   done
   dominant_preset=""; dominant_count=0; dominant_tie=0
   preset_distribution=""
-  for p in SONAR AURA WIDE AEGIS VOICE; do
+  for p in SONAR AURA WIDE AEGIS; do
     p_count="${PRESET_COUNTS[$p]:-0}"
     (( p_count > 0 )) && preset_distribution+="${p}:${p_count} "
     if (( p_count > dominant_count )); then
@@ -1577,7 +1561,7 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
     echo -e "  Decisioni incerte:   \033[0;37m${low_confidence_count}/${CNT}\033[0m"
     echo -e "  Preset Consigliato:  ${season_color}${season_preset}\033[0m  (${season_desc})"
 
-    # Se alcuni file hanno preset forzati a VOICE a causa di surround virtualmente muti, conto quanti sono e mostro una nota che indica quanti file hanno questo problema, per dare un'indicazione aggiuntiva sulla natura della stagione.
+    # Le anomalie gravi bloccano il batch prima del riepilogo stagionale.
     if [[ "$forced_count" -gt 0 ]]; then
       echo -e "  \033[0;33mNota: ${forced_count} file con override di sicurezza; verificare le righe per-file.\033[0m"
     fi 
@@ -1609,7 +1593,8 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
   fi
 
   # ── Generazione batch file ─────────────────────────────────────────────────
-  # Se ho risultati validi, genero un batch file con i comandi di processing consigliati per ogni file, usando i preset raffinati per-file se sono stati forzati o se la stagione è eterogenea, altrimenti usando il preset stagionale. Il batch file include commenti e istruzioni per l'utente, e ogni comando include un commento con le metriche rilevanti per quel file.
+  # Genero i comandi con i soli quattro preset automatici per-file, conservando
+  # i parametri e le metriche. Il verdetto stagionale resta solo diagnostico.
   BATCH_FILE="run_processing.sh"
   if [[ "$CREATE_RUN" == "si" ]]; then
     BATCH_TMP=$(mktemp "./.${BATCH_FILE}.XXXXXX") || { err "Impossibile creare il batch temporaneo"; exit 1; }
@@ -1637,8 +1622,8 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
       # Per ogni file genero un comando usando sempre il preset raffinato per-file. Escludo gli output già processati.
       for (( i=0; i<CNT; i++ )); do
         case "${GLOBAL_METRIC_PATHS[$i]}" in
-          *_AC3_Aegis.mkv|*_AC3_Sonar.mkv|*_AC3_Wide.mkv|*_AC3_Aura.mkv|*_AC3_Voice.mkv|\
-          *_EAC3_Aegis.mkv|*_EAC3_Sonar.mkv|*_EAC3_Wide.mkv|*_EAC3_Aura.mkv|*_EAC3_Voice.mkv)
+          *_AC3_Aegis.mkv|*_AC3_Sonar.mkv|*_AC3_Wide.mkv|*_AC3_Aura.mkv|*_AC3_Voice.mkv|*_AC3_Voiceita.mkv|\
+          *_EAC3_Aegis.mkv|*_EAC3_Sonar.mkv|*_EAC3_Wide.mkv|*_EAC3_Aura.mkv|*_EAC3_Voice.mkv|*_EAC3_Voiceita.mkv)
             continue
             ;;
         esac
@@ -1647,6 +1632,10 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
         file_preset="${GLOBAL_PRESET_VALUES[$i]:-}"
         # Il preset stagionale e' solo diagnostico; fallback neutro se manca il per-file.
         [[ -z "$file_preset" ]] && file_preset="AEGIS"
+        case "$file_preset" in
+          AEGIS|SONAR|WIDE|AURA) ;;
+          *) err "Preset automatico non sicuro: $file_preset"; exit 1 ;;
+        esac
         file_preset_lower="${file_preset,,}"
         file_volamp="${GLOBAL_VOLAMP_VALUES[$i]:-0}"
         file_lfe_gain="${GLOBAL_LFE_GAIN_VALUES[$i]:-0.0}"
