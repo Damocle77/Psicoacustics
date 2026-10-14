@@ -490,25 +490,15 @@ Motore principale per tracce **5.1 esistenti**.
 
 ## Definizione del surround diretto
 
-AEGIS e SONAR applicano una lieve EQ parametrica ai soli rami diretti `SLd` e `SRd`, dopo il passa-alto a 40 Hz e prima del volume:
-
-```text
-equalizer=f=3200:t=q:w=1.2:g=0.3
-```
-
-WIDE applica invece **+0,1 dB a 3200 Hz, Q 1,2** ai rami diretti `SLd_in` e `SRd_in`, per ridurre leggermente la presenza dei surround in questa zona:
+AEGIS, SONAR, WIDE e AURA applicano lo stesso boost di **+0,1 dB a 3200 Hz, Q 1,2** ai soli rami diretti SL/SR, dopo il passa-alto a 40 Hz e prima del volume:
 
 ```text
 equalizer=f=3200:t=q:w=1.2:g=0.1
 ```
 
-AURA applica **+0,4 dB a 3200 Hz, Q 1,2** agli stessi rami diretti `SLd_in` e `SRd_in`:
+Anche VOICEITA usa **+0,1 dB a 3200 Hz, Q 1,2**, direttamente sui canali SL/SR dopo il passa-alto, senza rami spaziali.
 
-```text
-equalizer=f=3200:t=q:w=1.2:g=0.4
-```
-
-Il boost di **+0,3 dB a 3200 Hz, Q 1,2** in AEGIS e SONAR mira a rifinire la leggibilità degli effetti posteriori. È una rifinitura timbrica: la verticalità continua a dipendere dai rami HEIGHT esistenti e la larghezza dai delay, dagli allpass e dai rami decorrelati dei preset.
+Il boost uniforme mantiene una lieve presenza dei surround in questa zona. Rispetto alla taratura precedente, SONAR e VOICEITA scendono da +0,3 a +0,1 dB e AURA da +0,4 a +0,1 dB; AEGIS e WIDE erano già a +0,1 dB. La riduzione mira a lasciare leggermente più spazio percettivo al dialogo centrale. La verticalità continua a dipendere dai rami HEIGHT e la larghezza dai delay, dagli allpass e dai rami decorrelati dei preset.
 
 Restano invariati i delay diretti (**0 ms** in AEGIS/SONAR, **1 ms** in WIDE/AURA), tutti i valori di volume e i rami di presenza, HEIGHT, riflessione tardiva, decorrelazione e ambienza. La decorrelazione finale mantiene la catena e i parametri esistenti. Nessuna modifica a FL/FR, FC, LFE, limiter, VOLAMP, gestione Atmos o controlli di pubblicazione.
 
@@ -562,7 +552,7 @@ l'articolazione e la presenza delle consonanti. La catena dedicata non
 aggiunge filtri a 1100, 5200, 6800 o 7200 Hz.
 
 **Surround (SL/SR).** Solo passa-alto a 40 Hz Q 0,707 e bell a 3200 Hz
-+0,3 dB Q 1,2. Nessuna attenuazione dedicata, delay, allpass o decorrelazione.
++0,1 dB Q 1,2. Nessuna attenuazione dedicata, delay, allpass o decorrelazione.
 Restano applicati VOLAMP, bass trim e processing finale condiviso.
 
 **Selezione manuale.** Scegliere `voiceita` nel processore oppure sostituire
