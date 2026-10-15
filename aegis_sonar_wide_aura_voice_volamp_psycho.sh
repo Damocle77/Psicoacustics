@@ -517,19 +517,18 @@ EOF
 # BLOCCHI SURROUND
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-# Presenza uniforme +0.1 dB a 3.2 kHz (Q=1.2) in tutti e cinque i preset.
-# AEGIS/SONAR/WIDE/AURA: EQ sui soli rami diretti SLd/SRd, dopo HPF e prima del volume.
-# VOICEITA: stessa EQ direttamente su SL/SR dopo HPF, senza attenuazione o processing spaziale.
+# Surround: nessun microboost a 3200 Hz in tutti e cinque i preset.
+# WIDE conserva il highshelf a 3500 Hz dopo gli amix, indipendente dal microboost rimosso.
 # SONAR: cupola sonora con boost verticale, più presenza medio-alta per SL/SR, e un layer di decorrelazione a basso livello per aria.
 read -r -d '' SUR_FILTERS_SONAR <<'EOF' || true
 [SL]asplit=4[SLd_in][SLp_in][SLh_in][SLlate_in];
-[SLd_in]adelay=0,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.1,volume=0.95[SLd];
+[SLd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SLd];
 [SLp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=2.0,equalizer=f=11000:t=q:w=1.0:g=-1.2,volume=1.00[SLp];
 [SLh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=900:t=q:w=0.70,allpass=f=2200:t=q:w=0.70,equalizer=f=8000:t=q:w=2.5:g=0.8,equalizer=f=11000:t=q:w=1.2:g=1.0,__HEIGHT_GAIN_FILTER__volume=0.60[SLh];
 [SLlate_in]adelay=38,highpass=f=150,lowpass=f=1500,volume=0.58[SLlate];
 [SLd][SLp][SLh][SLlate]amix=inputs=4:weights='1 0.6 0.4 0.2':normalize=0,volume=1.05[SL_out];
 [SR]asplit=4[SRd_in][SRp_in][SRh_in][SRlate_in];
-[SRd_in]adelay=0,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.1,volume=0.95[SRd];
+[SRd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SRd];
 [SRp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=2.0,equalizer=f=11000:t=q:w=1.0:g=-1.2,volume=1.00[SRp];
 [SRh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=1050:t=q:w=0.70,allpass=f=2400:t=q:w=0.70,equalizer=f=8000:t=q:w=2.5:g=0.8,equalizer=f=11000:t=q:w=1.2:g=1.0,__HEIGHT_GAIN_FILTER__volume=0.60[SRh];
 [SRlate_in]adelay=41,highpass=f=150,lowpass=f=1500,volume=0.58[SRlate];
@@ -539,13 +538,13 @@ EOF
 # AEGIS: cupola sonora con boost più bilanciato e meno artificiale, più presenza medio-alta per SL/SR, e un layer di decorrelazione a basso livello per aria.
 read -r -d '' SUR_FILTERS_AEGIS <<'EOF' || true
 [SL]asplit=4[SLd_in][SLp_in][SLh_in][SLlate_in];
-[SLd_in]adelay=0,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.1,volume=0.95[SLd];
+[SLd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SLd];
 [SLp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=1.6,equalizer=f=11000:t=q:w=1.0:g=-1.4,volume=0.95[SLp];
 [SLh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=900:t=q:w=0.70,allpass=f=2200:t=q:w=0.70,equalizer=f=8000:t=q:w=3.0:g=-4.0,equalizer=f=11000:t=q:w=1.2:g=0.6,__HEIGHT_GAIN_FILTER__volume=0.48[SLh];
 [SLlate_in]adelay=39,highpass=f=150,lowpass=f=1300,volume=0.42[SLlate];
 [SLd][SLp][SLh][SLlate]amix=inputs=4:weights='1.05 0.80 0.70 0.45':normalize=0,volume=0.95[SL_out];
 [SR]asplit=4[SRd_in][SRp_in][SRh_in][SRlate_in];
-[SRd_in]adelay=0,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.1,volume=0.95[SRd];
+[SRd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SRd];
 [SRp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=1.6,equalizer=f=11000:t=q:w=1.0:g=-1.4,volume=0.95[SRp];
 [SRh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=1050:t=q:w=0.70,allpass=f=2400:t=q:w=0.70,equalizer=f=8000:t=q:w=3.0:g=-4.0,equalizer=f=11000:t=q:w=1.2:g=0.6,__HEIGHT_GAIN_FILTER__volume=0.48[SRh];
 [SRlate_in]adelay=42,highpass=f=150,lowpass=f=1300,volume=0.42[SRlate];
@@ -555,12 +554,12 @@ EOF
 # WIDE: allargamento laterale più marcato, con boost più evidente sulle sub-bande filtrate, e un layer di decorrelazione a basso livello per aria.
 read -r -d '' SUR_FILTERS_WIDE <<'EOF' || true
 [SL]asplit=3[SLd_in][SLe_in][SLx_in];
-[SLd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.1,volume=1.00[SLd];
+[SLd_in]adelay=1,highpass=f=40:t=q:w=0.707,volume=1.00[SLd];
 [SLe_in]adelay=9,highpass=f=280,lowpass=f=7000,allpass=f=1200:t=q:w=0.65,volume=0.42[SLe];
 [SLx_in]adelay=22,highpass=f=600,lowpass=f=5000,allpass=f=700:t=q:w=0.70,allpass=f=2600:t=q:w=0.70,volume=0.17[SLx];
 [SLd][SLe][SLx]amix=inputs=3:weights='1.00 0.90 0.80':normalize=0,lowshelf=f=250:g=0.5:t=q:w=0.7,highshelf=f=3500:g=0.1:t=q:w=0.8,volume=1.00[SL_out];
 [SR]asplit=3[SRd_in][SRe_in][SRx_in];
-[SRd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.1,volume=1.00[SRd];
+[SRd_in]adelay=1,highpass=f=40:t=q:w=0.707,volume=1.00[SRd];
 [SRe_in]adelay=10,highpass=f=280,lowpass=f=7000,allpass=f=1350:t=q:w=0.65,volume=0.42[SRe];
 [SRx_in]adelay=24,highpass=f=600,lowpass=f=5000,allpass=f=820:t=q:w=0.70,allpass=f=2400:t=q:w=0.70,volume=0.17[SRx];
 [SRd][SRe][SRx]amix=inputs=3:weights='1.00 0.90 0.80':normalize=0,lowshelf=f=250:g=0.5:t=q:w=0.7,highshelf=f=3500:g=0.1:t=q:w=0.8,volume=1.00[SR_out];
@@ -569,19 +568,19 @@ EOF
 # AURA: allargamento posteriore. Due layer (diretto + allpass decorrelato), presenza medio-alta contenuta. Il più morbido tra i preset spaziali.
 read -r -d '' SUR_FILTERS_AURA <<'EOF' || true
 [SL]asplit=2[SLd_in][SLa_in];
-[SLd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.1,volume=1.00[SLd];
+[SLd_in]adelay=1,highpass=f=40:t=q:w=0.707,volume=1.00[SLd];
 [SLa_in]adelay=8,highpass=f=800,lowpass=f=4500,allpass=f=1400:t=q:w=0.65,volume=0.22[SLa];
 [SLd][SLa]amix=inputs=2:weights='1.00 0.85':normalize=0,volume=0.95[SL_out];
 [SR]asplit=2[SRd_in][SRa_in];
-[SRd_in]adelay=1,highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.1,volume=1.00[SRd];
+[SRd_in]adelay=1,highpass=f=40:t=q:w=0.707,volume=1.00[SRd];
 [SRa_in]adelay=9,highpass=f=800,lowpass=f=4500,allpass=f=1550:t=q:w=0.65,volume=0.22[SRa];
 [SRd][SRa]amix=inputs=2:weights='1.00 0.85':normalize=0,volume=0.95[SR_out];
 EOF
 
-# VOICEITA: surround a livello nominale, con HPF ed EQ lieve; nessuna espansione spaziale.
+# VOICEITA: surround a livello nominale, con solo HPF; nessuna espansione spaziale.
 read -r -d '' SUR_FILTERS_VOICEITA <<'EOF' || true
-[SL]highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.1[SL_out];
-[SR]highpass=f=40:t=q:w=0.707,equalizer=f=3200:t=q:w=1.2:g=0.1[SR_out];
+[SL]highpass=f=40:t=q:w=0.707[SL_out];
+[SR]highpass=f=40:t=q:w=0.707[SR_out];
 EOF
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

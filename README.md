@@ -490,15 +490,9 @@ Motore principale per tracce **5.1 esistenti**.
 
 ## Definizione del surround diretto
 
-AEGIS, SONAR, WIDE e AURA applicano lo stesso boost di **+0,1 dB a 3200 Hz, Q 1,2** ai soli rami diretti SL/SR, dopo il passa-alto a 40 Hz e prima del volume:
+AEGIS, SONAR, WIDE e AURA mantengono il passa-alto a **40 Hz, Q 0,707** sui rami diretti `SLd_in` e `SRd_in`, senza il microboost a 3200 Hz. Anche VOICEITA elimina il microboost e applica ai canali SL/SR soltanto il passa-alto a 40 Hz, prima delle elaborazioni globali condivise.
 
-```text
-equalizer=f=3200:t=q:w=1.2:g=0.1
-```
-
-Anche VOICEITA usa **+0,1 dB a 3200 Hz, Q 1,2**, direttamente sui canali SL/SR dopo il passa-alto, senza rami spaziali.
-
-Il boost uniforme mantiene una lieve presenza dei surround in questa zona. Rispetto alla taratura precedente, SONAR e VOICEITA scendono da +0,3 a +0,1 dB e AURA da +0,4 a +0,1 dB; AEGIS e WIDE erano già a +0,1 dB. La riduzione mira a lasciare leggermente più spazio percettivo al dialogo centrale. La verticalità continua a dipendere dai rami HEIGHT e la larghezza dai delay, dagli allpass e dai rami decorrelati dei preset.
+In WIDE resta il **highshelf a 3500 Hz, +0,1 dB, Q 0,8** dopo gli `amix` SL/SR: è indipendente dal microboost rimosso. La verticalità continua a dipendere dai rami HEIGHT e la larghezza dai delay, dagli allpass e dai rami decorrelati dei preset.
 
 Restano invariati i delay diretti (**0 ms** in AEGIS/SONAR, **1 ms** in WIDE/AURA), tutti i valori di volume e i rami di presenza, HEIGHT, riflessione tardiva, decorrelazione e ambienza. La decorrelazione finale mantiene la catena e i parametri esistenti. Nessuna modifica a FL/FR, FC, LFE, limiter, VOLAMP, gestione Atmos o controlli di pubblicazione.
 
@@ -511,8 +505,8 @@ Restano invariati i delay diretti (**0 ms** in AEGIS/SONAR, **1 ms** in WIDE/AUR
 **VOICEITA è un preset manuale pensato per favorire la leggibilità del parlato italiano.**
 Sul centrale riduce parte delle medio-basse e aggiunge una presenza moderata
 nella gamma vocale, con l'obiettivo di rendere le parole più distinguibili
-mantenendo il corpo della voce. I surround ricevono una lieve EQ, senza
-espansione spaziale aggiunta.
+mantenendo il corpo della voce. I surround ricevono solo il passa-alto a 40 Hz,
+senza espansione spaziale aggiunta.
 
 È una variante da confrontare con gli altri preset quando i dialoghi risultano
 impastati o poco in primo piano, soprattutto nell'ascolto domestico a volume
@@ -526,11 +520,9 @@ taratura, non un riconoscimento della lingua o del doppiaggio. Il risultato
 va valutato su dialoghi reali, confrontando i preset a volume percepito
 pareggiato; un miglioramento non è garantito su ogni mix.
 
-**Livello del centrale.** Il gain dedicato è `volume=2.9dB`, seguito da
-`volume=0.95`: circa **+2,45 dB netti esclusa l'EQ, prima dei guadagni condivisi**.
-Il gain di 2,9 dB mantiene la voce meno in primo piano rispetto alla taratura
-a 3,0/3,1 dB. Il bell a 150 Hz passa da +0,2 a −1,2 dB per alleggerire
-il corpo del centrale a volume sostenuto; la taratura va valutata all'ascolto.
+**Livello del centrale.** Il gain dedicato è `volume=3.1dB`, seguito da
+`volume=0.95`: circa **+2,65 dB netti esclusa l'EQ, prima dei guadagni condivisi**.
+La taratura del centrale resta invariata, incluso il bell a 150 Hz di +0,2 dB.
 Questo parametro è distinto dal **VOLAMP**, che regola il guadagno comune ai
 canali. Restano attivi i limiter e le eventuali compensazioni Atmos condivise.
 
@@ -539,7 +531,7 @@ canali. Restano attivi i limiter e le eventuali compensazioni Atmos condivise.
 | Filtro | Frequenza | Gain | Q |
 |---|---:|---:|---:|
 | Passa-alto | 40 Hz | — | 0,707 |
-| Bell | 150 Hz | −1,2 dB | 1,1 |
+| Bell | 150 Hz | +0,2 dB | 1,1 |
 | Bell | 300 Hz | −1,0 dB | 1,0 |
 | Bell | 450 Hz | −0,6 dB | 1,2 |
 | Bell | 1650 Hz | +0,7 dB | 1,6 |
@@ -551,8 +543,9 @@ I tagli a **300 e 450 Hz** mirano a mitigare il parlato gonfio e impastato
 l'articolazione e la presenza delle consonanti. La catena dedicata non
 aggiunge filtri a 1100, 5200, 6800 o 7200 Hz.
 
-**Surround (SL/SR).** Solo passa-alto a 40 Hz Q 0,707 e bell a 3200 Hz
-+0,1 dB Q 1,2. Nessuna attenuazione dedicata, delay, allpass o decorrelazione.
+**Surround (SL/SR).** Solo passa-alto a 40 Hz Q 0,707, a livello nominale
+(senza `volume=0.88`). `DECORR_GAIN_VOICEITA="0"`: nessuna espansione, delay,
+allpass o decorrelazione aggiuntiva.
 Restano applicati VOLAMP, bass trim e processing finale condiviso.
 
 **Selezione manuale.** Scegliere `voiceita` nel processore oppure sostituire
