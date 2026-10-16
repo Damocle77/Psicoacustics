@@ -472,6 +472,7 @@ Motore principale per tracce **5.1 esistenti**.
 - limiter sul centrale dopo il volamp e l’eventuale compensazione Atmos, senza auto-level;
 - processing surround differenziato per preset;
 - air/decorrelation layer controllato;
+- microboost finale sui soli SL/SR: bell a 3200 Hz, Q 1,2, +0,1 dB nei preset spaziali e +0,2 dB in VOICEITA;
 - Bass trim opzionale: low-shelf a 100 Hz sui sei canali prima dei limiter, da −3 a 0 dB;
 - trattamento LFE: volamp, correzione statica `--lfe-gain` ed eventuale compensazione Atmos prima del limiter dedicato; filtraggio dedicato affidato all’hardware;
 - compensazione del bed **FC +0,5 dB / LFE −0,5 dB**, con profilo EAC3 Atmos o marker originale, per tutti e cinque i preset;
@@ -490,9 +491,16 @@ Motore principale per tracce **5.1 esistenti**.
 
 ## Definizione del surround diretto
 
-AEGIS, SONAR, WIDE e AURA mantengono il passa-alto a **40 Hz, Q 0,707** sui rami diretti `SLd_in` e `SRd_in`, senza il microboost a 3200 Hz. Anche VOICEITA elimina il microboost e applica ai canali SL/SR soltanto il passa-alto a 40 Hz, prima delle elaborazioni globali condivise.
+| Preset | Canali | Filtro | Frequenza | Gain | Q |
+|---|---|---|---:|---:|---:|
+| AEGIS, SONAR, WIDE, AURA | SL e SR | Bell (peaking EQ) | 3200 Hz | +0,1 dB | 1,2 |
+| VOICEITA | SL e SR | Bell (peaking EQ) | 3200 Hz | +0,2 dB | 1,2 |
 
-In WIDE resta il **highshelf a 3500 Hz, +0,1 dB, Q 0,8** dopo gli `amix` SL/SR: è indipendente dal microboost rimosso. La verticalità continua a dipendere dai rami HEIGHT e la larghezza dai delay, dagli allpass e dai rami decorrelati dei preset.
+AEGIS, SONAR, WIDE e AURA mantengono il passa-alto a **40 Hz, Q 0,707** sui rami diretti `SLd_in` e `SRd_in`. Il microboost di presenza è un filtro a campana a **3200 Hz, Q 1,2** (valore storico), applicato una sola volta ai soli `SL_final` e `SR_final`: **+0,1 dB** nei quattro preset psicoacustici e **+0,2 dB** in VOICEITA.
+
+Ordine effettivo: blocco surround del preset → decorrelazione/ambienza finale (bypass in VOICEITA) → microboost SL/SR → bass trim e VOLAMP → join 5.1, highshelf e limiter finali. Il filtro interviene sul segnale già elaborato senza modificare gli ingressi o i parametri degli algoritmi spaziali. Non introduce aumenti del guadagno generale dei surround; la riduzione manuale di circa 1 dB sull'impianto resta un dato del contesto di ascolto. Il beneficio percettivo di incrementi così piccoli non è garantito e richiede un confronto d'ascolto controllato.
+
+In WIDE resta il **highshelf a 3500 Hz, +0,1 dB, Q 0,8** dopo gli `amix` SL/SR: è indipendente dal microboost finale. La verticalità continua a dipendere dai rami HEIGHT e la larghezza dai delay, dagli allpass e dai rami decorrelati dei preset.
 
 Restano invariati i delay diretti (**0 ms** in AEGIS/SONAR, **1 ms** in WIDE/AURA), tutti i valori di volume e i rami di presenza, HEIGHT, riflessione tardiva, decorrelazione e ambienza. La decorrelazione finale mantiene la catena e i parametri esistenti. Nessuna modifica a FL/FR, FC, LFE, limiter, VOLAMP, gestione Atmos o controlli di pubblicazione.
 
@@ -505,14 +513,15 @@ Restano invariati i delay diretti (**0 ms** in AEGIS/SONAR, **1 ms** in WIDE/AUR
 **VOICEITA è un preset manuale pensato per favorire la leggibilità del parlato italiano.**
 Sul centrale riduce parte delle medio-basse e aggiunge una presenza moderata
 nella gamma vocale, con l'obiettivo di rendere le parole più distinguibili
-mantenendo il corpo della voce. I surround ricevono solo il passa-alto a 40 Hz,
-senza espansione spaziale aggiunta.
+mantenendo il corpo della voce. I surround ricevono il passa-alto a 40 Hz
+e il microboost finale a 3200 Hz di +0,2 dB, senza espansione spaziale aggiunta.
 
 È una variante da confrontare con gli altri preset quando i dialoghi risultano
 impastati o poco in primo piano, soprattutto nell'ascolto domestico a volume
 medio/basso. AEGIS, SONAR, WIDE e AURA combinano l'EQ del centrale con diverse
 elaborazioni spaziali dei surround; VOICEITA concentra la propria taratura sul
-parlato e mantiene i surround a livello nominale.
+parlato e mantiene invariato il guadagno generale dei surround, aggiungendo
+solo la lieve enfasi di presenza descritta sopra.
 
 La taratura è fissa e agisce su **tutto il canale centrale**, inclusi musica ed
 effetti presenti: non separa la voce. Il nome indica la destinazione della
@@ -543,7 +552,8 @@ I tagli a **300 e 450 Hz** mirano a mitigare il parlato gonfio e impastato
 l'articolazione e la presenza delle consonanti. La catena dedicata non
 aggiunge filtri a 1100, 5200, 6800 o 7200 Hz.
 
-**Surround (SL/SR).** Solo passa-alto a 40 Hz Q 0,707, a livello nominale
+**Surround (SL/SR).** Passa-alto a 40 Hz Q 0,707 e microboost finale
+a campana a 3200 Hz, +0,2 dB, Q 1,2, senza aumento del guadagno generale
 (senza `volume=0.88`). `DECORR_GAIN_VOICEITA="0"`: nessuna espansione, delay,
 allpass o decorrelazione aggiuntiva.
 Restano applicati VOLAMP, bass trim e processing finale condiviso.
@@ -742,6 +752,8 @@ alla quale contribuisce il ritardo di 1 ms sul ramo surround diretto. Questo
 risultato non descrive tutti i mix reali e non indica un errore di decodifica,
 ma richiede un controllo dedicato se l'output sarà ascoltato soprattutto in
 stereo. `voiceita` non aggiunge questi ritardi né decorrelazione.
+Il microboost a 3200 Hz viene applicato dopo questo blocco, sui segnali
+`SL_final` e `SR_final`, e non modifica i parametri di decorrelazione.
 
 Per valutare la decorrelazione restano necessari confronti su estratti reali con volume pareggiato, anche in downmix stereo.
 

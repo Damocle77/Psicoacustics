@@ -517,8 +517,9 @@ EOF
 # BLOCCHI SURROUND
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-# Surround: nessun microboost a 3200 Hz in tutti e cinque i preset.
-# WIDE conserva il highshelf a 3500 Hz dopo gli amix, indipendente dal microboost rimosso.
+# Microboost a campana: 3200 Hz, Q 1.2 storico; +0.1 dB nei preset spaziali, +0.2 dB in VOICEITA.
+# Applicato una sola volta su SL_final/SR_final, dopo preset e decorrelazione, nel blocco finale.
+# WIDE conserva il highshelf a 3500 Hz dopo gli amix, indipendente dal microboost finale.
 # SONAR: cupola sonora con boost verticale, più presenza medio-alta per SL/SR, e un layer di decorrelazione a basso livello per aria.
 read -r -d '' SUR_FILTERS_SONAR <<'EOF' || true
 [SL]asplit=4[SLd_in][SLp_in][SLh_in][SLlate_in];
@@ -577,7 +578,8 @@ read -r -d '' SUR_FILTERS_AURA <<'EOF' || true
 [SRd][SRa]amix=inputs=2:weights='1.00 0.85':normalize=0,volume=0.95[SR_out];
 EOF
 
-# VOICEITA: surround a livello nominale, con solo HPF; nessuna espansione spaziale.
+# VOICEITA: questo blocco applica solo HPF, senza espansione spaziale o guadagno aggiunto.
+# Il microboost SL/SR a 3200 Hz, +0.2 dB, Q 1.2 viene applicato nel blocco finale di output.
 read -r -d '' SUR_FILTERS_VOICEITA <<'EOF' || true
 [SL]highpass=f=40:t=q:w=0.707[SL_out];
 [SR]highpass=f=40:t=q:w=0.707[SR_out];
@@ -662,6 +664,9 @@ EOF
 }
 
 # Blocco finale di output:
+# - applica il microboost solo a SL_final/SR_final, dopo tutta la psicoacustica;
+#   bell 3200 Hz, Q 1.2, +0.1 dB (AEGIS/SONAR/WIDE/AURA) o +0.2 dB (VOICEITA);
+#   segue bass trim e volamp, senza compensazioni del livello generale surround;
 # - applica il volamp separatamente ai cinque canali principali;
 # - LFE: volamp -> correzione statica --lfe-gain -> compensazione Atmos -> limiter;
 # - nessun passa-alto sul LFE; il preparatore Atmos non ne applica per default;
@@ -672,19 +677,24 @@ EOF
 # - applica gli offset del bed Atmos (profilo EAC3 Atmos o marker affidabile) prima dei limiter FC/LFE;
 # - limita FC dopo il volamp e la compensazione.
 build_output_join_graph() {
+  # Dopo preset e decorrelazione, prima di bass trim, VOLAMP e limiter; una sola volta per surround.
+  local surround_presence_gain="0.1"
+  [[ "$SUR_MODE" = "voiceita" ]] && surround_presence_gain="0.2"
   cat <<EOF
 [FLp]${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[FLf];
 [FRp]${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[FRf];
 [FCv]${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}${ATMOS_FC_GAIN_FILTER}alimiter=${FC_LIMITER_OPTS},aformat=channel_layouts=mono[FCf];
 [LFE]aformat=channel_layouts=mono,${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}${LFE_GAIN_FILTER}${ATMOS_LFE_GAIN_FILTER}alimiter=limit=0.94:attack=2.0:release=120:level=0:latency=1[LFEf];
-[SL_final]${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[SLf];
-[SR_final]${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[SRf];
+[SL_final]equalizer=f=3200:t=q:w=1.2:g=${surround_presence_gain},${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[SLf];
+[SR_final]equalizer=f=3200:t=q:w=1.2:g=${surround_presence_gain},${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[SRf];
 [FLf][FRf][FCf][LFEf][SLf][SRf]join=inputs=6:channel_layout=5.1(side):map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR,
 highshelf=f=12000:g=0.4:w=0.5:c=FL|FR|FC|SL|SR,alimiter=${MASTER_LIMITER_OPTS},aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=5.1(side)[aout]
 EOF
 }
 
-# La funzione build_filter_complex assembla il filtergraph completo concatenando i 4 blocchi principali: input split, processing voce, processing surround, output join. Il risultato viene stampato su stdout.
+# Assembla cinque blocchi: input split, voce, surround del preset, decorrelazione e output join.
+# Il microboost appartiene all'output join: riceve SL_final/SR_final dopo la decorrelazione
+# (bypass in VOICEITA), prima di bass trim, VOLAMP, join 5.1 e processing finale condiviso.
 build_filter_complex() {
   local input_graph psycho_graph output_graph
   input_graph="$(build_input_split_graph)"
