@@ -91,8 +91,11 @@ ESEMPI:
 
 REGOLAZIONI AUTOMATICHE:
   Analyzer seleziona esclusivamente AEGIS, SONAR, WIDE o AURA come preset filtro.
-  VOICEITA: preset manuale per dare priorita' ai dialoghi italiani, con EQ del centrale
-  e surround senza espansione spaziale. La scelta richiede una valutazione all'ascolto.
+  Volamp: base 3.5 dB, recupero loudness a 4.0 o 4.5 dB; cap 3.5 dB con LRA >= 18 LU.
+  VOICEITA: preset esclusivamente manuale, da applicare nel processore.
+  audio_analyzer non lo seleziona come preset, alternativa o fallback e non genera
+  comandi per questo preset. I relativi output AC3/EAC3 sono esclusi da analisi e batch.
+  VOICEITA: EQ centrale dedicata ai dialoghi italiani, surround senza espansione.
 -----------------------------------------------------------------------------------------------
 USAGE
   exit "${1:-1}"
@@ -187,7 +190,7 @@ if [[ "$MULTI_FILES_MODE" == true ]]; then
 else
   info "Metrica: CLASSIFIER RMS + VOICE BAND | Batch: ${BATCH_CODEC} / keep=${BATCH_KEEP} / ${BATCH_BITRATE} / run_processing=${CREATE_RUN}"
 fi
-info "Volamp heuristic: make-up DSP 3.0 dB + recupero loudness con step 3 / 3.5 / 4 / 4.5 dB"
+info "Volamp heuristic: make-up DSP 3.5 dB + recupero loudness con step 3.5 / 4 / 4.5 dB"
 
 # ── CONFIG ANALITICA INTERNA ──────────────────────────────────────────────────
 # Target domestico fisso: niente variabili da esportare prima del lancio.
@@ -216,10 +219,10 @@ if [[ "$ANALYZER_CACHE" == "1" ]] && ! mkdir -p -- "$ANALYZER_CACHE_DIR" 2>/dev/
   ANALYZER_CACHE="0"
 fi
 
-# Make-up gain minimo del processore.
+# Make-up gain minimo automatico: 3.5 dB, allineato al default del processore.
 # Non rappresenta una sorgente "bassa": compensa la perdita percepita introdotta
 # da split/EQ/limiter della pipeline psicoacustica.
-VOLAMP_BASE="3.0"
+VOLAMP_BASE="3.5"
 VOLAMP_MAX="4.5"
 
 # Bilanciamento LFE automatico: soglie iniziali conservative, da tarare con ascolti.
@@ -492,7 +495,7 @@ preset_color() {
 }
 
 # Classificatore automatico: quattro preset spaziali; la voce resta diagnostica.
-# VOICEITA richiede una valutazione all'ascolto: le metriche non misurano l'intelligibilita'.
+# VOICEITA richiede una scelta manuale: le metriche non misurano l'intelligibilita'.
 # Resta esclusivamente manuale, mai primario/alternativo/fallback.
 # Output: PRESET|COLORE|CONFIDENCE|ALTERNATIVE|REASON
 classify_preset_v6() {
@@ -714,25 +717,24 @@ store_metrics_cache() {
 
 # ────────────────────────────────────────────────────────────────────────────────
 # Euristica volamp da Loudness Integrata del file intero
-# Output consentiti automatici: 3 | 3.5 | 4 | 4.5
+# Output consentiti automatici: 3.5 | 4 | 4.5
 # ────────────────────────────────────────────────────────────────────────────────
 loudness_to_volamp() {
   local i_val="$1"
-  # Se la misura non e' disponibile, uso comunque il make-up DSP standard.
+  # Se la misura non e' disponibile o valida, uso la base standard di 3.5 dB.
   [[ -n "$i_val" ]] || { echo "$VOLAMP_BASE"; return; }
   [[ "$i_val" =~ ^-?[0-9]+([.][0-9]+)?$ ]] || { echo "$VOLAMP_BASE"; return; }
 
   local deficit
   deficit=$(awk -v i="$i_val" -v t="$LOUDNESS_TARGET" 'BEGIN { printf "%.2f", (t - i) }')
 
-  # Baseline allineata al default del processore: +3 dB nominali.
+  # Baseline allineata al default del processore: +3.5 dB nominali.
   # Gli step superiori recuperano sorgenti progressivamente piu' basse.
-  # - 3.0 dB = make-up DSP standard
-  # - 3.5/4.0/4.5 dB = recupero crescente sotto il target loudness
-  if awk -v d="$deficit" 'BEGIN { exit !(d < 0.8) }'; then
+  # - deficit < 1.8 dB: 3.5 dB = make-up DSP standard
+  # - deficit da 1.8 a < 3.0 dB: 4.0 dB = recupero loudness
+  # - deficit >= 3.0 dB: 4.5 dB = recupero loudness forte
+  if awk -v d="$deficit" 'BEGIN { exit !(d < 1.8) }'; then
     echo "$VOLAMP_BASE"
-  elif awk -v d="$deficit" 'BEGIN { exit !(d < 1.8) }'; then
-    echo "3.5"
   elif awk -v d="$deficit" 'BEGIN { exit !(d < 3.0) }'; then
     echo "4.0"
   else
@@ -743,8 +745,7 @@ loudness_to_volamp() {
 # Descrizione testuale del volamp consigliato per il display.
 volamp_to_desc() {
   case "$1" in
-    3|3.0)   echo "Make-up DSP standard" ;;
-    3.5)     echo "Recupero loudness leggero" ;;
+    3|3.0|3.5) echo "Make-up DSP standard" ;;
     4|4.0)   echo "Recupero loudness" ;;
     4.5)     echo "Recupero loudness forte" ;;
     6|6.0)   echo "Recupero massimo manuale" ;;
@@ -757,8 +758,7 @@ volamp_to_desc() {
 source_volume_status() {
   local volamp="$1"
   case "$volamp" in
-    3|3.0)   echo "standard / make-up DSP" ;;
-    3.5)     echo "basso" ;;
+    3|3.0|3.5) echo "standard / make-up DSP" ;;
     4|4.0)   echo "molto basso" ;;
     4.5)     echo "estremamente basso" ;;
     6|6.0)   echo "modalita' manuale spinta" ;;
@@ -776,7 +776,7 @@ cap_volamp_by_lra() {
   [[ -n "$lra" && "$lra" =~ ^-?[0-9]+([.][0-9]+)?$ ]] || { echo "$volamp"; return; }
 
   # Mix molto dinamico: consento il recupero ma limito gli step piu' spinti.
-  # Il cap non scende mai sotto il make-up base di 3.0 dB.
+  # Il cap non scende mai sotto il make-up base di 3.5 dB.
   if awk -v l="$lra" 'BEGIN { exit !(l >= 18.0) }'; then
     if awk -v v="$volamp" 'BEGIN { exit !(v > 3.5) }'; then
       echo "3.5"
@@ -1618,6 +1618,7 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
       echo '# ── COMANDI ──'
       echo 'BATCH_FAILURES=0'
       echo "# VOLAMP invariato; --lfe-gain e --bass-trim coordinati per-file."
+      echo "# VOICEITA e' un preset manuale: non selezionato o generato da audio_analyzer."
   
       # Per ogni file genero un comando usando sempre il preset raffinato per-file. Escludo gli output già processati.
       for (( i=0; i<CNT; i++ )); do

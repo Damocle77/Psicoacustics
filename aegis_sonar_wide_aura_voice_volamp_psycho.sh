@@ -5,18 +5,19 @@ set -uo pipefail
 # │   aegis_sonar_wide_aura_voice_volamp_psycho.sh - Ottobre 2026                    │
 # │   By Sandro (D@mocle77) Sabbioni                                                 │
 # │                                                                                  │
-# │   Motore di processing audio offline per tracce 5.1 (EAC3/AC3).                  │
+# │   Motore di processing audio offline per tracce 5.1 (EAC3/AC3/PCM).              │
 # │   Corregge dinamicamente mix sbilanciati tramite preset psicoacustici,           │
 # │   migliorando l'intelligibilità dei dialoghi e ripristinando la bolla            │
 # │   surround (Aegis, Sonar, Wide, Aura), con controllo mirato dei picchi LFE.      │
 # │                                                                                  │
 # │   - Diffusori Small: bass management/crossover 110 Hz affidato all'AVR           │
 # │   - Canali principali: highpass di sicurezza a 40 Hz                             │
-# │   - Voce: EQ sartoriale FC, dinamica piena, nessun compressore                   │
+# │   - EQ FC senza compressore; limiter FC/master                                   │
 # │   - Surround psicoacustici controllati                                           │
-# │   - LFE: volamp + balance statico + compensazione Atmos + limiter                │
+# │   - LFE: balance statico, compensazione Atmos e limiter dedicato                 │
 # │   - Pipeline leggibile: input -> split -> voce -> surround -> output             │
 # |   - gestione robusta dei sei canali anche con channel_layout=unknown             |
+# |   - PCM: c0..c5 = FL/FR/FC/LFE/SL/SR assunto; verificare sul render reale        |
 # ╰──────────────────────────────────────────────────────────────────────────────────╯
 
 # Color codes per log: info, warning, error, ok. Usati per distinguere i livelli di messaggio in console.
@@ -53,19 +54,6 @@ ATMOS_ORIGINAL_TITLE_LEGACY="EAC3 Atmos (Original)"
 ATMOS_FC_GAIN_DB="0.5"
 ATMOS_LFE_GAIN_DB="-0.5"
 
-# Guard rail della verifica comparativa tra sorgente e traccia DSP post-codec.
-# Soglie di integrita' conservative, non obiettivi di loudness: tollerano EQ,
-# bass trim e limiter. Un canale sorgente inattivo non impone un livello minimo all'output.
-VERIFY_SILENCE_PEAK_DB="-80.0"
-VERIFY_MAX_SAMPLE_DELTA_RATIO="0.02"
-VERIFY_ACTIVE_INPUT_RMS_DB="-65.0"
-VERIFY_MAX_OVERALL_DROP_DB="18.0"
-VERIFY_MAX_MAIN_CHANNEL_DROP_DB="24.0"
-VERIFY_MAX_LFE_DROP_DB="36.0"
-
-# Tolleranza minima di 100 ms per padding AC3/EAC3 e code dei delay sui clip brevi.
-VERIFY_MIN_SAMPLE_DELTA="4800"
-
 # Regola soltanto i rami SLh/SRh di SONAR e AEGIS, non il volume surround totale.
 # Default aumentato del 15% sul solo ramo verticale; normal ripristina il livello precedente.
 # Valori sperimentali, non altezza misurata.
@@ -99,31 +87,30 @@ PARAMETRI:
   bitrate   : Es. 640k o 768k (default: 640k per AC3, 768k per EAC3).
   preset    : aegis | sonar | wide | aura | voiceita (default: sonar).
   volamp    : Gain finale opzionale in dB prima del limiter.
-              Valori consentiti: 0 .. 6.0.
-              0 = OFF, default = 3.0 dB.
-              Esempi pratici: 0 | 3.0 | 4.0 | 5.0 | 6.0
-  --lfe-gain  : Correzione statica LFE da -2.0 a +2.0 dB (default: 0.0).
-                Separata dalla compensazione Atmos automatica di -0.5 dB.
-  --bass-trim : Low-shelf a 100 Hz sui sei canali, da -3.0 a 0.0 dB (default: 0.0).
+              Valori consentiti: 0 .. 5.0.
+              0 = OFF, default = 3.5 dB.
               
 MODALITA' --files:  Processa soltanto i file elencati. 
 ESEMPIO:
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 3.0 "film.mkv"
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh ac3 no 640k wide 3.0 ""
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files eac3 no 768k sonar 3.0 ep1.mkv ep4.mkv
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 3.5 "film.mkv"
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh ac3 no 640k wide 3.5 ""
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files eac3 no 768k sonar 3.5 ep1.mkv ep4.mkv
 
 PRESET DISPONIBILI:
   aegis     -> Simula NEURAL:X (DTS:X)  | Cupola Sonora
   sonar     -> Simula ATMOS (5.1.2)     | Boost Verticale
-  wide      -> Simula Dolby 7.1         | Allargamento Laterale
-  aura      -> Simula Dolby 6.1         | Allargamento Posteriore
-  voiceita  -> Dialoghi Italiani (5.1)  | EQ Canale Centrale Surround senza effetti spaziali
+  wide      -> Simula Dolby (7.1)       | Allargamento Laterale
+  aura      -> Simula Dolby (6.1)       | Allargamento Posteriore
+  voiceita  -> Dialoghi Italiani (5.1)  | EQ Canale Centrale Surround no effetti spaziali
+
+NOTA: VOICEITA e' un preset manuale: audio_analyzer non lo seleziona
+      e non genera comandi per questo preset; applicarlo direttamente con questo script.
 -----------------------------------------------------------------------------------------------------------------------
 USAGE
   exit "${1:-1}"
 }
 
-# Controllo se un token è un preset valido: deve essere uno dei nomi riconosciuti (aegis, sonar, wide, aura, voiceita).
+# Preset accettati dal processore; VOICEITA e' solo manuale, escluso dall'analyzer.
 is_preset_name() {
   case "$1" in
     aegis|sonar|wide|aura|voiceita) return 0 ;;
@@ -189,7 +176,7 @@ MULTI_FILES=()
 INPUT_FILE=""
 BITRATE=""
 SUR_MODE=""
-VOLAMP_DB="3.0"
+VOLAMP_DB="3.5"
 
 if [[ "${1:-}" == "--files" ]]; then
   # Sintassi fissa: --files codec keep bitrate preset volamp file...
@@ -227,14 +214,14 @@ else
     shift 2
     POSITIONAL=("$@")
 
-    # Ultimo parametro opzionale = volamp (0 .. 6.0 dB)
+    # Ultimo parametro opzionale = volamp (0 .. 5.0 dB)
     if (( ${#POSITIONAL[@]} > 0 )); then
       LAST_IDX=$((${#POSITIONAL[@]} - 1))
       LAST_ARG="${POSITIONAL[$LAST_IDX]}"
       LAST_ARG="${LAST_ARG/,/.}"
 
       if [[ "$LAST_ARG" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-        if awk -v v="$LAST_ARG" 'BEGIN { exit !(v >= 0 && v <= 6.0) }'; then
+        if awk -v v="$LAST_ARG" 'BEGIN { exit !(v >= 0 && v <= 5.0) }'; then
           VOLAMP_DB="$LAST_ARG"
           unset 'POSITIONAL[$LAST_IDX]'
           POSITIONAL=("${POSITIONAL[@]}")
@@ -242,7 +229,7 @@ else
           : # numero grande: bitrate senza suffisso
         else
           err "Valore numerico ambiguo: '$LAST_ARG'"
-          err "volamp ammette 0 .. 6.0 dB ; il bitrate va indicato >= 32 (es. 640 o 640k)."
+          err "volamp ammette 0 .. 5.0 dB ; il bitrate va indicato >= 32 (es. 640 o 640k)."
           exit 1
         fi
       fi
@@ -315,17 +302,16 @@ fi
 # Normalizzo sempre il valore in uscita come NNk.
 BITRATE="${BITRATE_KBPS}k"
 
-# Controllo volamp opzionale: se specificato, deve essere un numero da 0 a 6.0 (con optional decimale).
+# Controllo volamp opzionale: se specificato, deve essere un numero da 0 a 5.0 (con optional decimale).
 if ! [[ "$VOLAMP_DB" =~ ^[0-9]+([.][0-9]+)?$ ]] || \
-   ! awk -v v="$VOLAMP_DB" 'BEGIN { exit !(v >= 0 && v <= 6.0) }'; then
-  err "volamp non valido: '$VOLAMP_DB'. Valori consentiti: 0 .. 6.0 dB"
+   ! awk -v v="$VOLAMP_DB" 'BEGIN { exit !(v >= 0 && v <= 5.0) }'; then
+  err "volamp non valido: '$VOLAMP_DB'. Valori consentiti: 0 .. 5.0 dB"
   exit 1
 fi
 
-# Gain globale opzionale applicato ai singoli canali prima del join.
-#
+# Gain opzionale applicato ai singoli canali prima del join 5.1.
 # Sui canali principali conserva il recupero di volume richiesto.
-# Sul canale LFE viene applicato prima del limiter dedicato, evitando che
+# Sul LFE viene applicato prima del limiter dedicato, evitando che
 # un picco del sub gia' amplificato piloti inutilmente il limiter globale 5.1.
 case "$VOLAMP_DB" in
   0|0.0|0.00|0.000)
@@ -339,7 +325,7 @@ case "$VOLAMP_DB" in
 esac
 
 # Guard rail: sopra 3.5 dB il limiter finale puo' iniziare a lavorare in modo udibile.
-# fino a 6.0 resta permesso per sorgenti realmente basse, ma va trattato come modalita' spinta.
+# fino a 5.0 resta permesso per sorgenti realmente basse, ma va trattato come modalita' spinta.
 if awk -v v="$VOLAMP_DB" 'BEGIN { exit !(v > 3.5) }'; then
   warn "volamp alto (${VOLAMP_DB} dB): controlla eventuale compressione percepita nei picchi."
 fi
@@ -491,7 +477,8 @@ fi
 # BLOCCHI VOCE
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-# Equalizzazione sartioriale della voce per preset surround, con EQ mirato per intelligibilità mantenendo la dinamica naturale. Serve a dare presenza alla voce senza rubare scena ai frontali.
+# EQ della voce per i preset surround, mirato all'intelligibilità.
+# Il gain precede i limiter FC e master: sui passaggi forti la dinamica può ridursi.
 read -r -d '' VOICE_EQ_BASE <<'EOF' || true
 [FC]highpass=f=40:t=q:w=0.707,equalizer=f=150:t=q:w=1.1:g=0.2,equalizer=f=450:t=q:w=1.2:g=-0.6,equalizer=f=1100:t=q:w=1.4:g=0.8,equalizer=f=7200:t=q:w=2.5:g=-0.9[FC_pre];
 EOF
@@ -509,8 +496,9 @@ read -r -d '' VOICE_DELTA_AURA <<'EOF' || true
 EOF
 # VOICEITA: priorità ai dialoghi italiani con riduzione delle medio-basse e presenza moderata.
 # Catena FC autonoma; non sommare VOICE_EQ_BASE. Taratura fissa da valutare all'ascolto.
+# Sostegno FC +4.2 dB nominali; +0.5 dB rispetto alla taratura da 3.7 dB, a EQ invariata.
 read -r -d '' VOICE_DELTA_VOICEITA <<'EOF' || true
-[FC]highpass=f=40:t=q:w=0.707,volume=3.1dB,equalizer=f=150:t=q:w=1.1:g=0.2,equalizer=f=300:t=q:w=1.0:g=-1.0,equalizer=f=450:t=q:w=1.2:g=-0.6,equalizer=f=1650:t=q:w=1.6:g=0.7,equalizer=f=2450:t=q:w=1.3:g=1.4,equalizer=f=3800:t=q:w=2.0:g=0.9,volume=0.95[FCv];
+[FC]highpass=f=40:t=q:w=0.707,volume=4.2dB,equalizer=f=150:t=q:w=1.1:g=0.2,equalizer=f=300:t=q:w=1.0:g=-1.0,equalizer=f=450:t=q:w=1.2:g=-0.6,equalizer=f=1650:t=q:w=1.6:g=0.7,equalizer=f=2450:t=q:w=1.3:g=1.4,equalizer=f=3800:t=q:w=2.0:g=0.9,volume=0.95[FCv];
 EOF
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -635,16 +623,18 @@ set_preset_profile() {
 
 # Funzione per costruire il blocco di split dei canali in ingresso con mapping posizionale.
 build_input_split_graph() {
+  local front_filters="highpass=f=40:t=q:w=0.707,${FRONT_EQ}"
   cat <<EOF
 [0:${A_STREAM_INDEX}]${INPUT_AFORMAT},
 pan=5.1(side)|${INPUT_PAN_MAP}[base];
 [base]channelsplit=channel_layout=5.1(side)[FL][FR][FC][LFE][SL][SR];
-[FL]highpass=f=40:t=q:w=0.707,${FRONT_EQ}[FLp];
-[FR]highpass=f=40:t=q:w=0.707,${FRONT_EQ}[FRp];
+[FL]${front_filters}[FLp];
+[FR]${front_filters}[FRp];
 EOF
 }
 
 # Il blocco di processing surround psicoacustico: se DECORR_GAIN è 0, salto completamente la decorrelazione.
+# VOICEITA usa questo bypass, senza ritardi o layer di ambienza.
 build_surround_psycho_graph() {
   if [[ "${DECORR_GAIN:-0}" = "0" ]]; then
     cat <<EOF
@@ -663,7 +653,7 @@ EOF
   fi
 }
 
-# Blocco finale di output:
+# Blocco finale di output condiviso da tutti i preset:
 # - applica il microboost solo a SL_final/SR_final, dopo tutta la psicoacustica;
 #   bell 3200 Hz, Q 1.2, +0.1 dB (AEGIS/SONAR/WIDE/AURA) o +0.2 dB (VOICEITA);
 #   segue bass trim e volamp, senza compensazioni del livello generale surround;
@@ -704,7 +694,7 @@ build_filter_complex() {
 }
 
 # Codifica la traccia DSP e copia gli altri stream nello stesso processo FFmpeg.
-# Il contenitore MKV temporaneo passa poi le verifiche audio e struttura prima della pubblicazione.
+# Il contenitore MKV temporaneo passa il controllo di formato prima della pubblicazione.
 encode_and_mux_output() {
   local output_file="$1" filter_complex="$2" orig_title
   local -a cmd=(ffmpeg -hide_banner -nostdin -stats -xerror -loglevel warning -y)
@@ -733,131 +723,9 @@ encode_and_mux_output() {
   "${cmd[@]}"
 }
 
-# Misura peak, RMS, campioni e RMS per-canale.
-measure_audio_signal() {
-  local f="$1" map_spec="$2" log_file="$3" expected_channels=6 metrics
-  # Decodifica integrale con errore fatale; il log resta disponibile in caso di rifiuto.
-  LC_ALL=C ffmpeg -hide_banner -nostdin -nostats -xerror -v info -i "$f" \
-    -map "$map_spec" -vn -sn -dn \
-    -af "aformat=sample_rates=48000:sample_fmts=fltp,astats=metadata=0:reset=0" \
-    -f null - >/dev/null 2>"$log_file" || return 1
-
-  metrics="$(tr -d '\r' <"$log_file" | awk -v expected="$expected_channels" '
-    /Channel:/ { channel=$NF; overall=0; next }
-    /] Overall$/ { overall=1; channel=0; next }
-    /Peak level dB:/ { if (overall) overall_peak=$NF; next }
-    /RMS level dB:/ {
-      if (overall) overall_rms=$NF
-      else if (channel >= 1 && channel <= expected) channel_rms[channel]=$NF
-      next
-    }
-    /Number of samples:/ { if (overall) samples=$NF; next }
-    END {
-      if (overall_peak == "" || overall_rms == "" || samples == "") exit 1
-      for (i=1; i<=expected; i++) if (channel_rms[i] == "") exit 1
-      printf "%s|%s|%s", overall_peak, overall_rms, samples
-      for (i=1; i<=expected; i++) printf "|%s", channel_rms[i]
-      printf "\n"
-    }
-  ')" || return 1
-
-  [[ -n "$metrics" ]] || return 1
-  printf '%s\n' "$metrics"
-}
-
-is_finite_db() {
-  [[ "$1" =~ ^-?[0-9]+([.][0-9]+)?$ ]]
-}
-
-verify_output_audio_signal() {
-  local f="$1" input_metrics="$2" log_file="$3" output_metrics
-  local -a in_m out_m channel_names=(FL FR FC LFE SL SR)
-  local input_peak input_rms input_samples output_peak output_rms output_samples
-  local i input_channel_rms output_channel_rms max_drop
-
-  output_metrics="$(measure_audio_signal "$f" "0:a:0" "$log_file")" || {
-    VERIFY_REASON="decodifica output fallita o metriche astats incomplete"
-    return 2
-  }
-
-  IFS='|' read -r -a in_m <<<"$input_metrics"
-  IFS='|' read -r -a out_m <<<"$output_metrics"
-  [[ ${#in_m[@]} -eq 9 && ${#out_m[@]} -eq 9 ]] || {
-    VERIFY_REASON="numero di metriche input/output inatteso"
-    return 2
-  }
-
-  input_peak="${in_m[0]}"; input_rms="${in_m[1]}"; input_samples="${in_m[2]}"
-  output_peak="${out_m[0]}"; output_rms="${out_m[1]}"; output_samples="${out_m[2]}"
-
-  if [[ "$output_peak" == "-inf" || "$output_rms" == "-inf" ]]; then
-    VERIFY_REASON="output digitalmente silenzioso"
-    return 1
-  fi
-  if ! is_finite_db "$input_peak" || ! is_finite_db "$input_rms" || \
-     ! is_finite_db "$output_peak" || ! is_finite_db "$output_rms" || \
-     ! [[ "$input_samples" =~ ^[0-9]+([.][0-9]+)?$ && "$output_samples" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-    VERIFY_REASON="metriche globali non numeriche"
-    return 2
-  fi
-
-  if awk -v i="$input_samples" -v o="$output_samples" 'BEGIN { exit !(i <= 0 || o <= 0) }'; then
-    VERIFY_REASON="numero di campioni nullo/non valido"
-    return 2
-  fi
-  if awk -v v="$output_peak" -v lim="$VERIFY_SILENCE_PEAK_DB" 'BEGIN { exit !(v <= lim) }'; then
-    VERIFY_REASON="picco output troppo basso (${output_peak} dBFS)"
-    return 1
-  fi
-  if awk -v i="$input_rms" -v o="$output_rms" -v lim="$VERIFY_MAX_OVERALL_DROP_DB" \
-       'BEGIN { exit !((i-o) > lim) }'; then
-    VERIFY_REASON="perdita RMS globale eccessiva: input=${input_rms} dBFS, output=${output_rms} dBFS"
-    return 1
-  fi
-  if awk -v i="$input_samples" -v o="$output_samples" -v d="$VERIFY_MAX_SAMPLE_DELTA_RATIO" \
-       -v floor="$VERIFY_MIN_SAMPLE_DELTA" \
-       'BEGIN { tolerance=i*d; if (tolerance < floor) tolerance=floor;
-                exit !(o < i-tolerance || o > i+tolerance) }'; then
-    VERIFY_REASON="durata incoerente: campioni input=${input_samples}, output=${output_samples}"
-    return 1
-  fi
-
-  for i in {0..5}; do
-    input_channel_rms="${in_m[$((i+3))]}"
-    output_channel_rms="${out_m[$((i+3))]}"
-
-    if { [[ "$input_channel_rms" != "-inf" ]] && ! is_finite_db "$input_channel_rms"; } || \
-       { [[ "$output_channel_rms" != "-inf" ]] && ! is_finite_db "$output_channel_rms"; }; then
-      VERIFY_REASON="metrica canale ${channel_names[$i]} non numerica"
-      return 2
-    fi
-    # Un canale sorgente sotto questa soglia e' considerato intenzionalmente inattivo.
-    [[ "$input_channel_rms" == "-inf" ]] && continue
-    if ! awk -v v="$input_channel_rms" -v lim="$VERIFY_ACTIVE_INPUT_RMS_DB" \
-         'BEGIN { exit !(v > lim) }'; then
-      continue
-    fi
-    if [[ "$output_channel_rms" == "-inf" ]]; then
-      VERIFY_REASON="canale ${channel_names[$i]} attivo in input ma silenzioso in output"
-      return 1
-    fi
-
-    max_drop="$VERIFY_MAX_MAIN_CHANNEL_DROP_DB"
-    [[ $i -eq 3 ]] && max_drop="$VERIFY_MAX_LFE_DROP_DB"
-    if awk -v src="$input_channel_rms" -v dst="$output_channel_rms" -v lim="$max_drop" \
-         'BEGIN { exit !((src-dst) > lim) }'; then
-      VERIFY_REASON="canale ${channel_names[$i]} attenuato eccessivamente: input=${input_channel_rms} dBFS, output=${output_channel_rms} dBFS"
-      return 1
-    fi
-  done
-
-  info "Verifica audio: peak ${input_peak}→${output_peak} dBFS; RMS ${input_rms}→${output_rms} dBFS; campioni ${input_samples}→${output_samples}"
-  return 0
-}
-
 # Controllo strutturale della traccia DSP primaria nel candidato MKV.
 # Fino a 20 MB / 20 secondi di analisi; nessuna scansione integrale aggiuntiva.
-# Il segnale del candidato MKV viene verificato integralmente prima del probe.
+# Controllo dei metadati del formato; nessuna scansione RMS/campioni.
 verify_mux_audio_layout() {
   local probe field codec="" channels="" layout="" rate="" default=""
   probe="$(ffprobe -v error -analyzeduration 20000000 -probesize 20000000 -select_streams a:0 \
@@ -878,9 +746,9 @@ verify_mux_audio_layout() {
 }
 
 # Riserva i temporanei sullo stesso filesystem dell'output; pubblica solo dopo
-# la verifica completa. Errori e interruzioni lasciano candidato, graph e log.
+# il controllo di formato. Errori e interruzioni lasciano candidato e graph.
 process_verified_output() {
-  local graph="$1" work_dir mux_file input_metrics
+  local graph="$1" work_dir mux_file
   work_dir="$(mktemp -d "$(dirname -- "$OUT_FILE")/.$(basename -- "${OUT_FILE%.mkv}").partial.XXXXXX")" || {
     err "Impossibile riservare la directory temporanea"
     return 1
@@ -889,20 +757,8 @@ process_verified_output() {
   mux_file="$work_dir/mux.mkv"
   printf '%s\n' "$graph" >"$work_dir/filter_complex.txt" || return 1
 
-  info "Misura di riferimento sull'intera traccia sorgente"
-  input_metrics="$(measure_audio_signal "$CUR_FILE" "0:${A_STREAM_INDEX}" "$work_dir/input-astats.log")" || {
-    err "Sorgente non misurabile; output finale invariato. Temporanei: $work_dir"
-    return 1
-  }
   if ! encode_and_mux_output "$mux_file" "$graph"; then
     err "Encoding/mux fallito; output finale invariato. Temporanei: $work_dir"
-    return 1
-  fi
-  VERIFY_REASON=""
-  info "Verifica comparativa post-codec sull'intera traccia audio"
-  if ! verify_output_audio_signal "$mux_file" "$input_metrics" "$work_dir/output-astats.log"; then
-    err "Verifica rifiutata/non conclusiva: $VERIFY_REASON"
-    err "Output finale invariato. Temporanei: $work_dir"
     return 1
   fi
   if ! verify_mux_audio_layout "$mux_file"; then
@@ -914,14 +770,14 @@ process_verified_output() {
     return 1
   fi
   # Solo file creati da questa esecuzione nella directory riservata da mktemp.
-  rm -f -- "$work_dir/filter_complex.txt" "$work_dir/input-astats.log" "$work_dir/output-astats.log"
+  rm -f -- "$work_dir/filter_complex.txt"
   rmdir -- "$work_dir" || warn "Directory temporanea conservata: $work_dir"
-  ok "Creato e verificato: $OUT_FILE"
+  ok "Creato (formato traccia verificato): $OUT_FILE"
   return 0
 }
 
-trap 'warn "Interrotto: output non verificati e temporanei conservati per il debug"; exit 130' INT
-trap 'warn "Terminato: output non verificati e temporanei conservati per il debug"; exit 143' TERM
+trap 'warn "Interrotto: temporanei conservati per il debug"; exit 130' INT
+trap 'warn "Terminato: temporanei conservati per il debug"; exit 143' TERM
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 # CICLO ELABORAZIONE
@@ -963,6 +819,8 @@ for CUR_FILE in "${FILES[@]}"; do
   # Mapping input robusto e non distruttivo: per ogni layout 5.1 supportato copio sempre
   # i sei canali per indice. Cosi' aformat non puo' attivare una rimappatura automatica.
   # Ordine canonico atteso: c0 FL, c1 FR, c2 FC, c3 LFE, c4 surround L, c5 surround R.
+  # Per PCM/unknown e' un'assunzione sui campioni, non una prova dal titolo:
+  # verificare l'identita' dei canali nel render prima della pubblicazione definitiva.
   INPUT_AFORMAT="aformat=sample_rates=48000:sample_fmts=fltp"
   INPUT_PAN_MAP="FL=c0|FR=c1|FC=c2|LFE=c3|SL=c4|SR=c5"
   case "$A_LAYOUT" in
