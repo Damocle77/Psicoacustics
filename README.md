@@ -2,7 +2,7 @@
   <img src="psico_logo.png" width="700" alt="Sonary Suite Logo">
 </p>
 
-# 🎧 Psychoacoustic Suite - Ottobre 2026
+# 🎧 Psychoacoustic Suite - Novembre 2026
 
 Suite di script **Bash AWK + FFmpeg** per analizzare, normalizzare, correggere e trasformare tracce audio stereo, 5.1 ed EAC3 Atmos/JOC in modo offline, ripetibile e controllato.
 
@@ -31,6 +31,10 @@ Suite di script **Bash AWK + FFmpeg** per analizzare, normalizzare, correggere e
 La filosofia è semplice: **misurare prima, processare dopo**. Il Classifier dell'analyzer misura scena full-band, prominenza della voce, mascheramento e width dei surround; sceglie quindi il preset per-file più adatto e può generare un batch riproducibile. Gli altri script coprono upmix stereo, preparazione Atmos/EAC3 e processing binaurale per cuffie.
 
 La taratura 5.1 è pensata per un impianto domestico ibrido con frontali a torre 3 vie, centrale e surround compatti, tutti configurati **Small** con crossover AVR unico intorno a **110 Hz**, uno o due subwoofer attivi gestiti dall'AVR, ascolto medio/basso e priorità all'intelligibilità della voce italiana.
+
+La pipeline 5.1 (preparatore Atmos, analyzer e processore Aegis/Sonar/Wide/Aura/Voiceita) disattiva la **DRC dei metadati Dolby** nella decodifica AC3/EAC3 con l'opzione di input `-drc_scale:<indice_stream> 0`, posta prima di `-i` nel comando FFmpeg. L'opzione è applicata allo stream selezionato; gli altri codec mantengono la propria decodifica. La DRC dell'AVR è indipendente e non può annullare una compressione già incorporata nei campioni di un render precedente. Le tracce originali conservate con stream copy mantengono dati e metadati originali.
+
+Questa scelta non disattiva `dynaudnorm`, i limiter o gli altri filtri della suite e non recupera la dinamica già modificata nei file precedenti. Livelli e picchi possono cambiare sulle sorgenti con metadati DRC attivi: riascoltare i render e controllare l'intervento dei limiter. Lo schema della cache dell'analyzer è aggiornato per ricalcolare le metriche con la nuova decodifica.
 
 Setup di riferimento: **Yamaha RX-V4A**, frontali **Harman Kardon 3 vie**, centrale/surround **JBL SCS200**, 2x subwoofer **Kenwood ST40**, bass management AVR a **110 Hz**.
 
@@ -69,7 +73,7 @@ Obiettivi principali:
 - build FFmpeg con **libsoxr** per `stereo251_upmix...`;
 - build FFmpeg con **libbs2b** per `asmr_vr_intimate...`.
 
-Python 3 è necessario solo per eseguire i [test di regressione dell'upmix](#verifiche-di-regressione); gli script audio non lo richiedono.
+Gli script audio non richiedono Python.
 
 La suite è sviluppata e verificata con **FFmpeg/ffprobe 8.1.2**. Non usare release con major superiore a 8 (`9.x` o successive) finché la suite non viene nuovamente validata: output testuale di `astats`/`ebur128`, opzioni dei filtri e semantica dei channel layout possono cambiare. Anche FFmpeg 7.x e precedenti sono fuori dal perimetro supportato. È consigliato usare `ffmpeg` e `ffprobe` provenienti dalla stessa build.
 
@@ -103,7 +107,7 @@ chmod +x *.sh
 ```
 
 Se si scarica lo ZIP, estrarlo completamente prima di eseguire gli script.
-La versione di lavoro è costituita dai cinque script `.sh` e dal README nella cartella principale. Gli archivi `.rar` rimasti sono copie precedenti: non vengono aggiornati insieme ai file attivi e non vanno estratti sopra questi ultimi senza un confronto.
+La versione di lavoro è costituita dai cinque script principali `.sh` e dal README nella cartella principale, senza copie sperimentali di test. Il processore 5.1 e il preparatore Atmos mantengono la pipeline precedente con la sola DRC Dolby disattivata in decodifica. Gli archivi `.rar` rimasti sono copie precedenti: non vengono aggiornati insieme ai file attivi e non vanno estratti sopra questi ultimi senza un confronto.
 
 I comandi di questa guida vanno eseguiti in Bash (su Windows: Git Bash, MSYS2
 o WSL). Per esempio, in Git Bash `cd /e/Download` apre `E:\Download`.
@@ -145,7 +149,7 @@ done
 
 Nei quattro processori sono state rimosse le scansioni comparative integrali della sorgente e dell'output per RMS, sample peak e numero di campioni. Restano gli errori FFmpeg, i controlli preventivi e la pubblicazione tramite file temporaneo. L'analyzer conserva le misure necessarie alle proprie decisioni.
 
-I messaggi finali specificano **«formato traccia verificato»** oppure **«True Peak verificato»**: nessuno dei due indica un confronto completo con il segnale sorgente. Le osservazioni della revisione iniziale sono descritte in [REVISIONE_AUDIO.md](REVISIONE_AUDIO.md); le successive modifiche all'upmix V10 sono documentate nella sezione dedicata sotto.
+I messaggi finali specificano **«formato traccia verificato»** oppure **«True Peak verificato»**: nessuno dei due indica un confronto completo con il segnale sorgente. Le caratteristiche dell'upmix V10 sono documentate nella sezione dedicata sotto.
 
 ## Quick Start: comandi manuali
 
@@ -155,7 +159,7 @@ Analizzare un file senza generare il batch:
 ./audio_analyzer_volamp_psycho.sh eac3 no 768k no "film.mkv"
 ```
 
-Elaborare un file scegliendo preset e volume (qui SONAR, 3 dB):
+Elaborare un file scegliendo preset e volume (qui SONAR, 3,5 dB):
 
 ```bash
 ./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 3.5 "film.mkv"
@@ -207,6 +211,7 @@ La scelta si basa sull'ascolto del film e sulle preferenze personali.
 ## Caratteristiche
 
 - selezione del 5.1 score-based: lingua italiana e flag default, senza confronto con la durata del container;
+- decodifica AC3/EAC3 con DRC Dolby disattivata, coerente con il processore;
 - misura in un'unica decodifica full-duration `I(full)`, `LRA`, sample peak,
   full-band, banda voce, `Width MS` e finestre LFE/bassi;
 - indicatore di avanzamento durante la scansione completa;
@@ -306,7 +311,7 @@ Le soglie sono sperimentali, da tarare all'ascolto. Per i tagli non è stata int
 
 Rigenerare `run_processing.sh` per usare le nuove decisioni: i batch esistenti conservano i gain espliciti già calcolati. Il batch passa `--lfe-gain` e `--bass-trim` al processore; le singole righe restano modificabili entro i range consentiti.
 
-La cache usa lo schema **`classifier-rms-voiceband-ebur-lfe-bass-v5-persistence`**, con 38 campi. Conserva le misure LFE e Bass, quattro frazioni di persistenza LFE, attività e ultime decisioni. Le strutture precedenti vengono invalidate automaticamente. Finestra, gate di misura, soglie HOT/VERY_HOT LFE, offset Atmos e soglia HOT Bass entrano nella chiave perché cambiano le misure. Durata minima e percentuali richieste per decidere il taglio vengono ricalcolate anche su cache HIT.
+La cache usa lo schema **`classifier-rms-voiceband-ebur-lfe-bass-v6-no-dolby-drc`**, con 38 campi. Conserva le misure LFE e Bass, quattro frazioni di persistenza LFE, attività e ultime decisioni. Le strutture precedenti vengono invalidate automaticamente, comprese le metriche ottenute prima della disattivazione della DRC Dolby. Finestra, gate di misura, soglie HOT/VERY_HOT LFE, offset Atmos e soglia HOT Bass entrano nella chiave perché cambiano le misure. Durata minima e percentuali richieste per decidere il taglio vengono ricalcolate anche su cache HIT.
 
 ## Bass trim automatico: bassi complessivi
 
@@ -479,6 +484,7 @@ Motore principale per tracce **5.1 esistenti**.
 ## Caratteristiche
 
 - input 5.1, output AC3/EAC3 5.1(side);
+- DRC Dolby disattivata nel decoder AC3/EAC3 prima dei filtri; nessuna opzione Dolby sugli altri codec;
 - preset `aegis`, `sonar`, `wide`, `aura`, `voiceita`; `voiceita` è solo manuale, escluso dalla selezione dell'analyzer;
 - selezione stream score-based: entrano solo tracce a 6 canali; lingua italiana `+300`, flag default `+200`; la durata del container non entra nel punteggio;
 - layout gestiti: `5.1`, `5.1(back)`, `5.1(side)`;
@@ -641,6 +647,14 @@ Compatibilità: resta accettato il vecchio ordine `<codec> <keep> <file|""> [bit
 | `preset` | `aegis`, `sonar`, `wide`, `aura`, `voiceita` | `sonar` | modalità DSP; `voiceita` solo manuale |
 | `volamp` | `0–5.0` | `3.5` | gain per-canale prima del join e dei limiter dedicati; un valore esplicito prevale sul default |
 | `file` | file o stringa vuota | cartella corrente | `""` usa la cartella corrente |
+
+## Versione principale
+
+La versione corrente è **Novembre 2026**, con la sola DRC dei metadati Dolby disattivata rispetto alla pipeline precedente del processore 5.1 e del preparatore Atmos. EQ, surround, VOLAMP, compensazioni Atmos e `dynaudnorm` mantengono la taratura esistente.
+
+Il processore conserva i tempi dei limiter: **FC 1,5 / 60 ms**, **LFE 2 / 120 ms** e **master 2,5 / 50 ms** (attack / release). Processore e preparatore Atmos verificano il formato della traccia primaria, senza scansioni True Peak post-codec o retry. Gli output mantengono i nomi consueti, per esempio `film_EAC3_Sonar.mkv` e `film-0.mkv`; il batch dell'analyzer richiama il processore principale.
+
+I controlli True Peak e gli eventuali retry già presenti nell'upmix e nell'ASMR restano quelli descritti nelle rispettive sezioni. Non sono copie sperimentali del processore 5.1 o del preparatore Atmos.
 
 ## Catena finale
 
@@ -1000,13 +1014,9 @@ Variabili principali:
 | `QUAD_AIR_VOL` | livello dell'air layer del preset `quad` |
 | `LFE_VOL` | quantità di LFE sintetico |
 
-## Verifiche di regressione
+## Controlli dell'upmix
 
-```bash
-python -m unittest discover -s tests -v
-```
-
-Le prove richiedono Python 3, Bash, FFmpeg con SOXR e ffprobe. Su Windows viene cercato prima il Bash di Git/MSYS2; `BASH` può indicare un altro eseguibile. Gli audio sintetici vengono creati in una directory temporanea. Gli 8 test verificano entrambi i codec e preset, copia stereo, durata PCM, routing mono/controfase e su un solo lato, attenuazione del bed correlato, silenzio di 10 ms, lingua e offset A/V, ingresso AC3, file corrotti, sorgenti senza stereo e True Peak con eventuale retry. Il controllo della durata PCM riguarda il graph prima della codifica; la verifica True Peak eseguita dallo script su ogni candidato non confronta la durata con la sorgente. Le prove non sostituiscono un confronto d'ascolto su materiale reale.
+Questa distribuzione non include una suite di regressione automatizzata. Per il controllo sintattico usare `bash -n stereo251_upmix_psycho.sh`. Il controllo True Peak integrale e l'eventuale retry vengono eseguiti dallo script sui candidati prodotti, come descritto sopra; non confrontano durata o identità dei canali con la sorgente. Verificare inoltre all'ascolto routing dei canali, sincronizzazione A/V e risultato dei preset su materiale reale.
 
 ---
 
@@ -1139,7 +1149,7 @@ In termini tecnici FFmpeg decodifica il bed multicanale disponibile; non esegue 
 
 ```text
 EAC3 Atmos/JOC originale
-├─ decode bed/core multicanale
+├─ decode bed/core multicanale con DRC Dolby disattivata
 │  → 5.1(side)
 │  → dynaudnorm (high-pass 20 Hz opzionale, disattivato di default)
 │  → EAC3 5.1 normalizzata, traccia 1/default
@@ -1361,7 +1371,7 @@ Con `run=si`, il batch viene scritto in un temporaneo nella stessa directory e p
 ./audio_analyzer_volamp_psycho.sh eac3 no 768k si . && ./run_processing.sh
 ```
 
-Con `run=no`, il batch esistente resta sempre intatto. `INT` e `TERM` fermano il decoder dell’analyzer, rimuovono i temporanei e terminano con codice `130` e `143`. Analyzer e Aegis usano `-xerror`. La versione della cache dell’analyzer è stata incrementata per ricalcolare le vecchie metriche con il controllo degli errori attivo.
+Con `run=no`, il batch esistente resta sempre intatto. `INT` e `TERM` fermano il decoder dell’analyzer, rimuovono i temporanei e terminano con codice `130` e `143`. Analyzer e Aegis usano `-xerror`. Lo schema attuale della cache dell’analyzer ricalcola le vecchie metriche con il controllo degli errori attivo e la DRC Dolby disattivata; rigenerare il batch per aggiornare anche preset e gain espliciti già salvati.
 
 Restano possibili miglioramenti di manutenzione: uniformare i parser CSV di analyzer/Aegis ai parser chiave/valore degli altri script e completare i preflight. Il batch usa ancora percorsi relativi: eseguirlo dalla directory di generazione con il processore presente, oppure impostare `PROC` con un percorso assoluto.
 

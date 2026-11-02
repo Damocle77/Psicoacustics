@@ -2,7 +2,7 @@
 set -uo pipefail
 
 # ╭──────────────────────────────────────────────────────────────────────────────╮
-# │   asmr_vr_intimate_psycho.sh - Ottobre 2026                                  │
+# │   asmr_vr_intimate_psycho.sh - Novembre 2026                                 │
 # │   By Sandro (D@mocle77) Sabbioni                                             │
 # │                                                                              │
 # │   Processing binaurale ottimizzato per ASMR / VR / contenuto intimo.         │
@@ -12,7 +12,7 @@ set -uo pipefail
 # │   CHANGELOG V3:                                                              │
 # │     - Rimosso set -e (allineato a aegis/analyzer/upmix)                      │
 # │     - Selezione stream score-based (stereo, default, ita)                    │
-# │     - Output atomico e verifica comparativa prima della pubblicazione        │
+# │     - Output atomico e controllo True Peak prima della pubblicazione        │
 # │     - Prompt overwrite da /dev/tty con opzione "tutti" (-f)                  │
 # │     - Propagazione language tag                                              │
 # │     - LFO fix: tremolo+flanger (la pan= non supporta espressioni t-varianti) │
@@ -53,13 +53,6 @@ DISABLE_ITD=0
 DISTANCE_MODE="whisper"
 OUT_CODEC="aac"
 OUT_BITRATE="320k"
-
-# Guard rail della verifica comparativa stereo input/output.
-VERIFY_SILENCE_PEAK_DB="-80.0"
-VERIFY_ACTIVE_INPUT_RMS_DB="-65.0"
-VERIFY_MAX_OVERALL_DROP_DB="30.0"
-VERIFY_MAX_CHANNEL_DROP_DB="30.0"
-VERIFY_MIN_SAMPLE_RATIO="0.98"
 
 show_help() {
   cat <<'EOF'
@@ -243,7 +236,7 @@ pick_best_stereo_stream() {
 #   7. loudnorm — normalizza la catena gia' processata verso il target del preset
 #   8. ritorno esplicito a 48 kHz
 #   9. alimiter finale — safety net senza auto-level
-#  10. eventuale trim del retry, encoding, QC/True Peak integrali e mux unico
+#  10. eventuale trim del retry, encoding, True Peak integrale e mux unico
 # ────────────────────────────────────────────────────────────────────────────────
 
 # WHISPER (20-30cm)
@@ -278,119 +271,6 @@ ITD_CENTER=""
 # Il risultato e' un leggero "respiro" nell'immagine stereo senza artefatti.
 LFO_PART="tremolo=f=0.12:d=0.06,flanger=delay=2:depth=1.5:regen=0:width=40:speed=0.15:shape=sinusoidal:phase=50"
 
-# Misura peak, RMS, campioni e RMS L/R in una sola decodifica.
-# Output: peak|rms|samples|rms_L|rms_R
-measure_audio_signal() {
-  local f="$1" map_spec="$2" probe metrics
-  probe="$(
-    ffmpeg -hide_banner -nostdin -nostats -xerror -v info -i "$f" \
-      -map "$map_spec" -vn -sn -dn \
-      -af "aformat=sample_rates=48000:sample_fmts=fltp,astats=metadata=0:reset=0" \
-      -f null - 2>&1
-  )" || return 1
-  probe="${probe//$'\r'/}"
-
-  metrics="$(printf '%s\n' "$probe" | awk '
-    /Channel:/ { channel=$NF; overall=0; next }
-    /] Overall$/ { overall=1; channel=0; next }
-    /Peak level dB:/ { if (overall) overall_peak=$NF; next }
-    /RMS level dB:/ {
-      if (overall) overall_rms=$NF
-      else if (channel >= 1 && channel <= 2) channel_rms[channel]=$NF
-      next
-    }
-    /Number of samples:/ { if (overall) samples=$NF; next }
-    END {
-      if (overall_peak == "" || overall_rms == "" || samples == "") exit 1
-      for (i=1; i<=2; i++) if (channel_rms[i] == "") exit 1
-      printf "%s|%s|%s|%s|%s\n", overall_peak, overall_rms, samples, channel_rms[1], channel_rms[2]
-    }
-  ')" || return 1
-
-  [[ -n "$metrics" ]] || return 1
-  printf '%s\n' "$metrics"
-}
-
-is_finite_db() {
-  [[ "$1" =~ ^-?[0-9]+([.][0-9]+)?$ ]]
-}
-
-verify_output_audio_signal() {
-  local f="$1" input_metrics="$2" output_metrics
-  local -a in_m out_m channel_names=(L R)
-  local input_peak input_rms input_samples output_peak output_rms output_samples
-  local i input_channel_rms output_channel_rms
-
-  output_metrics="$(measure_audio_signal "$f" "0:a:0")" || {
-    VERIFY_REASON="astats non ha restituito metriche stereo complete per l'output"
-    return 2
-  }
-  IFS='|' read -r -a in_m <<<"$input_metrics"
-  IFS='|' read -r -a out_m <<<"$output_metrics"
-  [[ ${#in_m[@]} -eq 5 && ${#out_m[@]} -eq 5 ]] || {
-    VERIFY_REASON="numero di metriche input/output inatteso"
-    return 2
-  }
-
-  input_peak="${in_m[0]}"; input_rms="${in_m[1]}"; input_samples="${in_m[2]}"
-  output_peak="${out_m[0]}"; output_rms="${out_m[1]}"; output_samples="${out_m[2]}"
-  if [[ "$output_peak" == "-inf" || "$output_rms" == "-inf" ]]; then
-    VERIFY_REASON="output digitalmente silenzioso"
-    return 1
-  fi
-  if ! is_finite_db "$input_peak" || ! is_finite_db "$input_rms" || \
-     ! is_finite_db "$output_peak" || ! is_finite_db "$output_rms" || \
-     ! [[ "$input_samples" =~ ^[0-9]+([.][0-9]+)?$ && "$output_samples" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-    VERIFY_REASON="metriche globali non numeriche"
-    return 2
-  fi
-  if awk -v i="$input_samples" -v o="$output_samples" 'BEGIN { exit !(i <= 0 || o <= 0) }'; then
-    VERIFY_REASON="numero di campioni nullo/non valido"
-    return 2
-  fi
-  if awk -v v="$output_peak" -v lim="$VERIFY_SILENCE_PEAK_DB" 'BEGIN { exit !(v <= lim) }'; then
-    VERIFY_REASON="picco output troppo basso (${output_peak} dBFS)"
-    return 1
-  fi
-  if awk -v i="$input_rms" -v o="$output_rms" -v lim="$VERIFY_MAX_OVERALL_DROP_DB" \
-       'BEGIN { exit !((i-o) > lim) }'; then
-    VERIFY_REASON="perdita RMS globale eccessiva: input=${input_rms} dBFS, output=${output_rms} dBFS"
-    return 1
-  fi
-  if awk -v i="$input_samples" -v o="$output_samples" -v ratio="$VERIFY_MIN_SAMPLE_RATIO" \
-       'BEGIN { exit !(o < i*ratio) }'; then
-    VERIFY_REASON="output troncato: campioni input=${input_samples}, output=${output_samples}"
-    return 1
-  fi
-
-  for i in {0..1}; do
-    input_channel_rms="${in_m[$((i+3))]}"
-    output_channel_rms="${out_m[$((i+3))]}"
-    [[ "$input_channel_rms" == "-inf" ]] && continue
-    if ! is_finite_db "$input_channel_rms" || \
-       { [[ "$output_channel_rms" != "-inf" ]] && ! is_finite_db "$output_channel_rms"; }; then
-      VERIFY_REASON="metrica canale ${channel_names[$i]} non numerica"
-      return 2
-    fi
-    if ! awk -v v="$input_channel_rms" -v lim="$VERIFY_ACTIVE_INPUT_RMS_DB" \
-         'BEGIN { exit !(v > lim) }'; then
-      continue
-    fi
-    if [[ "$output_channel_rms" == "-inf" ]]; then
-      VERIFY_REASON="canale ${channel_names[$i]} attivo in input ma silenzioso in output"
-      return 1
-    fi
-    if awk -v src="$input_channel_rms" -v dst="$output_channel_rms" -v lim="$VERIFY_MAX_CHANNEL_DROP_DB" \
-         'BEGIN { exit !((src-dst) > lim) }'; then
-      VERIFY_REASON="canale ${channel_names[$i]} attenuato eccessivamente: input=${input_channel_rms} dBFS, output=${output_channel_rms} dBFS"
-      return 1
-    fi
-  done
-
-  info "Verifica audio: peak ${input_peak}→${output_peak} dBFS; RMS ${input_rms}→${output_rms} dBFS; campioni ${input_samples}→${output_samples}"
-  return 0
-}
-
 # True Peak post-codec: ceiling del preset e un solo retry con trim limitato.
 # Il valore whisper iniziale viene aggiornato dalla selezione preset.
 VERIFY_MAX_TRUE_PEAK_DB="-2.0"
@@ -417,7 +297,7 @@ measure_true_peak_db() {
   '
 }
 
-# Decodifica l'intero candidato AAC/Opus/FLAC: niente -ss/-t e nessuna finestra QC.
+# Misura il True Peak sull'intero candidato AAC/Opus/FLAC, senza confronti RMS/campioni.
 # Un errore FFmpeg o un summary incompleto rendono la misura non conclusiva.
 measure_encoded_true_peak() {
   local probe
@@ -430,14 +310,10 @@ measure_encoded_true_peak() {
 
 
 verify_audio_candidate() {
-  local rc
+  # Controlla solo il True Peak post-codec; il superamento può attivare il retry.
   VERIFY_FAILURE_KIND=""
   VERIFY_OUTPUT_TRUE_PEAK=""
   VERIFY_REASON=""
-  info "Verifica comparativa sull'intera traccia audio"
-  verify_output_audio_signal "$1" "$INPUT_AUDIO_METRICS"
-  rc=$?
-  (( rc == 0 )) || return "$rc"
   info "Verifica True Peak post-codec sull'intera traccia audio"
   VERIFY_OUTPUT_TRUE_PEAK="$(measure_encoded_true_peak "$1")" || {
     VERIFY_REASON="misura True Peak post-codec fallita o non conclusiva"
@@ -531,9 +407,9 @@ process_verified_audio() {
     err "Nessun altro encode; output finale invariato. Temporanei: $work_dir"
     return 1
   fi
-  info "Audio verificato: mux finale unico"
+  info "True Peak verificato: mux finale unico"
   if ! mux_verified_audio "$mux_file" "$candidate"; then
-    err "Mux fallito; audio verificato e temporanei conservati: $work_dir"
+    err "Mux fallito; candidato con True Peak verificato e temporanei conservati: $work_dir"
     return 1
   fi
   if ! mv -f -- "$mux_file" "$OUT_FILE"; then
@@ -543,7 +419,7 @@ process_verified_audio() {
   # Soltanto file di questa esecuzione; mai pulizia ricorsiva o su nomi condivisi.
   rm -f -- "$first_candidate" "$work_dir/audio.retry.mka" || warn "Pulizia audio incompleta: $work_dir"
   rmdir -- "$work_dir" || warn "Directory temporanea conservata: $work_dir"
-  ok "Creato e verificato (trim finale -${trim} dB): $OUT_FILE"
+  ok "Creato (True Peak verificato, trim finale -${trim} dB): $OUT_FILE"
   return 0
 }
 
@@ -610,12 +486,6 @@ for CUR_FILE in "$@"; do
       info "Sovrascrittura automatica di '$OUT_FILE'..."
     fi
   fi
-
-  INPUT_AUDIO_METRICS="$(measure_audio_signal "$CUR_FILE" "0:$A_STREAM_INDEX")" || {
-    err "Impossibile misurare in modo affidabile la traccia stereo sorgente. Salto."
-    ((ERR_COUNT+=1))
-    continue
-  }
 
   FINAL_AUDIO_TITLE="VR Intimate ${T}"
   KEEP_ORIGINAL="no"

@@ -2,7 +2,7 @@
 set -uo pipefail
 
 # ╭─────────────────────────────────────────────────────────────────────────────────╮
-# │   audio_analyzer_volamp_psycho.sh - Ottobre 2026                                │
+# │   audio_analyzer_volamp_psycho.sh - Novembre 2026                               │
 # │   By Sandro (D@mocle77) Sabbioni                                                │
 # │                                                                                 │
 # │   Sonda euristica per l'analisi offline di container multimediali 5.1.          │
@@ -21,6 +21,7 @@ set -uo pipefail
 # │   -> diagnostica; surround molto arretrati -> SONAR; surround stretti           │
 # │   -> WIDE; moderatamente arretrati -> AURA; mix equilibrato -> AEGIS.           │
 # │   Le misure RMS dei canali vengono raccolte in un solo passaggio FFmpeg.        │
+# │   Decodifica AC3/EAC3 con DRC Dolby disattivata, come nel processore.            │
 # │                                                                                 │
 # │   VERDETTO STAGIONALE:                                                          │
 # │   Verdetto: servono almeno 2/3 di consenso; parita'/spread > 4 dB -> MIXED.     │
@@ -202,7 +203,7 @@ LOUDNESS_TARGET="-21.0"
 # un futuro cambio dell'algoritmo non puo' riutilizzare risultati obsoleti.
 ANALYZER_CACHE="${ANALYZER_CACHE:-1}"
 ANALYZER_CACHE_DIR="${ANALYZER_CACHE_DIR:-.clearvoice_analyzer_cache}"
-ANALYZER_CACHE_SCHEMA="classifier-rms-voiceband-ebur-lfe-bass-v5-persistence"
+ANALYZER_CACHE_SCHEMA="classifier-rms-voiceband-ebur-lfe-bass-v6-no-dolby-drc"
 ANALYZER_PROGRESS_INTERVAL="${ANALYZER_PROGRESS_INTERVAL:-10}"
 
 if ! [[ "$ANALYZER_CACHE" =~ ^[01]$ ]]; then
@@ -1035,8 +1036,21 @@ classify_lfe_balance() {
 # ────────────────────────────────────────────────────────────────────────────────
 measure_classifier_metrics() {
   local f="$1" stream="$2"
-  local probe log_file progress_file ffmpeg_rc
+  local probe log_file progress_file ffmpeg_rc codec
   local processed last_processed=""
+  local -a input_decoder_opts=()
+  # Stessa decodifica del processore; non passare opzioni Dolby ad altri codec.
+  codec=$(ffprobe -v error -select_streams "$stream" \
+    -show_entries stream=codec_name -of default=nw=1:nk=1 "$f" \
+    2>/dev/null </dev/null) || return 1
+  codec="${codec//$'\r'/}"
+  [[ -n "$codec" ]] || return 1
+  case "$codec" in
+    ac3|eac3)
+      input_decoder_opts=("-drc_scale:${stream}" 0)
+      info "Decoder ${codec^^}: misure con DRC Dolby disattivata"
+      ;;
+  esac
   log_file=$(mktemp -p "$ANALYZER_TMPDIR") || return 1
   progress_file=$(mktemp -p "$ANALYZER_TMPDIR") || return 1
 
@@ -1045,7 +1059,7 @@ measure_classifier_metrics() {
   # vengono eseguiti, ma non trasformati/codificati inutilmente come output PCM.
   ffmpeg -y -nostdin -hide_banner -nostats -xerror -loglevel info \
     -stats_period "$ANALYZER_PROGRESS_INTERVAL" -progress "$progress_file" \
-    -i "$f" \
+    "${input_decoder_opts[@]}" -i "$f" \
     -filter_complex "[0:${stream}]asplit=7[loud_in][full_in][mid_in][side_in][voice_in][bass_in][bass_ref_in];\
 [full_in]astats@full=metadata=0:reset=0:measure_perchannel=RMS_level+Peak_level:measure_overall=none,anullsink;\
 [mid_in]pan=1c|c0=0.5*c4+0.5*c5,astats@mid=metadata=0:reset=0:measure_perchannel=RMS_level:measure_overall=none,anullsink;\

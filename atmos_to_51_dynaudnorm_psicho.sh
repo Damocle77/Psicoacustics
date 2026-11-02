@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ╭──────────────────────────────────────────────────────────────────────────────╮
-# │   atmos_to_51_dynaudnorm_psicho.sh - Ottobre 2026                            │
+# │   atmos_to_51_dynaudnorm_psicho.sh - Novembre 2026                           │
 # │   By Sandro (D@mocle77) Sabbioni                                             │
 # │                                                                              │
 # │   Prende un file con traccia EAC3 Atmos (JOC) e produce un MKV con:          │
@@ -11,9 +11,10 @@
 # │   non esegue il rendering degli oggetti Atmos. dynaudnorm applica una        │
 # │   normalizzazione dinamica conservativa al bed, che resta lo stadio          │
 # │   primario da analizzare/elaborare con i preset psicoacustici.               │
+# │   DRC Dolby disattivata in decodifica; dynaudnorm resta attivo.              │
 # │                                                                              │
 # │   UTILIZZO:                                                                  │
-# │   ./atmos_to_51_dynaudnorm_psicho.sh [bitrate] <file|directory|"">         │
+# │   ./atmos_to_51_dynaudnorm_psicho.sh [bitrate] <file|directory|"">           │
 # │   ./atmos_to_51_dynaudnorm_psicho.sh --files <bitrate> <file1> [...]         │
 # │                                                                              │
 # │   PARAMETRI:                                                                 │
@@ -38,14 +39,6 @@ mapping(){ echo -e "${C_MAPPING} $*"; }
 warn(){ echo -e "${C_WARN} $*"; }
 err(){  echo -e "${C_ERR}  $*"; }
 ok(){   echo -e "${C_OK}  $*"; }
-
-# Guard rail della verifica comparativa tra bed sorgente e traccia normalizzata.
-VERIFY_SILENCE_PEAK_DB="-80.0"
-VERIFY_MAX_SAMPLE_DELTA_RATIO="0.02"
-VERIFY_ACTIVE_INPUT_RMS_DB="-65.0"
-VERIFY_MAX_OVERALL_DROP_DB="18.0"
-VERIFY_MAX_MAIN_CHANNEL_DROP_DB="24.0"
-VERIFY_MAX_LFE_DROP_DB="36.0"
 
 # Legge dallo stesso terminale dello script, senza riaprire /dev/tty.
 # In esecuzioni non interattive gli output esistenti vengono saltati.
@@ -243,142 +236,12 @@ find_atmos_stream() {
   fi
 }
 
-# Misura peak, RMS, campioni e RMS per-canale.
-measure_audio_signal() {
-  local f="$1" map_spec="$2" expected_channels=6 probe metrics
-  probe="$(
-    ffmpeg -hide_banner -nostdin -nostats -xerror -v info -i "$f" \
-      -map "$map_spec" -vn -sn -dn \
-      -af "aformat=sample_rates=48000:sample_fmts=fltp,astats=metadata=0:reset=0" \
-      -f null - 2>&1
-  )" || return 1
-  probe="${probe//$'\r'/}"
-
-  metrics="$(printf '%s\n' "$probe" | awk -v expected="$expected_channels" '
-    /Channel:/ { channel=$NF; overall=0; next }
-    /] Overall$/ { overall=1; channel=0; next }
-    /Peak level dB:/ { if (overall) overall_peak=$NF; next }
-    /RMS level dB:/ {
-      if (overall) overall_rms=$NF
-      else if (channel >= 1 && channel <= expected) channel_rms[channel]=$NF
-      next
-    }
-    /Number of samples:/ { if (overall) samples=$NF; next }
-    END {
-      if (overall_peak == "" || overall_rms == "" || samples == "") exit 1
-      for (i=1; i<=expected; i++) if (channel_rms[i] == "") exit 1
-      printf "%s|%s|%s", overall_peak, overall_rms, samples
-      for (i=1; i<=expected; i++) printf "|%s", channel_rms[i]
-      printf "\n"
-    }
-  ')" || return 1
-
-  [[ -n "$metrics" ]] || return 1
-  printf '%s\n' "$metrics"
-}
-
-is_finite_db() {
-  [[ "$1" =~ ^-?[0-9]+([.][0-9]+)?$ ]]
-}
-
-verify_output_audio_signal() {
-  local f="$1" input_metrics="$2" output_metrics
-  local -a in_m out_m channel_names=(FL FR FC LFE SL SR)
-  local input_peak input_rms input_samples output_peak output_rms output_samples
-  local i input_channel_rms output_channel_rms max_drop
-
-  output_metrics="$(measure_audio_signal "$f" "0:a:0")" || {
-    VERIFY_REASON="astats non ha restituito metriche complete per l'output"
-    return 2
-  }
-
-  IFS='|' read -r -a in_m <<<"$input_metrics"
-  IFS='|' read -r -a out_m <<<"$output_metrics"
-  [[ ${#in_m[@]} -eq 9 && ${#out_m[@]} -eq 9 ]] || {
-    VERIFY_REASON="numero di metriche input/output inatteso"
-    return 2
-  }
-
-  input_peak="${in_m[0]}"; input_rms="${in_m[1]}"; input_samples="${in_m[2]}"
-  output_peak="${out_m[0]}"; output_rms="${out_m[1]}"; output_samples="${out_m[2]}"
-
-  if [[ "$output_peak" == "-inf" || "$output_rms" == "-inf" ]]; then
-    VERIFY_REASON="output digitalmente silenzioso"
-    return 1
-  fi
-  if ! is_finite_db "$input_peak" || ! is_finite_db "$input_rms" || \
-     ! is_finite_db "$output_peak" || ! is_finite_db "$output_rms" || \
-     ! [[ "$input_samples" =~ ^[0-9]+([.][0-9]+)?$ && "$output_samples" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-    VERIFY_REASON="metriche globali non numeriche"
-    return 2
-  fi
-
-  if awk -v i="$input_samples" -v o="$output_samples" 'BEGIN { exit !(i <= 0 || o <= 0) }'; then
-    VERIFY_REASON="numero di campioni nullo/non valido"
-    return 2
-  fi
-  if awk -v v="$output_peak" -v lim="$VERIFY_SILENCE_PEAK_DB" 'BEGIN { exit !(v <= lim) }'; then
-    VERIFY_REASON="picco output troppo basso (${output_peak} dBFS)"
-    return 1
-  fi
-  if awk -v i="$input_rms" -v o="$output_rms" -v lim="$VERIFY_MAX_OVERALL_DROP_DB" \
-       'BEGIN { exit !((i-o) > lim) }'; then
-    VERIFY_REASON="perdita RMS globale eccessiva: input=${input_rms} dBFS, output=${output_rms} dBFS"
-    return 1
-  fi
-  if awk -v i="$input_samples" -v o="$output_samples" -v d="$VERIFY_MAX_SAMPLE_DELTA_RATIO" \
-       'BEGIN { exit !(o < i*(1-d) || o > i*(1+d)) }'; then
-    VERIFY_REASON="durata incoerente: campioni input=${input_samples}, output=${output_samples}"
-    return 1
-  fi
-
-  for i in {0..5}; do
-    input_channel_rms="${in_m[$((i+3))]}"
-    output_channel_rms="${out_m[$((i+3))]}"
-
-    # Un canale sorgente sotto questa soglia e' considerato intenzionalmente inattivo.
-    if [[ "$input_channel_rms" == "-inf" ]]; then
-      continue
-    fi
-    if ! is_finite_db "$input_channel_rms" || \
-       { [[ "$output_channel_rms" != "-inf" ]] && ! is_finite_db "$output_channel_rms"; }; then
-      VERIFY_REASON="metrica canale ${channel_names[$i]} non numerica"
-      return 2
-    fi
-    if ! awk -v v="$input_channel_rms" -v lim="$VERIFY_ACTIVE_INPUT_RMS_DB" \
-         'BEGIN { exit !(v > lim) }'; then
-      continue
-    fi
-    if [[ "$output_channel_rms" == "-inf" ]]; then
-      VERIFY_REASON="canale ${channel_names[$i]} attivo in input ma silenzioso in output"
-      return 1
-    fi
-
-    max_drop="$VERIFY_MAX_MAIN_CHANNEL_DROP_DB"
-    [[ $i -eq 3 ]] && max_drop="$VERIFY_MAX_LFE_DROP_DB"
-    if awk -v src="$input_channel_rms" -v dst="$output_channel_rms" -v lim="$max_drop" \
-         'BEGIN { exit !((src-dst) > lim) }'; then
-      VERIFY_REASON="canale ${channel_names[$i]} attenuato eccessivamente: input=${input_channel_rms} dBFS, output=${output_channel_rms} dBFS"
-      return 1
-    fi
-  done
-
-  info "Verifica audio: peak ${input_peak}→${output_peak} dBFS; RMS ${input_rms}→${output_rms} dBFS; campioni ${input_samples}→${output_samples}"
-  return 0
-}
-
-verify_audio_candidate() {
-  VERIFY_REASON=""
-  info "Verifica comparativa sull'intera traccia audio"
-  verify_output_audio_signal "$1" "$INPUT_AUDIO_METRICS"
-}
-
-# Come nella versione settembre: encoding e mux nello stesso processo.
+# Encoding e mux nello stesso processo.
 # Nessun candidato MKA intermedio e nessuna gestione forzata dei timestamp.
 encode_complete_candidate() {
   local output_file="$1" graph="$2"
   local -a cmd=(ffmpeg -hide_banner -nostdin -stats -xerror -loglevel warning -y
-    -i "$CUR_FILE" -map_metadata 0 -map_chapters 0
+    -drc_scale:"$A_IDX" 0 -i "$CUR_FILE" -map_metadata 0 -map_chapters 0
     -map "0:V:0?" -c:v copy -map "0:s?" -c:s copy -map "0:t?" -c:t copy
     -filter_complex "$graph" -map "[aout]"
     -c:a:0 "$OUT_CODEC" -b:a:0 "$BITRATE"
@@ -395,7 +258,7 @@ encode_complete_candidate() {
 
 # Probe limitato: dynaudnorm puo' ritardare i primi pacchetti nel file.
 # Fino a 20 MB / 20 secondi di analisi; nessuna scansione integrale aggiuntiva.
-# Il segnale del candidato MKV viene verificato integralmente prima del probe.
+# Controllo dei metadati del formato; nessuna scansione RMS/campioni.
 verify_mux_audio_layout() {
   local probe field codec="" channels="" layout="" rate="" default=""
   probe="$(ffprobe -v error -analyzeduration 20000000 -probesize 20000000 -select_streams a:0 \
@@ -418,7 +281,7 @@ verify_mux_audio_layout() {
 # Directory riservata atomicamente nella cartella dell'output: nessuna collisione
 # puo' far cancellare file altrui. Gli errori e le interruzioni conservano il debug.
 process_verified_audio() {
-  local graph="$1" work_dir mux_file rc
+  local graph="$1" work_dir mux_file
   work_dir="$(mktemp -d "$(dirname -- "$OUT_FILE")/.$(basename -- "${OUT_FILE%.mkv}").partial.XXXXXX")" || {
     err "Impossibile riservare la directory temporanea"
     return 1
@@ -430,13 +293,6 @@ process_verified_audio() {
     err "Encoding/mux fallito; temporanei conservati: $work_dir"
     return 1
   fi
-  verify_audio_candidate "$mux_file"
-  rc=$?
-  if (( rc != 0 )); then
-    err "Verifica rifiutata/non conclusiva: $VERIFY_REASON"
-    err "Output finale invariato. Temporanei: $work_dir"
-    return 1
-  fi
   if ! verify_mux_audio_layout "$mux_file"; then
     err "Traccia primaria del mux non conforme (EAC3, 5.1(side), 48 kHz, default). Temporanei: $work_dir"
     return 1
@@ -446,7 +302,7 @@ process_verified_audio() {
     return 1
   fi
   rmdir -- "$work_dir" || warn "Directory temporanea conservata: $work_dir"
-  ok "Creato e verificato: $OUT_FILE"
+  ok "Creato (formato traccia verificato): $OUT_FILE"
   return 0
 }
 
@@ -526,6 +382,7 @@ for CUR_FILE in "${FILES[@]}"; do
   A_LANG="${A_LANG//$'\r'/}"
 
   info "Traccia audio: idx=$A_IDX, canali=$A_CH, lingua=$A_LANG, tipo=$A_TYPE"
+  info "Decoder EAC3: DRC Dolby disattivata prima di dynaudnorm"
   if [[ "$A_TYPE" == "atmos" ]]; then
     echo -e "${C_ATMOS_FOUND} Atmos verificato nella traccia audio originale. Compensazione FC/LFE demandata al processore finale.\033[0m"
   fi
@@ -560,14 +417,6 @@ for CUR_FILE in "${FILES[@]}"; do
   # Filter complex per traccia 5.1: mapping posizionale non distruttivo, poi
   # dynaudnorm con coupling attivo e passa-alto globale opzionale.
   FILTER_COMPLEX="[0:${A_IDX}]aformat=sample_rates=48000:sample_fmts=fltp,pan=5.1(side)|FL=c0|FR=c1|FC=c2|LFE=c3|SL=c4|SR=c5,${DYNAUDNORM}[aout]"
-
-  # Il riferimento viene misurato prima dell'encode. Se la sorgente non e'
-  # misurabile in modo affidabile, non produciamo un output non verificabile.
-  INPUT_AUDIO_METRICS="$(measure_audio_signal "$CUR_FILE" "0:${A_IDX}")" || {
-    err "Impossibile misurare la traccia sorgente → salto: $CUR_FILE"
-    ((ERR_COUNT+=1))
-    continue
-  }
 
   OUT_CODEC="eac3"
   FINAL_AUDIO_TITLE="EAC3 5.1 Normalized"

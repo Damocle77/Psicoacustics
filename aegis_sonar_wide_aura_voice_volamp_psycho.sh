@@ -2,7 +2,7 @@
 set -uo pipefail
 
 # ╭──────────────────────────────────────────────────────────────────────────────────╮
-# │   aegis_sonar_wide_aura_voice_volamp_psycho.sh - Ottobre 2026                    │
+# │   aegis_sonar_wide_aura_voice_volamp_psycho.sh - Novembre 2026                   │
 # │   By Sandro (D@mocle77) Sabbioni                                                 │
 # │                                                                                  │
 # │   Motore di processing audio offline per tracce 5.1 (EAC3/AC3/PCM).              │
@@ -12,6 +12,7 @@ set -uo pipefail
 # │                                                                                  │
 # │   - Diffusori Small: bass management/crossover 110 Hz affidato all'AVR           │
 # │   - Canali principali: highpass di sicurezza a 40 Hz                             │
+# │   - DRC Dolby AC3/EAC3 disattivata in decodifica prima del DSP                   │
 # │   - EQ FC senza compressore; limiter FC/master                                   │
 # │   - Surround psicoacustici controllati                                           │
 # │   - LFE: balance statico, compensazione Atmos e limiter dedicato                 │
@@ -700,7 +701,7 @@ encode_and_mux_output() {
   local -a cmd=(ffmpeg -hide_banner -nostdin -stats -xerror -loglevel warning -y)
 
   cmd+=(
-    -i "$CUR_FILE"
+    "${INPUT_DECODER_OPTS[@]}" -i "$CUR_FILE"
     -map_metadata 0 -map_chapters 0
     -filter_complex "$filter_complex"
     -map "0:V:0?" -c:v copy
@@ -812,6 +813,21 @@ for CUR_FILE in "${FILES[@]}"; do
     warn "Non è un 5.1 (Canali: $A_CHANNELS) → Salto."
     continue
   fi
+
+  # La DRC Dolby va esclusa prima del DSP: l'AVR non puo' annullarla nel render.
+  # Opzione privata solo sullo stream AC3/EAC3 selezionato; altri codec invariati.
+  A_CODEC=$(ffprobe -v error -select_streams "$A_STREAM_INDEX" \
+    -show_entries stream=codec_name -of default=nw=1:nk=1 "$CUR_FILE" \
+    2>/dev/null </dev/null) || { err "Probe codec fallito → salto: $CUR_FILE"; continue; }
+  A_CODEC="${A_CODEC//$'\r'/}"
+  [[ -n "$A_CODEC" ]] || { err "Codec audio non rilevabile → salto: $CUR_FILE"; continue; }
+  INPUT_DECODER_OPTS=()
+  case "$A_CODEC" in
+    ac3|eac3)
+      INPUT_DECODER_OPTS=("-drc_scale:${A_STREAM_INDEX}" 0)
+      info "Decoder ${A_CODEC^^}: DRC Dolby disattivata prima del DSP"
+      ;;
+  esac
 
   # Normalizzo anche il layout: su Windows/Git Bash ffprobe può lasciare un CR finale.
   A_LAYOUT="${A_LAYOUT//$'\r'/}"
