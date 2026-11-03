@@ -498,8 +498,8 @@ Motore principale per tracce **5.1 esistenti**.
 - trattamento LFE: volamp, correzione statica `--lfe-gain` ed eventuale compensazione Atmos prima del limiter dedicato; filtraggio dedicato affidato all’hardware;
 - compensazione del bed **FC +0,5 dB / LFE −0,5 dB**, con profilo EAC3 Atmos o marker originale, per tutti i preset;
 - diffusori mantenuti `Small`, con bass management e crossover a circa `110 Hz` affidati all'AVR; lo script applica ai canali principali solo un high-pass di sicurezza a `20 Hz`;
-- `FRONT_EQ` leggermente adattato alle torri senza widening o alterazioni della scena frontale;
-- volamp manuale `0–5.0 dB`, default **2.0 dB** se omesso; un valore esplicito prevale sempre;
+- FL/FR senza EQ timbrica aggiuntiva: highpass 20 Hz, Bass Trim opzionale e VOLAMP invariati; limitazione finale affidata al master;
+- volamp manuale `0–5.0 dB`, default **3.5 dB** se omesso; un valore esplicito prevale sempre;
 - warning sopra `2.0 dB`;
 - video, sottotitoli, capitoli e allegati copiati;
 - keep opzionale della traccia 5.1 selezionata;
@@ -645,12 +645,12 @@ Compatibilità: resta accettato il vecchio ordine `<codec> <keep> <file|""> [bit
 | `keep` | `si`, `no` | obbligatorio | conserva la traccia sorgente selezionata |
 | `bitrate` | `256k–640k` AC3; `256k–768k` EAC3, step da `64k` | `640k` AC3, `768k` EAC3 | valori fuori range vengono rifiutati prima dell'encoding |
 | `preset` | `aegis`, `sonar`, `wide`, `aura`, `voiceita` | `sonar` | modalità DSP; `voiceita` solo manuale |
-| `volamp` | `0–5.0` | `2.0` | gain per-canale prima del join e dei limiter dedicati; un valore esplicito prevale sul default |
+| `volamp` | `0–5.0` | `3.5` | gain per-canale prima del join e dei limiter dedicati; un valore esplicito prevale sul default |
 | `file` | file o stringa vuota | cartella corrente | `""` usa la cartella corrente |
 
 ## Versione principale
 
-La versione corrente è **Novembre 2026**, con DRC Dolby disattivata in decodifica e gain staging aggiornato: dynaudnorm con i parametri originali `peak=0.92` e `maxgain=4`, seguito dal limiter in coda, passa-alto subsonico a 20 Hz sui canali principali, VOLAMP base 2,0 dB e limiter FC/master a 0,89 con release 80 ms. EQ, rami spaziali e compensazioni Atmos mantengono la taratura esistente.
+La versione corrente è **Novembre 2026**, con DRC Dolby disattivata in decodifica e gain staging aggiornato: dynaudnorm con i parametri originali `peak=0.92` e `maxgain=4`, seguito dal limiter in coda, passa-alto subsonico a 20 Hz sui canali principali, VOLAMP predefinito 3,5 dB, limiter FC 0,89, LFE 0,90 e master 0,92. FL/FR non ricevono EQ timbrica aggiuntiva; lo shelf finale resta solo su FC/SL/SR. EQ del centrale, rami spaziali e compensazioni Atmos mantengono la taratura esistente.
 
 I tempi dei limiter del processore sono: **FC 1,5 / 80 ms**, **LFE 2 / 120 ms** e **master 2,5 / 80 ms** (attack / release). Processore e preparatore Atmos verificano il formato della traccia primaria, senza scansioni True Peak post-codec o retry. Gli output mantengono i nomi consueti, per esempio `film_EAC3_Sonar.mkv` e `film-0.mkv`; il batch dell'analyzer richiama il processore principale.
 
@@ -662,13 +662,13 @@ Tutti i preset usano:
 
 ```text
 split 5.1
-→ EQ frontali / EQ centrale / processing surround (HEIGHT_MODE su SONAR/AEGIS)
+→ highpass FL/FR / EQ centrale / processing surround (HEIGHT_MODE su SONAR/AEGIS)
 → eventuale Bass shelf sui sei canali
 → volamp individuale FL/FR/FC/SL/SR
 → FC: eventuale offset Atmos +0,5 dB → limiter dedicato
 → LFE: volamp → --lfe-gain → eventuale offset Atmos −0,5 dB → limiter dedicato
 → join 5.1(side)
-→ high-shelf finale sui canali non-LFE
+→ high-shelf finale solo su FC/SL/SR
 → master limiter 5.1
 → formato finale 48 kHz / fltp
 → encoding AC3/EAC3 e mux nello stesso processo FFmpeg
@@ -680,10 +680,10 @@ split 5.1
 Parametri principali:
 
 ```text
-FRONT_EQ:
-  -0.4 dB @ 320 Hz
-  +0.4 dB @ 5 kHz
-  +0.4 dB high-shelf @ 11 kHz
+FL/FR:
+  highpass 20 Hz, Q 0.707
+  Bass Trim opzionale e VOLAMP invariati
+  nessuna EQ timbrica aggiuntiva; limiter master dopo il join
 
 FC (dopo il volamp):
   volume +0,5 dB con profilo EAC3 Atmos o marker originale
@@ -694,15 +694,15 @@ LFE:
   volamp
   correzione --lfe-gain
   volume −0,5 dB con profilo EAC3 Atmos o marker originale
-  alimiter limit=0.94, attack=2 ms, release=120 ms, level=0, latency=1
+  alimiter limit=0.90, attack=2 ms, release=120 ms, level=0, latency=1
 
 Master:
-  high-shelf +0.4 dB @ 12 kHz sui canali non-LFE
-  alimiter limit=0.89, attack=2.5 ms, release=80 ms, level=0, latency=1
+  high-shelf +0.4 dB @ 12 kHz solo su FC/SL/SR
+  alimiter limit=0.92, attack=2.5 ms, release=80 ms, level=0, latency=1
   output 48 kHz / fltp / 5.1(side)
 ```
 
-I limiter FC, LFE e master usano tutti `level=0`: non aggiungono auto-level al volamp impostato. FC e master limitano a `0.89` (circa −1,01 dBFS); il limiter LFE resta a `0.94`, prima del master comune.
+I limiter FC, LFE e master usano tutti `level=0`: non aggiungono auto-level al volamp impostato. Le soglie FC `0.89`, LFE `0.90` e master `0.92` sono ampiezze lineari, non guadagni in dB. FC/LFE hanno soglie inferiori al master comune, che opera sul flusso 5.1 ricomposto con collegamento fra i canali. Non si dichiarano miglioramenti di dinamica, qualità sonora o True Peak come risultati verificati.
 
 Il margine sui campioni riduce il rischio di overshoot, ma non garantisce un tetto True Peak dopo AC3/EAC3: la ricodifica lossy può generare nuovi picchi. Il passa-alto a 20 Hz riduce l’intervento vicino al crossover rispetto a 40 Hz, ma non elimina ogni rotazione di fase né garantisce l’allineamento con subwoofer e AVR. Occorrono misure e ascolto sul sistema reale.
 
@@ -1482,7 +1482,7 @@ Controllare il mix manualmente. Il batch non viene aggiornato; non eseguire un b
 
 ## Il volamp sembra alto
 
-Il processore usa `2.0 dB` come default se VOLAMP viene omesso, e accetta valori da `0` a `5.0 dB`. Un valore esplicito prevale sul default. L'analyzer sceglie un valore esplicito fra `2.0` e `3.0 dB` per i soli preset automatici AEGIS/SONAR/WIDE/AURA; `voiceita` resta manuale. I valori automatici possibili sono:
+Il processore usa `3.5 dB` come default se VOLAMP viene omesso, e accetta valori da `0` a `5.0 dB`. Un valore esplicito prevale sul default. L'analyzer sceglie un valore esplicito fra `2.0` e `3.0 dB` per i soli preset automatici AEGIS/SONAR/WIDE/AURA; `voiceita` resta manuale. I valori automatici possibili sono:
 
 ```text
 2.0 = make-up DSP standard

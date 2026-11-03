@@ -46,7 +46,7 @@ DECORR_GAIN_VOICEITA="0"
 
 # Peak catcher senza makeup gain: il gain nominale resta quello del VOLAMP.
 FC_LIMITER_OPTS="limit=0.89:attack=1.5:release=80:level=0:latency=1"
-MASTER_LIMITER_OPTS="limit=0.89:attack=2.5:release=80:level=0:latency=1"
+MASTER_LIMITER_OPTS="limit=0.92:attack=2.5:release=80:level=0:latency=1"
 
 # Compensazione del bed con profilo EAC3 Atmos o marker esatto del workflow.
 # Indipendente dal preset DSP; nessuna attivazione dal nome file.
@@ -66,8 +66,6 @@ case "$HEIGHT_MODE" in
   *) err "HEIGHT_MODE non valido: usare reduced, normal o increased"; exit 1 ;;
 esac
 
-# FRONT_EQ: equalizzatore frontale condiviso, adattato a torri audio 3 vie.
-FRONT_EQ="equalizer=f=320:t=q:w=1.1:g=-0.4,equalizer=f=5000:t=q:w=1.4:g=0.4,highshelf=f=11000:t=q:w=0.7:g=0.4"
 
 # Controllo dipendenze: ffmpeg e ffprobe sono essenziali per il funzionamento dello script. Se non sono nel PATH, esco con errore.
 for _bin in ffmpeg ffprobe; do
@@ -621,7 +619,7 @@ set_preset_profile() {
 
 # Funzione per costruire il blocco di split dei canali in ingresso con mapping posizionale.
 build_input_split_graph() {
-  local front_filters="highpass=f=20:t=q:w=0.707,${FRONT_EQ}"
+  local front_filters="highpass=f=20:t=q:w=0.707"
   cat <<EOF
 [0:${A_STREAM_INDEX}]${INPUT_AFORMAT},
 pan=5.1(side)|${INPUT_PAN_MAP}[base];
@@ -661,6 +659,8 @@ EOF
 #   ATMOS_HIGHPASS_HZ=20 nel preparatore e' una scelta opzionale e cumulativa;
 # - il file resta 5.1 con un solo canale LFE; l'eventuale doppio sub (5.2) e' gestito dall'AVR;
 # - unisce i sei canali in 5.1(side);
+# - FL/FR: solo highpass 20 Hz, bass trim opzionale e VOLAMP prima del master;
+# - shelf finale solo su FC/SL/SR; soglie lineari FC 0.89, LFE 0.90, master 0.92;
 # - mantiene il limiter finale come protezione globale;
 # - applica gli offset del bed Atmos (profilo EAC3 Atmos o marker affidabile) prima dei limiter FC/LFE;
 # - limita FC dopo il volamp e la compensazione.
@@ -672,11 +672,11 @@ build_output_join_graph() {
 [FLp]${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[FLf];
 [FRp]${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[FRf];
 [FCv]${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}${ATMOS_FC_GAIN_FILTER}alimiter=${FC_LIMITER_OPTS},aformat=channel_layouts=mono[FCf];
-[LFE]aformat=channel_layouts=mono,${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}${LFE_GAIN_FILTER}${ATMOS_LFE_GAIN_FILTER}alimiter=limit=0.94:attack=2.0:release=120:level=0:latency=1[LFEf];
+[LFE]aformat=channel_layouts=mono,${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}${LFE_GAIN_FILTER}${ATMOS_LFE_GAIN_FILTER}alimiter=limit=0.90:attack=2.0:release=120:level=0:latency=1[LFEf];
 [SL_final]equalizer=f=3200:t=q:w=1.2:g=${surround_presence_gain},${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[SLf];
 [SR_final]equalizer=f=3200:t=q:w=1.2:g=${surround_presence_gain},${BASS_TRIM_FILTER}${FINAL_GAIN_FILTER}aformat=channel_layouts=mono[SRf];
 [FLf][FRf][FCf][LFEf][SLf][SRf]join=inputs=6:channel_layout=5.1(side):map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR,
-highshelf=f=12000:g=0.4:w=0.5:c=FL|FR|FC|SL|SR,alimiter=${MASTER_LIMITER_OPTS},aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=5.1(side)[aout]
+highshelf=f=12000:g=0.4:w=0.5:c=FC|SL|SR,alimiter=${MASTER_LIMITER_OPTS},aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=5.1(side)[aout]
 EOF
 }
 

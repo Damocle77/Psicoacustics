@@ -341,12 +341,12 @@ Legacy order `<codec> <keep> <file|""> [bitrate] [preset] [volamp]` remains acce
 | `codec`, `keep` | Required: `ac3`/`eac3`, `si`/`no` |
 | `bitrate` | AC3 256k–640k (default 640k); EAC3 256k–768k (default 768k); 64k steps |
 | `preset` | `aegis`, `sonar` (default), `wide`, `aura`, `voiceita` |
-| `volamp` | 0–5.0 dB; default 2.0 dB when omitted; explicit values take precedence |
+| `volamp` | 0–5.0 dB; default 3.5 dB when omitted; explicit values take precedence |
 | Input | File or `""`/omitted for current directory |
 | `--lfe-gain` | −2.0 to +2.0 dB, default 0.0 |
 | `--bass-trim` | −3.0 to 0.0 dB, default 0.0 |
 
-Above 2.0 dB volamp, the script warns about possible audible limiting. All five main channels use a **20 Hz, Q 0.707** safety high-pass; dedicated LFE filtering is left to hardware. This does not replace AVR bass management at about 110 Hz. `FRONT_EQ` is −0.4 dB at 320 Hz, +0.4 dB at 5 kHz and a +0.4 dB high shelf at 11 kHz, without front widening.
+Above 2.0 dB volamp, the script warns about possible audible limiting. All five main channels use a **20 Hz, Q 0.707** safety high-pass; dedicated LFE filtering is left to hardware. This does not replace AVR bass management at about 110 Hz. FL/FR receive no additional tonal EQ: their path retains only the 20 Hz high-pass, optional Bass Trim and unchanged VOLAMP, followed by the shared master limiter. The final 12 kHz shelf applies only to FC/SL/SR.
 
 ### Direct surround definition
 
@@ -409,21 +409,21 @@ Delayed/decorrelated surrounds can change timbre when folded into stereo. Synthe
 The common chain is:
 
 ```text
-5.1 split → front/center EQ and surround DSP → optional six-channel bass shelf
+5.1 split → front high-pass, center EQ and surround DSP → optional six-channel bass shelf
 → individual main-channel volamp
 → FC: optional Atmos +0.5 dB → FC limiter
 → LFE: volamp → --lfe-gain → optional Atmos −0.5 dB → LFE limiter
-→ 5.1(side) join → +0.4 dB high shelf at 12 kHz on non-LFE channels
+→ 5.1(side) join → +0.4 dB high shelf at 12 kHz on FC/SL/SR only
 → master limiter → 48 kHz / fltp → AC3/EAC3 encoding and mux
 ```
 
 | Limiter | Limit | Attack | Release | Auto-level | Latency compensation |
 |---|---:|---:|---:|---|---|
 | FC | 0.89 | 1.5 ms | 80 ms | Off | On |
-| LFE | 0.94 | 2 ms | 120 ms | Off | On |
-| Master | 0.89 | 2.5 ms | 80 ms | Off | On |
+| LFE | 0.90 | 2 ms | 120 ms | Off | On |
+| Master | 0.92 | 2.5 ms | 80 ms | Off | On |
 
-All use `level=0`. FC/master ceiling 0.89 is approximately −1.01 dBFS. Sample headroom does not guarantee a post-codec True Peak ceiling: lossy encoding can create new peaks. Moving the high-pass from 40 to 20 Hz reduces its influence around the AVR crossover but does not eliminate phase rotation or guarantee subwoofer alignment. Measure and listen on the actual system.
+All use `level=0`. FC 0.89, LFE 0.90 and master 0.92 are linear amplitude thresholds, not gains in dB. The lower FC/LFE thresholds provide dedicated limiting before the slightly higher, channel-linked master threshold on the rejoined 5.1 stream. No improvements in dynamics, sound quality or True Peak are claimed as verified results. Sample headroom does not guarantee a post-codec True Peak ceiling: lossy encoding can create new peaks. Moving the high-pass from 40 to 20 Hz reduces its influence around the AVR crossover but does not eliminate phase rotation or guarantee subwoofer alignment. Measure and listen on the actual system.
 
 `--lfe-gain` is static gain, not EQ or AGC; zero adds no gain filter. Duplicate/incomplete/out-of-range options are rejected. `--` ends option parsing to protect filenames. Example nominal gain: `+4.0 -1.5 -0.5 = +2.0 dB` before the LFE limiter. The shelf remains frequency dependent; actual peak gain may be lower because of limiting.
 
@@ -692,7 +692,7 @@ The batch processor path must resolve from its working directory; override `PROC
 
 **Automatic processing blocked.** A warning about virtually silent surrounds means manual mix inspection is required. The batch is not updated; do not run a previous batch for this failed analysis.
 
-**Volamp sounds high.** Processor default is 2.0 dB, allowed manual range 0–5.0. Analyzer uses 2.0/2.5/3.0 dB for its four automatic presets; VOICEITA is manual. The warning above 2.0 dB indicates potentially stronger limiting. Nominal gain is not necessarily the final LUFS increase because EQ/limiting affect the result.
+**Volamp sounds high.** Processor default is 3.5 dB, allowed manual range 0–5.0. Analyzer uses 2.0/2.5/3.0 dB for its four automatic presets; VOICEITA is manual. The warning above 2.0 dB indicates potentially stronger limiting. Nominal gain is not necessarily the final LUFS increase because EQ/limiting affect the result.
 
 **Upmix center dominates.** Reduce `FC_MIX` first, then `FC_VOL`, for example `FC_MIX=0.26 FC_VOL=0.82`.
 
