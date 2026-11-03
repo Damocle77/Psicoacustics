@@ -120,20 +120,6 @@ done
 
 ---
 
-## Test di regressione
-
-I test richiedono Python 3 (solo per il runner), Bash e FFmpeg/ffprobe 8.x nel `PATH`:
-
-```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
-```
-
-Generano audio sintetico in una directory temporanea e verificano gli step VOLAMP,
-il cap LRA, tutti i preset in AC3/EAC3, il default e l’override manuale del gain,
-il limite di guadagno e di picco prima della codifica dello stadio Atmos,
-la durata e la conservazione bitstream della traccia originale.
-Non sostituiscono una misura True Peak su materiale reale né una prova d’ascolto.
-
 ## Script inclusi
 
 | Script | Scopo |
