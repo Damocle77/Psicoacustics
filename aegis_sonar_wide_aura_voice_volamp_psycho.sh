@@ -11,7 +11,7 @@ set -uo pipefail
 # │   surround (Aegis, Sonar, Wide, Aura), con controllo mirato dei picchi LFE.      │
 # │                                                                                  │
 # │   - Diffusori Small: bass management/crossover 110 Hz affidato all'AVR           │
-# │   - Canali principali: highpass di sicurezza a 40 Hz                             │
+# │   - Canali principali: highpass di sicurezza a 20 Hz                             │
 # │   - DRC Dolby AC3/EAC3 disattivata in decodifica prima del DSP                   │
 # │   - EQ FC senza compressore; limiter FC/master                                   │
 # │   - Surround psicoacustici controllati                                           │
@@ -45,8 +45,8 @@ DECORR_GAIN_AEGIS="0.034"
 DECORR_GAIN_VOICEITA="0"
 
 # Peak catcher senza makeup gain: il gain nominale resta quello del VOLAMP.
-FC_LIMITER_OPTS="limit=0.94:attack=1.5:release=60:level=0:latency=1"
-MASTER_LIMITER_OPTS="limit=0.94:attack=2.5:release=50:level=0:latency=1"
+FC_LIMITER_OPTS="limit=0.89:attack=1.5:release=80:level=0:latency=1"
+MASTER_LIMITER_OPTS="limit=0.89:attack=2.5:release=80:level=0:latency=1"
 
 # Compensazione del bed con profilo EAC3 Atmos o marker esatto del workflow.
 # Indipendente dal preset DSP; nessuna attivazione dal nome file.
@@ -89,13 +89,13 @@ PARAMETRI:
   preset    : aegis | sonar | wide | aura | voiceita (default: sonar).
   volamp    : Gain finale opzionale in dB prima del limiter.
               Valori consentiti: 0 .. 5.0.
-              0 = OFF, default = 3.5 dB.
+              0 = OFF, default = 2.0 dB.
               
 MODALITA' --files:  Processa soltanto i file elencati. 
 ESEMPIO:
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 3.5 "film.mkv"
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh ac3 no 640k wide 3.5 ""
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files eac3 no 768k sonar 3.5 ep1.mkv ep4.mkv
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 2.0 "film.mkv"
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh ac3 no 640k wide 2.0 ""
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files eac3 no 768k sonar 2.0 ep1.mkv ep4.mkv
 
 PRESET DISPONIBILI:
   aegis     -> Simula NEURAL:X (DTS:X)  | Cupola Sonora
@@ -177,7 +177,7 @@ MULTI_FILES=()
 INPUT_FILE=""
 BITRATE=""
 SUR_MODE=""
-VOLAMP_DB="3.5"
+VOLAMP_DB="2.0"
 
 if [[ "${1:-}" == "--files" ]]; then
   # Sintassi fissa: --files codec keep bitrate preset volamp file...
@@ -325,9 +325,9 @@ case "$VOLAMP_DB" in
     ;;
 esac
 
-# Guard rail: sopra 3.5 dB il limiter finale puo' iniziare a lavorare in modo udibile.
+# Guard rail: sopra 2.0 dB il limiter finale puo' iniziare a lavorare in modo udibile.
 # fino a 5.0 resta permesso per sorgenti realmente basse, ma va trattato come modalita' spinta.
-if awk -v v="$VOLAMP_DB" 'BEGIN { exit !(v > 3.5) }'; then
+if awk -v v="$VOLAMP_DB" 'BEGIN { exit !(v > 2.0) }'; then
   warn "volamp alto (${VOLAMP_DB} dB): controlla eventuale compressione percepita nei picchi."
 fi
 
@@ -481,7 +481,7 @@ fi
 # EQ della voce per i preset surround, mirato all'intelligibilità.
 # Il gain precede i limiter FC e master: sui passaggi forti la dinamica può ridursi.
 read -r -d '' VOICE_EQ_BASE <<'EOF' || true
-[FC]highpass=f=40:t=q:w=0.707,equalizer=f=150:t=q:w=1.1:g=0.2,equalizer=f=450:t=q:w=1.2:g=-0.6,equalizer=f=1100:t=q:w=1.4:g=0.8,equalizer=f=7200:t=q:w=2.5:g=-0.9[FC_pre];
+[FC]highpass=f=20:t=q:w=0.707,equalizer=f=150:t=q:w=1.1:g=0.2,equalizer=f=450:t=q:w=1.2:g=-0.6,equalizer=f=1100:t=q:w=1.4:g=0.8,equalizer=f=7200:t=q:w=2.5:g=-0.9[FC_pre];
 EOF
 read -r -d '' VOICE_DELTA_SONAR <<'EOF' || true
 [FC_pre]volume=2.7dB,equalizer=f=1650:t=q:w=1.6:g=0.9,equalizer=f=2450:t=q:w=1.3:g=1.6,equalizer=f=3800:t=q:w=2.0:g=1.0,equalizer=f=6800:t=q:w=2.0:g=-1.0,volume=0.96[FCv];
@@ -499,7 +499,7 @@ EOF
 # Catena FC autonoma; non sommare VOICE_EQ_BASE. Taratura fissa da valutare all'ascolto.
 # Sostegno FC +4.2 dB nominali; +0.5 dB rispetto alla taratura da 3.7 dB, a EQ invariata.
 read -r -d '' VOICE_DELTA_VOICEITA <<'EOF' || true
-[FC]highpass=f=40:t=q:w=0.707,volume=4.2dB,equalizer=f=150:t=q:w=1.1:g=0.2,equalizer=f=300:t=q:w=1.0:g=-1.0,equalizer=f=450:t=q:w=1.2:g=-0.6,equalizer=f=1650:t=q:w=1.6:g=0.7,equalizer=f=2450:t=q:w=1.3:g=1.4,equalizer=f=3800:t=q:w=2.0:g=0.9,volume=0.95[FCv];
+[FC]highpass=f=20:t=q:w=0.707,volume=4.2dB,equalizer=f=150:t=q:w=1.1:g=0.2,equalizer=f=300:t=q:w=1.0:g=-1.0,equalizer=f=450:t=q:w=1.2:g=-0.6,equalizer=f=1650:t=q:w=1.6:g=0.7,equalizer=f=2450:t=q:w=1.3:g=1.4,equalizer=f=3800:t=q:w=2.0:g=0.9,volume=0.95[FCv];
 EOF
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -512,13 +512,13 @@ EOF
 # SONAR: cupola sonora con boost verticale, più presenza medio-alta per SL/SR, e un layer di decorrelazione a basso livello per aria.
 read -r -d '' SUR_FILTERS_SONAR <<'EOF' || true
 [SL]asplit=4[SLd_in][SLp_in][SLh_in][SLlate_in];
-[SLd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SLd];
+[SLd_in]adelay=0,highpass=f=20:t=q:w=0.707,volume=0.95[SLd];
 [SLp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=2.0,equalizer=f=11000:t=q:w=1.0:g=-1.2,volume=1.00[SLp];
 [SLh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=900:t=q:w=0.70,allpass=f=2200:t=q:w=0.70,equalizer=f=8000:t=q:w=2.5:g=0.8,equalizer=f=11000:t=q:w=1.2:g=1.0,__HEIGHT_GAIN_FILTER__volume=0.60[SLh];
 [SLlate_in]adelay=38,highpass=f=150,lowpass=f=1500,volume=0.58[SLlate];
 [SLd][SLp][SLh][SLlate]amix=inputs=4:weights='1 0.6 0.4 0.2':normalize=0,volume=1.05[SL_out];
 [SR]asplit=4[SRd_in][SRp_in][SRh_in][SRlate_in];
-[SRd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SRd];
+[SRd_in]adelay=0,highpass=f=20:t=q:w=0.707,volume=0.95[SRd];
 [SRp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=2.0,equalizer=f=11000:t=q:w=1.0:g=-1.2,volume=1.00[SRp];
 [SRh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=1050:t=q:w=0.70,allpass=f=2400:t=q:w=0.70,equalizer=f=8000:t=q:w=2.5:g=0.8,equalizer=f=11000:t=q:w=1.2:g=1.0,__HEIGHT_GAIN_FILTER__volume=0.60[SRh];
 [SRlate_in]adelay=41,highpass=f=150,lowpass=f=1500,volume=0.58[SRlate];
@@ -528,13 +528,13 @@ EOF
 # AEGIS: cupola sonora con boost più bilanciato e meno artificiale, più presenza medio-alta per SL/SR, e un layer di decorrelazione a basso livello per aria.
 read -r -d '' SUR_FILTERS_AEGIS <<'EOF' || true
 [SL]asplit=4[SLd_in][SLp_in][SLh_in][SLlate_in];
-[SLd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SLd];
+[SLd_in]adelay=0,highpass=f=20:t=q:w=0.707,volume=0.95[SLd];
 [SLp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=1.6,equalizer=f=11000:t=q:w=1.0:g=-1.4,volume=0.95[SLp];
 [SLh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=900:t=q:w=0.70,allpass=f=2200:t=q:w=0.70,equalizer=f=8000:t=q:w=3.0:g=-4.0,equalizer=f=11000:t=q:w=1.2:g=0.6,__HEIGHT_GAIN_FILTER__volume=0.48[SLh];
 [SLlate_in]adelay=39,highpass=f=150,lowpass=f=1300,volume=0.42[SLlate];
 [SLd][SLp][SLh][SLlate]amix=inputs=4:weights='1.05 0.80 0.70 0.45':normalize=0,volume=0.95[SL_out];
 [SR]asplit=4[SRd_in][SRp_in][SRh_in][SRlate_in];
-[SRd_in]adelay=0,highpass=f=40:t=q:w=0.707,volume=0.95[SRd];
+[SRd_in]adelay=0,highpass=f=20:t=q:w=0.707,volume=0.95[SRd];
 [SRp_in]adelay=18,highpass=f=1500,equalizer=f=6500:t=q:w=1.2:g=1.6,equalizer=f=11000:t=q:w=1.0:g=-1.4,volume=0.95[SRp];
 [SRh_in]adelay=32,highpass=f=2500,lowpass=f=14000,allpass=f=1050:t=q:w=0.70,allpass=f=2400:t=q:w=0.70,equalizer=f=8000:t=q:w=3.0:g=-4.0,equalizer=f=11000:t=q:w=1.2:g=0.6,__HEIGHT_GAIN_FILTER__volume=0.48[SRh];
 [SRlate_in]adelay=42,highpass=f=150,lowpass=f=1300,volume=0.42[SRlate];
@@ -544,12 +544,12 @@ EOF
 # WIDE: allargamento laterale più marcato, con boost più evidente sulle sub-bande filtrate, e un layer di decorrelazione a basso livello per aria.
 read -r -d '' SUR_FILTERS_WIDE <<'EOF' || true
 [SL]asplit=3[SLd_in][SLe_in][SLx_in];
-[SLd_in]adelay=1,highpass=f=40:t=q:w=0.707,volume=1.00[SLd];
+[SLd_in]adelay=1,highpass=f=20:t=q:w=0.707,volume=1.00[SLd];
 [SLe_in]adelay=9,highpass=f=280,lowpass=f=7000,allpass=f=1200:t=q:w=0.65,volume=0.42[SLe];
 [SLx_in]adelay=22,highpass=f=600,lowpass=f=5000,allpass=f=700:t=q:w=0.70,allpass=f=2600:t=q:w=0.70,volume=0.17[SLx];
 [SLd][SLe][SLx]amix=inputs=3:weights='1.00 0.90 0.80':normalize=0,lowshelf=f=250:g=0.5:t=q:w=0.7,highshelf=f=3500:g=0.1:t=q:w=0.8,volume=1.00[SL_out];
 [SR]asplit=3[SRd_in][SRe_in][SRx_in];
-[SRd_in]adelay=1,highpass=f=40:t=q:w=0.707,volume=1.00[SRd];
+[SRd_in]adelay=1,highpass=f=20:t=q:w=0.707,volume=1.00[SRd];
 [SRe_in]adelay=10,highpass=f=280,lowpass=f=7000,allpass=f=1350:t=q:w=0.65,volume=0.42[SRe];
 [SRx_in]adelay=24,highpass=f=600,lowpass=f=5000,allpass=f=820:t=q:w=0.70,allpass=f=2400:t=q:w=0.70,volume=0.17[SRx];
 [SRd][SRe][SRx]amix=inputs=3:weights='1.00 0.90 0.80':normalize=0,lowshelf=f=250:g=0.5:t=q:w=0.7,highshelf=f=3500:g=0.1:t=q:w=0.8,volume=1.00[SR_out];
@@ -558,11 +558,11 @@ EOF
 # AURA: allargamento posteriore. Due layer (diretto + allpass decorrelato), presenza medio-alta contenuta. Il più morbido tra i preset spaziali.
 read -r -d '' SUR_FILTERS_AURA <<'EOF' || true
 [SL]asplit=2[SLd_in][SLa_in];
-[SLd_in]adelay=1,highpass=f=40:t=q:w=0.707,volume=1.00[SLd];
+[SLd_in]adelay=1,highpass=f=20:t=q:w=0.707,volume=1.00[SLd];
 [SLa_in]adelay=8,highpass=f=800,lowpass=f=4500,allpass=f=1400:t=q:w=0.65,volume=0.22[SLa];
 [SLd][SLa]amix=inputs=2:weights='1.00 0.85':normalize=0,volume=0.95[SL_out];
 [SR]asplit=2[SRd_in][SRa_in];
-[SRd_in]adelay=1,highpass=f=40:t=q:w=0.707,volume=1.00[SRd];
+[SRd_in]adelay=1,highpass=f=20:t=q:w=0.707,volume=1.00[SRd];
 [SRa_in]adelay=9,highpass=f=800,lowpass=f=4500,allpass=f=1550:t=q:w=0.65,volume=0.22[SRa];
 [SRd][SRa]amix=inputs=2:weights='1.00 0.85':normalize=0,volume=0.95[SR_out];
 EOF
@@ -570,8 +570,8 @@ EOF
 # VOICEITA: questo blocco applica solo HPF, senza espansione spaziale o guadagno aggiunto.
 # Il microboost SL/SR a 3200 Hz, +0.2 dB, Q 1.2 viene applicato nel blocco finale di output.
 read -r -d '' SUR_FILTERS_VOICEITA <<'EOF' || true
-[SL]highpass=f=40:t=q:w=0.707[SL_out];
-[SR]highpass=f=40:t=q:w=0.707[SR_out];
+[SL]highpass=f=20:t=q:w=0.707[SL_out];
+[SR]highpass=f=20:t=q:w=0.707[SR_out];
 EOF
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -624,7 +624,7 @@ set_preset_profile() {
 
 # Funzione per costruire il blocco di split dei canali in ingresso con mapping posizionale.
 build_input_split_graph() {
-  local front_filters="highpass=f=40:t=q:w=0.707,${FRONT_EQ}"
+  local front_filters="highpass=f=20:t=q:w=0.707,${FRONT_EQ}"
   cat <<EOF
 [0:${A_STREAM_INDEX}]${INPUT_AFORMAT},
 pan=5.1(side)|${INPUT_PAN_MAP}[base];

@@ -165,12 +165,15 @@ fi
 # framelen=500   : finestra 500ms — buon compromesso reattività/smoothness
 # gausssize=31   : finestra gaussiana 31 frame — smoothing ampio (no pumping)
 # peak=0.92      : picco target lineare del normalizzatore
-# maxgain=4      : fattore lineare massimo (non 4 dB; circa +12 dB nominali)
+# maxgain=4   : fattore lineare massimo (non 4 dB; circa +12.04 dB nominali)
 # targetrms=0    : target RMS disabilitato; controllo guidato dai picchi
 # compress=0     : compressione opzionale interna disabilitata
 # coupling=1     : canali accoppiati — preserva l'immagine stereo/surround
 # altboundary=0  : boundary mode standard
-DYNAUDNORM="dynaudnorm=framelen=500:gausssize=31:peak=0.92:maxgain=4:targetrms=0:compress=0:coupling=1:altboundary=0"
+DYNAUDNORM="dynaudnorm=framelen=500:gausssize=31:peak=0.92:maxgain=4:targetrms=0:compress=0:coupling=1:altboundary=0,alimiter=level_in=1:level_out=1:limit=0.89:attack=10:level=0:latency=1"
+
+# Limiter con lookahead di 10 ms (attack), senza auto-level e con latenza compensata.
+# Il margine sui campioni non garantisce il True Peak dopo encoding lossy.
 
 # Preserva il basso del bed originale per default. Il filtro opzionale
 # coinvolge tutti i canali, LFE incluso, prima del normalizzatore.
@@ -180,7 +183,7 @@ case "$ATMOS_HIGHPASS_HZ" in
   20) DYNAUDNORM="highpass=f=20:t=q:w=0.707,${DYNAUDNORM}" ;;
   *) err "ATMOS_HIGHPASS_HZ non valido: usa 0 (disattivato) oppure 20."; exit 1 ;;
 esac
-# Aegis applica 40 Hz ai canali principali; sul LFE gestisce gain e limiter.
+# Aegis applica 20 Hz ai canali principali; sul LFE gestisce gain e limiter.
 # Il filtro opzionale a 20 Hz si somma ai filtri dei passaggi successivi.
 
 # Probe chiave/valore: profilo, layout e lingua dalla stessa interrogazione.

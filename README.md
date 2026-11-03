@@ -107,7 +107,7 @@ chmod +x *.sh
 ```
 
 Se si scarica lo ZIP, estrarlo completamente prima di eseguire gli script.
-La versione di lavoro è costituita dai cinque script principali `.sh` e dal README nella cartella principale, senza copie sperimentali di test. Il processore 5.1 e il preparatore Atmos mantengono la pipeline precedente con la sola DRC Dolby disattivata in decodifica. Gli archivi `.rar` rimasti sono copie precedenti: non vengono aggiornati insieme ai file attivi e non vanno estratti sopra questi ultimi senza un confronto.
+La versione di lavoro è costituita dai cinque script principali `.sh` e dal README nella cartella principale, senza copie sperimentali di test. Il processore 5.1 e il preparatore Atmos usano la taratura aggiornata descritta sotto, con DRC Dolby disattivata in decodifica. Gli archivi `.rar` rimasti sono copie precedenti: non vengono aggiornati insieme ai file attivi e non vanno estratti sopra questi ultimi senza un confronto.
 
 I comandi di questa guida vanno eseguiti in Bash (su Windows: Git Bash, MSYS2
 o WSL). Per esempio, in Git Bash `cd /e/Download` apre `E:\Download`.
@@ -124,11 +124,25 @@ done
 
 ---
 
+## Test di regressione
+
+I test richiedono Python 3 (solo per il runner), Bash e FFmpeg/ffprobe 8.x nel `PATH`:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+
+Generano audio sintetico in una directory temporanea e verificano gli step VOLAMP,
+il cap LRA, tutti i preset in AC3/EAC3, il default e l’override manuale del gain,
+il limite di guadagno e di picco prima della codifica dello stadio Atmos,
+la durata e la conservazione bitstream della traccia originale.
+Non sostituiscono una misura True Peak su materiale reale né una prova d’ascolto.
+
 ## Script inclusi
 
 | Script | Scopo |
 |---|---|
-| `audio_analyzer_volamp_psycho.sh` | Classifier per 5.1: Delta surround/centro, banda voce, mascheramento, width, target `-21 LUFS`, volamp automatico **3.5–4.5 dB** e batch opzionale |
+| `audio_analyzer_volamp_psycho.sh` | Classifier per 5.1: Delta surround/centro, banda voce, mascheramento, width, target `-21 LUFS`, volamp automatico **2.0–3.0 dB** e batch opzionale |
 | `aegis_sonar_wide_aura_voice_volamp_psycho.sh` | Processore 5.1 con preset `aegis`, `sonar`, `wide`, `aura`, `voiceita`, EQ voce, surround psicoacustici nei preset spaziali, controllo LFE e compensazione FC/LFE attivata dal profilo EAC3 Atmos o dal marker originale |
 | `stereo251_upmix_psycho.sh` | Upmix V10 stereo → 5.1: matrice L-R, centro assist, rear bed adattivo in `to51`, LFE minimo, output atomico/verificato e preset `quad` dedicato alla musica |
 | `asmr_vr_intimate_psycho.sh` | Processing stereo per cuffie/ASMR/VR con BS2B, ITD opzionale, loudnorm post-DSP, LFO e output atomico/verificato |
@@ -159,16 +173,16 @@ Analizzare un file senza generare il batch:
 ./audio_analyzer_volamp_psycho.sh eac3 no 768k no "film.mkv"
 ```
 
-Elaborare un file scegliendo preset e volume (qui SONAR, 3,5 dB):
+Elaborare un file scegliendo preset e volume (qui SONAR, 2,0 dB):
 
 ```bash
-./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 3.5 "film.mkv"
+./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 2.0 "film.mkv"
 ```
 
 Elaborare tutti i file compatibili nella cartella corrente:
 
 ```bash
-./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 3.5 ""
+./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 2.0 ""
 ```
 
 Il contributo verticale aumentato è già predefinito per SONAR e AEGIS. La compensazione Atmos si attiva sulle sorgenti riconosciute. I comandi diretti qui mostrati non trasferiscono automaticamente i gain LFE/Bass trim calcolati dall'analizzatore: queste due correzioni restano a zero. Il flusso con batch che le applica è descritto nella sezione dell'analizzatore.
@@ -224,8 +238,8 @@ La scelta si basa sull'ascolto del film e sulle preferenze personali.
 - `wide` quando SL/SR risultano stretti o collassati, `aegis` per mix equilibrati;
 - verdetto stagionale modale con almeno **2/3 di consenso**; altrimenti `MIXED`;
 - `MIXED` anche quando lo spread di `DeltaSur` supera `4 dB`;
-- volamp automatico con base **3.5 dB** e massimo **4.5 dB**;
-- cap del volamp a **3.5 dB** quando `LRA >= 18 LU`;
+- volamp automatico con base **2.0 dB** e massimo **3.0 dB**;
+- cap del volamp a **2.0 dB** quando `LRA >= 18 LU`;
 - `run_processing.sh` opzionale tramite parametro `run=si|no`;
 - colori distinti in console:
   - SONAR rosso;
@@ -344,8 +358,8 @@ Le costanti `BASS_*` dell'analyzer sono soglie iniziali euristiche, da tarare co
 Il processore accetta anche la scelta manuale:
 
 ```bash
-./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 no 768k sonar 3.5 --lfe-gain 0 --bass-trim -2 "film.mkv"
-./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files eac3 no 768k sonar 3.5 --bass-trim -1 -- "ep 1.mkv" "ep 2.mkv"
+./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 no 768k sonar 2.0 --lfe-gain 0 --bass-trim -2 "film.mkv"
+./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files eac3 no 768k sonar 2.0 --bass-trim -1 -- "ep 1.mkv" "ep 2.mkv"
 ```
 
 `--bass-trim` accetta decimali con punto fra −3 e 0; default 0, nessun filtro aggiunto. Il parser rifiuta valori positivi, non numerici, fuori range, mancanti o opzioni ripetute. Il processore applica i valori manuali indicati: il coordinamento del budget viene effettuato dall'analyzer, non sovrascrive una scelta manuale esplicita.
@@ -439,31 +453,33 @@ Width MS = RMS(SIDE) - RMS(MID)
 
 ## Volamp automatico
 
+La base è ridotta a 2,0 dB per limitare quanto il secondo stadio spinge contro i limiter. Se necessario, compensare il livello di ascolto sul Volume Trim dell’ingresso AVR (indicativamente +1,5–2 dB), verificando il risultato all’ascolto. I batch già generati mantengono i gain espliciti precedenti: rigenerarli per adottare la nuova taratura.
+
 Il volamp è il make-up gain applicato dal processore ai singoli canali prima del join 5.1. Sul canale LFE viene applicato prima del limiter dedicato, così i picchi del sub vengono controllati prima del master limiter multicanale. L'analyzer usa la loudness integrata del file rispetto al target `-21 LUFS`.
 
 | Deficit rispetto al target | Volamp |
 |---:|---:|
-| `< 1.8 dB` | `3.5 dB` |
-| `1.8 / <3.0 dB` | `4.0 dB` |
-| `>= 3.0 dB` | `4.5 dB` |
+| `< 1.8 dB` | `2.0 dB` |
+| `1.8 / <3.0 dB` | `2.5 dB` |
+| `>= 3.0 dB` | `3.0 dB` |
 
 Protezione per mix molto dinamici:
 
 | LRA | Cap |
 |---:|---:|
-| `>= 18 LU` | massimo `3.5 dB` |
+| `>= 18 LU` | massimo `2.0 dB` |
 
-Il minimo automatico è **3.5 dB**, allineato al default del processore, ed è usato anche quando la misura di loudness manca o non è valida. I valori della tabella sono gain totali, non incrementi da sommare alla base. Con LRA `>= 18 LU`, gli eventuali recuperi a `4.0` o `4.5 dB` vengono limitati alla base di `3.5 dB`.
+Il minimo automatico è **2.0 dB**, allineato al default del processore, ed è usato anche quando la misura di loudness manca o non è valida. I valori della tabella sono gain totali, non incrementi da sommare alla base. Con LRA `>= 18 LU`, gli eventuali recuperi a `2.5` o `3.0 dB` vengono limitati alla base di `2.0 dB`.
 
 ## `run_processing.sh`
 
 Quando `run=si`, il batch contiene righe simili a:
 
 ```bash
-"$PROC" "$CODEC" "$KEEP" "$BITRATE" sonar 3.5 --lfe-gain 0.0 --bass-trim 0.0 -- film.mkv || BATCH_FAILURES=$((BATCH_FAILURES + 1))  # DeltaSur=-14.2 dB | DeltaFC=1.0 dB | VoiceDelta=2.3 dB | VoiceMask=-12.0 dB | Width=-4.1 dB | I=-21.9 LUFS
+"$PROC" "$CODEC" "$KEEP" "$BITRATE" sonar 2.0 --lfe-gain 0.0 --bass-trim 0.0 -- film.mkv || BATCH_FAILURES=$((BATCH_FAILURES + 1))  # DeltaSur=-14.2 dB | DeltaFC=1.0 dB | VoiceDelta=2.3 dB | VoiceMask=-12.0 dB | Width=-4.1 dB | I=-21.9 LUFS
 ```
 
-Il valore subito dopo il preset (`3.5` nell'esempio) è il volamp realmente passato al processore. Seguono i gain LFE e Bass trim calcolati per il file; `--` separa le opzioni dal percorso. Il batch conta gli eventuali fallimenti tramite `BATCH_FAILURES`. Il commento è abbreviato nell'esempio: le righe generate includono anche layout, stato Atmos, confidenza e altre metriche. Il batch usa:
+Il valore subito dopo il preset (`2.0` nell'esempio) è il volamp realmente passato al processore. Seguono i gain LFE e Bass trim calcolati per il file; `--` separa le opzioni dal percorso. Il batch conta gli eventuali fallimenti tramite `BATCH_FAILURES`. Il commento è abbreviato nell'esempio: le righe generate includono anche layout, stato Atmos, confidenza e altre metriche. Il batch usa:
 
 ```bash
 PROC="${PROC:-./aegis_sonar_wide_aura_voice_volamp_psycho.sh}"
@@ -497,10 +513,10 @@ Motore principale per tracce **5.1 esistenti**.
 - Bass trim opzionale: low-shelf a 100 Hz sui sei canali prima dei limiter, da −3 a 0 dB;
 - trattamento LFE: volamp, correzione statica `--lfe-gain` ed eventuale compensazione Atmos prima del limiter dedicato; filtraggio dedicato affidato all’hardware;
 - compensazione del bed **FC +0,5 dB / LFE −0,5 dB**, con profilo EAC3 Atmos o marker originale, per tutti i preset;
-- diffusori mantenuti `Small`, con bass management e crossover a circa `110 Hz` affidati all'AVR; lo script applica ai canali principali solo un high-pass di sicurezza a `40 Hz`;
+- diffusori mantenuti `Small`, con bass management e crossover a circa `110 Hz` affidati all'AVR; lo script applica ai canali principali solo un high-pass di sicurezza a `20 Hz`;
 - `FRONT_EQ` leggermente adattato alle torri senza widening o alterazioni della scena frontale;
-- volamp manuale `0–5.0 dB`, default **3.5 dB** se omesso; un valore esplicito prevale sempre;
-- warning sopra `3.5 dB`;
+- volamp manuale `0–5.0 dB`, default **2.0 dB** se omesso; un valore esplicito prevale sempre;
+- warning sopra `2.0 dB`;
 - video, sottotitoli, capitoli e allegati copiati;
 - keep opzionale della traccia 5.1 selezionata;
 - DSP, codifica audio e mux in un unico processo FFmpeg, verso un MKV temporaneo;
@@ -517,7 +533,7 @@ Motore principale per tracce **5.1 esistenti**.
 | AEGIS, SONAR, WIDE, AURA | SL e SR | Bell (peaking EQ) | 3200 Hz | +0,1 dB | 1,2 |
 | VOICEITA | SL e SR | Bell (peaking EQ) | 3200 Hz | +0,2 dB | 1,2 |
 
-AEGIS, SONAR, WIDE e AURA mantengono il passa-alto a **40 Hz, Q 0,707** sui rami diretti `SLd_in` e `SRd_in`. Il microboost di presenza è un filtro a campana a **3200 Hz, Q 1,2** (valore storico), applicato una sola volta ai soli `SL_final` e `SR_final`: **+0,1 dB** nei quattro preset psicoacustici e **+0,2 dB** in VOICEITA.
+AEGIS, SONAR, WIDE e AURA mantengono il passa-alto a **20 Hz, Q 0,707** sui rami diretti `SLd_in` e `SRd_in`. Il microboost di presenza è un filtro a campana a **3200 Hz, Q 1,2** (valore storico), applicato una sola volta ai soli `SL_final` e `SR_final`: **+0,1 dB** nei quattro preset psicoacustici e **+0,2 dB** in VOICEITA.
 
 Ordine effettivo: blocco surround del preset → decorrelazione/ambienza finale (bypass in VOICEITA) → microboost SL/SR → bass trim e VOLAMP → join 5.1, highshelf e limiter finali. Il filtro interviene sul segnale già elaborato senza modificare gli ingressi o i parametri degli algoritmi spaziali. Non introduce aumenti del guadagno generale dei surround; la riduzione manuale di circa 1 dB sull'impianto resta un dato del contesto di ascolto. Il beneficio percettivo di incrementi così piccoli non è garantito e richiede un confronto d'ascolto controllato.
 
@@ -534,7 +550,7 @@ Restano invariati i delay diretti (**0 ms** in AEGIS/SONAR, **1 ms** in WIDE/AUR
 **VOICEITA è un preset manuale pensato per favorire la leggibilità del parlato italiano.**
 Sul centrale riduce parte delle medio-basse e aggiunge una presenza moderata
 nella gamma vocale, con l'obiettivo di rendere le parole più distinguibili
-mantenendo il corpo della voce. I surround ricevono il passa-alto a 40 Hz
+mantenendo il corpo della voce. I surround ricevono il passa-alto a 20 Hz
 e il microboost finale a 3200 Hz di +0,2 dB, senza espansione spaziale aggiunta.
 
 È una variante da confrontare con gli altri preset quando i dialoghi risultano
@@ -563,7 +579,7 @@ canali. Restano attivi i limiter e le eventuali compensazioni Atmos condivise.
 
 | Filtro | Frequenza | Gain | Q |
 |---|---:|---:|---:|
-| Passa-alto | 40 Hz | — | 0,707 |
+| Passa-alto | 20 Hz | — | 0,707 |
 | Bell | 150 Hz | +0,2 dB | 1,1 |
 | Bell | 300 Hz | −1,0 dB | 1,0 |
 | Bell | 450 Hz | −0,6 dB | 1,2 |
@@ -576,7 +592,7 @@ I tagli a **300 e 450 Hz** mirano a mitigare il parlato gonfio e impastato
 l'articolazione e la presenza delle consonanti. La catena dedicata non
 aggiunge filtri a 1100, 5200, 6800 o 7200 Hz.
 
-**Surround (SL/SR).** Passa-alto a 40 Hz Q 0,707 e microboost finale
+**Surround (SL/SR).** Passa-alto a 20 Hz Q 0,707 e microboost finale
 a campana a 3200 Hz, +0,2 dB, Q 1,2, senza aumento del guadagno generale
 (senza `volume=0.88`). `DECORR_GAIN_VOICEITA="0"`: nessuna espansione, delay,
 allpass o decorrelazione aggiuntiva.
@@ -604,10 +620,10 @@ Il controllo riguarda solo **SONAR e AEGIS**. WIDE, AURA e VOICEITA mantengono i
 
 ```bash
 # Usa increased automaticamente, salvo una variabile HEIGHT_MODE già esportata
-./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 3.5 "film.mkv"
+./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 2.0 "film.mkv"
 
 # Ripristina il contributo verticale precedente per questa esecuzione
-HEIGHT_MODE=normal ./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 3.5 "film.mkv"
+HEIGHT_MODE=normal ./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 2.0 "film.mkv"
 
 # Applica la scelta ai processi avviati dal batch
 HEIGHT_MODE=reduced ./run_processing.sh
@@ -620,8 +636,8 @@ Il batch non registra una scelta HEIGHT_MODE per file: eredita la variabile di a
 `--lfe-gain <dB>` accetta numeri decimali con punto da `-2.0` a `+2.0`, default `0.0`. Non cambia VOLAMP, preset, filtri o limiter. Un valore zero non aggiunge alcun filtro al percorso precedente. Le opzioni duplicate, incomplete o fuori intervallo vengono rifiutate; `--` termina le opzioni per proteggere i nomi dei file.
 
 ```bash
-./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 no 768k sonar 3.5 --lfe-gain -1.0 "film.mkv"
-./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files eac3 no 768k sonar 3.5 --lfe-gain -0.5 -- "ep 1.mkv" "ep 2.mkv"
+./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 no 768k sonar 2.0 --lfe-gain -1.0 "film.mkv"
+./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files eac3 no 768k sonar 2.0 --lfe-gain -0.5 -- "ep 1.mkv" "ep 2.mkv"
 ```
 
 Ordine: **LFE → eventuale Bass shelf → VOLAMP → LFE gain → compensazione Atmos → limiter LFE → join → limiter master**. Per esempio, `+4.0 -1.5 -0.5 = +2.0 dB` nominali prima del limiter. Il guadagno effettivo nei picchi può essere inferiore; l’eventuale Bass shelf introduce inoltre un’attenuazione dipendente dalla frequenza. Nei log le tre componenti e la loro somma sono separate. I vecchi comandi senza opzione mantengono gain LFE zero.
@@ -645,14 +661,14 @@ Compatibilità: resta accettato il vecchio ordine `<codec> <keep> <file|""> [bit
 | `keep` | `si`, `no` | obbligatorio | conserva la traccia sorgente selezionata |
 | `bitrate` | `256k–640k` AC3; `256k–768k` EAC3, step da `64k` | `640k` AC3, `768k` EAC3 | valori fuori range vengono rifiutati prima dell'encoding |
 | `preset` | `aegis`, `sonar`, `wide`, `aura`, `voiceita` | `sonar` | modalità DSP; `voiceita` solo manuale |
-| `volamp` | `0–5.0` | `3.5` | gain per-canale prima del join e dei limiter dedicati; un valore esplicito prevale sul default |
+| `volamp` | `0–5.0` | `2.0` | gain per-canale prima del join e dei limiter dedicati; un valore esplicito prevale sul default |
 | `file` | file o stringa vuota | cartella corrente | `""` usa la cartella corrente |
 
 ## Versione principale
 
-La versione corrente è **Novembre 2026**, con la sola DRC dei metadati Dolby disattivata rispetto alla pipeline precedente del processore 5.1 e del preparatore Atmos. EQ, surround, VOLAMP, compensazioni Atmos e `dynaudnorm` mantengono la taratura esistente.
+La versione corrente è **Novembre 2026**, con DRC Dolby disattivata in decodifica e gain staging aggiornato: dynaudnorm con i parametri originali `peak=0.92` e `maxgain=4`, seguito dal limiter in coda, passa-alto subsonico a 20 Hz sui canali principali, VOLAMP base 2,0 dB e limiter FC/master a 0,89 con release 80 ms. EQ, rami spaziali e compensazioni Atmos mantengono la taratura esistente.
 
-Il processore conserva i tempi dei limiter: **FC 1,5 / 60 ms**, **LFE 2 / 120 ms** e **master 2,5 / 50 ms** (attack / release). Processore e preparatore Atmos verificano il formato della traccia primaria, senza scansioni True Peak post-codec o retry. Gli output mantengono i nomi consueti, per esempio `film_EAC3_Sonar.mkv` e `film-0.mkv`; il batch dell'analyzer richiama il processore principale.
+I tempi dei limiter del processore sono: **FC 1,5 / 80 ms**, **LFE 2 / 120 ms** e **master 2,5 / 80 ms** (attack / release). Processore e preparatore Atmos verificano il formato della traccia primaria, senza scansioni True Peak post-codec o retry. Gli output mantengono i nomi consueti, per esempio `film_EAC3_Sonar.mkv` e `film-0.mkv`; il batch dell'analyzer richiama il processore principale.
 
 I controlli True Peak e gli eventuali retry già presenti nell'upmix e nell'ASMR restano quelli descritti nelle rispettive sezioni. Non sono copie sperimentali del processore 5.1 o del preparatore Atmos.
 
@@ -687,7 +703,7 @@ FRONT_EQ:
 
 FC (dopo il volamp):
   volume +0,5 dB con profilo EAC3 Atmos o marker originale
-  alimiter limit=0.94, attack=1.5 ms, release=60 ms, level=0, latency=1
+  alimiter limit=0.89, attack=1.5 ms, release=80 ms, level=0, latency=1
 
 LFE:
   eventuale Bass shelf
@@ -698,11 +714,13 @@ LFE:
 
 Master:
   high-shelf +0.4 dB @ 12 kHz sui canali non-LFE
-  alimiter limit=0.94, attack=2.5 ms, release=50 ms, level=0, latency=1
+  alimiter limit=0.89, attack=2.5 ms, release=80 ms, level=0, latency=1
   output 48 kHz / fltp / 5.1(side)
 ```
 
-I limiter FC, LFE e master usano tutti `level=0`: non aggiungono auto-level al volamp impostato.
+I limiter FC, LFE e master usano tutti `level=0`: non aggiungono auto-level al volamp impostato. FC e master limitano a `0.89` (circa −1,01 dBFS); il limiter LFE resta a `0.94`, prima del master comune.
+
+Il margine sui campioni riduce il rischio di overshoot, ma non garantisce un tetto True Peak dopo AC3/EAC3: la ricodifica lossy può generare nuovi picchi. Il passa-alto a 20 Hz riduce l’intervento vicino al crossover rispetto a 40 Hz, ma non elimina ogni rotazione di fase né garantisce l’allineamento con subwoofer e AVR. Occorrono misure e ascolto sul sistema reale.
 
 ## Compensazione del bed Atmos
 
@@ -729,7 +747,7 @@ ATMOS_LFE_GAIN_DB="-0.5"
 
 Il centrale è già impostato a +0,5 dB. Per cambiare la taratura, modificare `ATMOS_FC_GAIN_DB` e `ATMOS_LFE_GAIN_DB` nel processore e mantenere `LFE_ATMOS_COMPENSATION_DB` in analyzer allineato al valore LFE. Questi parametri non sono argomenti CLI né override da variabili d'ambiente.
 
-Gli offset si sommano al volamp anche quando `volamp=0`. Per esempio, con `volamp=3.5`, `--lfe-gain 0` e `--bass-trim 0`, gli stadi di volume finale valgono complessivamente **+4,0 dB sul FC** e **+3,0 dB sul LFE**; EQ, gain del preset e intervento dei limiter concorrono al livello audio effettivo.
+Gli offset si sommano al volamp anche quando `volamp=0`. Per esempio, con `volamp=2.0`, `--lfe-gain 0` e `--bass-trim 0`, gli stadi di volume finale valgono complessivamente **+2,5 dB sul FC** e **+1,5 dB sul LFE**; EQ, gain del preset e intervento dei limiter concorrono al livello audio effettivo.
 
 Il controllo viene ripetuto per ogni file: nessuna prova Atmos disponibile (profilo o marker) lascia entrambi gli offset disattivati, senza ereditare lo stato del file precedente. Il log riporta l'attivazione con i valori applicati oppure la disattivazione.
 
@@ -782,16 +800,16 @@ Per valutare la decorrelazione restano necessari confronti su estratti reali con
 
 ```bash
 ./aegis_sonar_wide_aura_voice_volamp_psycho.sh \
-  eac3 no 768k sonar 3.5 "film.mkv"
+  eac3 no 768k sonar 2.0 "film.mkv"
 
 ./aegis_sonar_wide_aura_voice_volamp_psycho.sh \
-  eac3 no 768k wide 3.5 "film.mkv"
+  eac3 no 768k wide 2.0 "film.mkv"
 
 ./aegis_sonar_wide_aura_voice_volamp_psycho.sh \
-  ac3 si 640k voiceita 3.5 "film.mkv"
+  ac3 si 640k voiceita 2.0 "film.mkv"
 
 # Batch nella cartella corrente
-./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 no 768k sonar 3.5 ""
+./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 no 768k sonar 2.0 ""
 ```
 
 ## Output
@@ -1218,8 +1236,11 @@ dynaudnorm=
   targetrms=0:
   compress=0:
   coupling=1:
-  altboundary=0
+  altboundary=0,
+alimiter=level_in=1:level_out=1:limit=0.89:attack=10:level=0:latency=1
 ```
+
+I valori `peak=0.92` e `maxgain=4` restano quelli originali: non sono disponibili misure che giustifichino una loro ritaratura. Il limiter aggiunto è uno stadio successivo e distinto.
 
 Interpretazione:
 
@@ -1227,11 +1248,12 @@ Interpretazione:
 - `framelen=500`: finestra da 500 ms;
 - `gausssize=31`: smoothing ampio;
 - `peak=0.92`: target di picco con headroom;
-- `maxgain=4`: **fattore lineare massimo**, non `4 dB`; nominalmente equivale a circa `+12 dB` di ampiezza;
+- `maxgain=4`: **fattore lineare massimo**, non `4 dB`; nominalmente equivale a circa `+12.04 dB` di ampiezza;
 - `targetrms=0`: target RMS disabilitato;
 - `compress=0`: compressione aggiuntiva disabilitata;
 - `coupling=1`: stesso fattore di gain sui canali, preservando il bilanciamento surround;
-- `altboundary=0`: modalità boundary standard.
+- `altboundary=0`: modalità boundary standard;
+- limiter finale a `0.89` (circa −1,01 dBFS), lookahead `attack=10` ms, release predefinito 50 ms, `level=0` e `latency=1`. In FFmpeg il lookahead si configura con `attack`, non con un’opzione `lookahead`.
 
 Il preparatore non applica gli offset FC/LFE né un trattamento specifico al solo LFE: dynaudnorm coinvolge tutti i canali, mentre il passa-alto generale a `20 Hz` viene applicato solo se richiesto. Il successivo processore applica volamp e limiter al canale `.1`, oltre a FC +0,5 dB e LFE −0,5 dB quando trova il profilo EAC3 Atmos o il marker originale. Il filtraggio dedicato dell’LFE è affidato all’hardware.
 
@@ -1241,7 +1263,7 @@ Il preparatore non applica gli offset FC/LFE né un trattamento specifico al sol
 |---|---|
 | Atmos → 5.1 | Nessun passa-alto per default; `ATMOS_HIGHPASS_HZ=20` abilita 20 Hz su tutti i canali, LFE incluso. |
 | Stereo → 5.1 | Il passa-alto a 20 Hz resta sul solo LFE sintetico, sia in `to51` sia in `quad`. |
-| Aegis / Sonar / Wide / Aura / Voiceita | Restano i passa-alto a 40 Hz dei canali principali. Bass trim opzionale sui sei canali. Nessun passa-alto dedicato sul LFE. |
+| Aegis / Sonar / Wide / Aura / Voiceita | Restano i passa-alto a 20 Hz dei canali principali. Bass trim opzionale sui sei canali. Nessun passa-alto dedicato sul LFE. |
 | ASMR | Restano i passa-alto vocali dei preset a 60/70/80 Hz. |
 | Analyzer | Misura il segnale; non applica un passa-alto al file da pubblicare. |
 
@@ -1257,7 +1279,7 @@ Per scegliere esplicitamente il filtro subsonico:
 ATMOS_HIGHPASS_HZ=20 ./atmos_to_51_dynaudnorm_psicho.sh 640k "film.mkv"
 ```
 
-Sono accettati solo `0` (default, disattivato) e `20`; altri valori vengono rifiutati. Se si prosegue con Aegis, il filtro opzionale si somma ai 40 Hz dei canali principali. Il bass management dell'AVR non recupera frequenze gia' attenuate nel file. La traccia Atmos originale in copia non viene filtrata.
+Sono accettati solo `0` (default, disattivato) e `20`; altri valori vengono rifiutati. Se si prosegue con Aegis, il filtro opzionale si somma ai 20 Hz dei canali principali. Il bass management dell'AVR non recupera frequenze gia' attenuate nel file. La traccia Atmos originale in copia non viene filtrata.
 
 ## Verifica e pubblicazione
 
@@ -1476,15 +1498,15 @@ Controllare il mix manualmente. Il batch non viene aggiornato; non eseguire un b
 
 ## Il volamp sembra alto
 
-Il processore usa `3.5 dB` come default se VOLAMP viene omesso, e accetta valori da `0` a `5.0 dB`. Un valore esplicito prevale sul default. L'analyzer sceglie un valore esplicito fra `3.5` e `4.5 dB` per i soli preset automatici AEGIS/SONAR/WIDE/AURA; `voiceita` resta manuale. I valori automatici possibili sono:
+Il processore usa `2.0 dB` come default se VOLAMP viene omesso, e accetta valori da `0` a `5.0 dB`. Un valore esplicito prevale sul default. L'analyzer sceglie un valore esplicito fra `2.0` e `3.0 dB` per i soli preset automatici AEGIS/SONAR/WIDE/AURA; `voiceita` resta manuale. I valori automatici possibili sono:
 
 ```text
-3.5 = make-up DSP standard
-4.0 = sorgente molto bassa
-4.5 = sorgente estremamente bassa
+2.0 = make-up DSP standard
+2.5 = sorgente molto bassa
+3.0 = sorgente estremamente bassa
 ```
 
-Sopra `3.5 dB` il processore mostra un warning perché il limiter può lavorare in modo più percepibile. Il gain nominale non coincide necessariamente con l'aumento LUFS finale: dipende da picchi, EQ e intervento del limiter.
+Sopra `2.0 dB` il processore mostra un warning perché il limiter può lavorare in modo più percepibile. Il gain nominale non coincide necessariamente con l'aumento LUFS finale: dipende da picchi, EQ e intervento del limiter.
 
 ## Il centrale dell'upmix ruba scena
 
