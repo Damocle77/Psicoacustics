@@ -21,7 +21,7 @@ set -uo pipefail
 # │   -> diagnostica; surround molto arretrati -> SONAR; surround stretti           │
 # │   -> WIDE; moderatamente arretrati -> AURA; mix equilibrato -> AEGIS.           │
 # │   Le misure RMS dei canali vengono raccolte in un solo passaggio FFmpeg.        │
-# │   Decodifica AC3/EAC3 con DRC Dolby disattivata, come nel processore.            │
+# │   Decodifica AC3/EAC3 con DRC Dolby disattivata, come nel processore.           │
 # │                                                                                 │
 # │   VERDETTO STAGIONALE:                                                          │
 # │   Verdetto: servono almeno 2/3 di consenso; parita'/spread > 4 dB -> MIXED.     │
@@ -66,7 +66,7 @@ trap 'warn "Analisi terminata; batch non aggiornato."; exit 143' TERM
 
 usage() {
   cat <<'USAGE'
------------------------------------------------------------------------------------------------
+───────────────────────────────────────────────────────────────────────────────────────────────
 UTILIZZO:
   ./audio_analyzer_volamp_psycho.sh <codec> <keep> <bitrate> <run> <file|directory|"">
   ./audio_analyzer_volamp_psycho.sh --files <codec> <keep> <bitrate> <run> <file1> [file2...]
@@ -76,15 +76,14 @@ MODALITA' INPUT:
   directory : Analizza tutti i file compatibili dentro la directory indicata.
   ""        : Analizza tutti i file compatibili nella cartella corrente.
   --files   : Analizza solo i file elencati esplicitamente dopo i parametri.
-              Utile per testare 2-3 episodi campione senza scandire tutta la folder.
 PARAMETRI:
-  codec   : eac3   (Default) Codec per il batch file generato.
-            ac3    Alternativa.
-  keep    : no     (Default) Non conservare audio originale.
-            si     Conserva audio originale nel file processato.
+  codec   : eac3    (Default) Codec per il batch file generato.
+            ac3     Alternativa.
+  keep    : no      (Default) Non conservare audio originale.
+            si      Conserva audio originale nel file processato.
   bitrate : Default automatico: AC3  = 640k - EAC3 = 768k
-  run     : si     (Default) Genera o aggiorna run_processing.sh.
-            no     Esegue solo l'analisi senza creare/modificare il batch.
+  run     : si      (Default) Genera o aggiorna run_processing.sh.
+            no      Esegue solo l'analisi senza creare/modificare il batch.
 ESEMPI:
   ./audio_analyzer_volamp_psycho.sh eac3 no 768k si "film.mkv"
   ./audio_analyzer_volamp_psycho.sh eac3 no 768k si ""
@@ -92,12 +91,8 @@ ESEMPI:
 
 REGOLAZIONI AUTOMATICHE:
   Analyzer seleziona esclusivamente AEGIS, SONAR, WIDE o AURA come preset filtro.
-  Volamp: base 2.0 dB, recupero loudness a 2.5 o 3.0 dB; cap 2.0 dB con LRA >= 18 LU.
   VOICEITA: preset esclusivamente manuale, da applicare nel processore.
-  audio_analyzer non lo seleziona come preset, alternativa o fallback e non genera
-  comandi per questo preset. I relativi output AC3/EAC3 sono esclusi da analisi e batch.
-  VOICEITA: EQ centrale dedicata ai dialoghi italiani, surround senza espansione.
------------------------------------------------------------------------------------------------
+───────────────────────────────────────────────────────────────────────────────────────────────
 USAGE
   exit "${1:-1}"
 }

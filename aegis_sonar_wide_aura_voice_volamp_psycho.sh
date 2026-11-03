@@ -76,9 +76,9 @@ done
 
 usage() {
   cat <<'USAGE'
------------------------------------------------------------------------------------------------------------------------
-UTILIZZO:
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh <codec> <keep> <bitrate> <preset> <volamp> <file|"">
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+UTILIZZO:                                                                                                              
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh <codec> <keep> <bitrate> <preset> <volamp> <file|"">                  
   ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files <codec> <keep> <bitrate> <preset> <volamp> <file1> [file2...]
 
 PARAMETRI:
@@ -87,26 +87,23 @@ PARAMETRI:
   file      : File input singolo. Se omesso o "" processa tutti file compatibili nella cartella.
   bitrate   : Es. 640k o 768k (default: 640k per AC3, 768k per EAC3).
   preset    : aegis | sonar | wide | aura | voiceita (default: sonar).
-  volamp    : Gain finale opzionale in dB prima del limiter.
-              Valori consentiti: 0 .. 5.0.
-              0 = OFF, default = 2.0 dB.
-              
+  volamp    : Gain finale opzionale: Valori consentiti: 0 .. 5.0. 0 = OFF, default = 3.5 dB.
+
 MODALITA' --files:  Processa soltanto i file elencati. 
 ESEMPIO:
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 2.0 "film.mkv"
-  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh ac3 no 640k wide 2.0 ""
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 3.0 "film.mkv"
+  ./aegis_sonar_wide_aura_voice_volamp_psycho.sh ac3 no 640k wide 4.0 ""
   ./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files eac3 no 768k sonar 2.0 ep1.mkv ep4.mkv
 
 PRESET DISPONIBILI:
   aegis     -> Simula NEURAL:X (DTS:X)  | Cupola Sonora
-  sonar     -> Simula ATMOS (5.1.2)     | Boost Verticale
+  sonar     -> Simula ATMOS (5.1.2)     | Boost Verticale 
   wide      -> Simula Dolby (7.1)       | Allargamento Laterale
   aura      -> Simula Dolby (6.1)       | Allargamento Posteriore
-  voiceita  -> Dialoghi Italiani (5.1)  | EQ Canale Centrale Surround no effetti spaziali
+  voiceita  -> Dialoghi Italiani (5.1)  | EQ Canale Centrale, Surround senza espansione
 
-NOTA: VOICEITA e' un preset manuale: audio_analyzer non lo seleziona
-      e non genera comandi per questo preset; applicarlo direttamente con questo script.
------------------------------------------------------------------------------------------------------------------------
+NOTA: VOICEITA è un preset manuale per prodotti originali italiani: audio_analyzer non lo seleziona automaticamente.
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 USAGE
   exit "${1:-1}"
 }
@@ -177,7 +174,7 @@ MULTI_FILES=()
 INPUT_FILE=""
 BITRATE=""
 SUR_MODE=""
-VOLAMP_DB="2.0"
+VOLAMP_DB="3.5"
 
 if [[ "${1:-}" == "--files" ]]; then
   # Sintassi fissa: --files codec keep bitrate preset volamp file...

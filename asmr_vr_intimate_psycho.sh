@@ -12,7 +12,7 @@ set -uo pipefail
 # │   CHANGELOG V3:                                                              │
 # │     - Rimosso set -e (allineato a aegis/analyzer/upmix)                      │
 # │     - Selezione stream score-based (stereo, default, ita)                    │
-# │     - Output atomico e controllo True Peak prima della pubblicazione        │
+# │     - Output atomico e controllo True Peak prima della pubblicazione         │
 # │     - Prompt overwrite da /dev/tty con opzione "tutti" (-f)                  │
 # │     - Propagazione language tag                                              │
 # │     - LFO fix: tremolo+flanger (la pan= non supporta espressioni t-varianti) │
@@ -56,7 +56,7 @@ OUT_BITRATE="320k"
 
 show_help() {
   cat <<'EOF'
------------------------------------------------------------------------------
+─────────────────────────────────────────────────────────────────────────────
 UTILIZZO:
   ./asmr_vr_intimate_psycho.sh [opzioni] <file1> [file2 ...]
 
@@ -84,7 +84,7 @@ NOTE:
   Codec/bitrate configurabili: default AAC 320k per massima fedelta'.
   La selezione stream e' score-based (allineata a aegis/analyzer/upmix):
   priorita' a tracce stereo (2ch), lingua italiana, poi flag default.
------------------------------------------------------------------------------
+─────────────────────────────────────────────────────────────────────────────
 EOF
   exit 0
 }

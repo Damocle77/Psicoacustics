@@ -66,33 +66,22 @@ confirm_overwrite() {
 usage() {
   local rc="${1:-0}"
   cat <<'USAGE'
-----------------------------------------------------------------------------------------
+─────────────────────────────────────────────────────────────────────────────────────────
 UTILIZZO:
   ./atmos_to_51_dynaudnorm_psicho.sh [bitrate] <file|directory|"">
   ./atmos_to_51_dynaudnorm_psicho.sh --files <bitrate> <file1> [file2...]
 
 PARAMETRI:
   file|directory : File sorgente (mkv/mp4/m2ts), cartella contenente
-                   file video da processare in batch, oppure "" per la
-                   cartella corrente.
+                   file video da processare in batch, oppure "" per cartella corrente.
   bitrate        : Bitrate traccia EAC3 5.1 in uscita (default: 640k).
-
-FILTRO OPZIONALE:
-  ATMOS_HIGHPASS_HZ=0   Nessun passa-alto prima di dynaudnorm (default).
-  ATMOS_HIGHPASS_HZ=20  Passa-alto a 20 Hz su tutti i canali, incluso LFE.
-  Esempio: ATMOS_HIGHPASS_HZ=20 ./atmos_to_51_dynaudnorm_psicho.sh 640k film.mkv
 
 MODALITA' --files:
   Analizza e converte soltanto i file elencati. Il bitrate e' obbligatorio
   per separare in modo non ambiguo i parametri dai nomi dei file.
 
-OUTPUT ESISTENTI:
-  Chiede conferma: s = sovrascrivi, n = salta, t = tutti (senza Invio).
-  In esecuzioni non interattive i file esistenti vengono saltati.
-
 ESEMPI:
   ./atmos_to_51_dynaudnorm_psicho.sh 640k film.mkv       # singolo file
-  ./atmos_to_51_dynaudnorm_psicho.sh 768k /path/folder   # batch su cartella
   ./atmos_to_51_dynaudnorm_psicho.sh 768k ""             # batch nella cartella corrente
   ./atmos_to_51_dynaudnorm_psicho.sh --files 768k ep1.mkv ep4.mkv
 
@@ -100,7 +89,7 @@ OUTPUT:
   <nome>-0.mkv con:
     • Traccia 1: EAC3 5.1 normalizzata (dynaudnorm, default)
     • Traccia 2: EAC3 Atmos originale (copia bit-perfect)
-----------------------------------------------------------------------------------------
+─────────────────────────────────────────────────────────────────────────────────────────
 USAGE
   exit "$rc"
 }

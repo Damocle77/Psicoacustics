@@ -16,7 +16,7 @@ set -uo pipefail
 # │     - Rear ricavati soprattutto dalla componente laterale L-R.                           │
 # │     - Psicoacustica leggera: delay Haas + allpass/air a basso livello.                   │
 # │     - Headroom preventiva e limiter finale 4x solo come protezione dei true peak.        │
-# │     - Output atomico con controllo True Peak post-codec prima della pubblicazione.   │
+# │     - Output atomico con controllo True Peak post-codec prima della pubblicazione.       │
 # ╰──────────────────────────────────────────────────────────────────────────────────────────╯
 
 C_INFO="\033[0;36m[INFO]\033[0m"
@@ -40,7 +40,7 @@ fi
 
 usage() {
   cat <<'USAGE'
---------------------------------------------------------------------------------------
+──────────────────────────────────────────────────────────────────────────────────
 UTILIZZO:
   ./stereo251_upmix_psycho.sh <ac3|eac3> <si|no> [file|""] [bitrate] [preset]
 
@@ -66,7 +66,7 @@ ESEMPI:
   ./stereo251_upmix_psycho.sh eac3 no 'movie.mkv' 448k to51
   ./stereo251_upmix_psycho.sh eac3 si 'concert.mkv' 640k quad
   ./stereo251_upmix_psycho.sh ac3 no "" 448k to51
-  --------------------------------------------------------------------------------------
+──────────────────────────────────────────────────────────────────────────────────
 USAGE
   exit 1
 }
