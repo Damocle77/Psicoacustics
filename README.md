@@ -30,17 +30,13 @@ Suite di script **Bash AWK + FFmpeg** per analizzare, normalizzare, correggere e
 
 La filosofia è semplice: **misurare prima, processare dopo**. Il Classifier dell'analyzer misura scena full-band, prominenza della voce, mascheramento e width dei surround; sceglie quindi il preset per-file più adatto e può generare un batch riproducibile. Gli altri script coprono upmix stereo, preparazione Atmos/EAC3 e processing binaurale per cuffie.
 
-La taratura 5.1 è pensata per un impianto domestico ibrido con frontali a torre 3 vie, centrale e surround compatti, tutti configurati **Small** con crossover AVR unico intorno a **110 Hz**, uno o due subwoofer attivi gestiti dall'AVR, ascolto medio/basso e priorità all'intelligibilità della voce italiana.
+La taratura 5.1 è pensata per un impianto domestico con frontali, centrale e surround compatti, tutti configurati **Small** con crossover AVR unico intorno a **110 Hz**, uno o due subwoofer attivi gestiti dall'AVR, ascolto medio/basso e priorità all'intelligibilità della voce in generale ed italiana in particolare.
 
-La pipeline 5.1 (preparatore Atmos, analyzer e processore Aegis/Sonar/Wide/Aura/Voiceita) disattiva la **DRC dei metadati Dolby** nella decodifica AC3/EAC3 con l'opzione di input `-drc_scale:<indice_stream> 0`, posta prima di `-i` nel comando FFmpeg. L'opzione è applicata allo stream selezionato; gli altri codec mantengono la propria decodifica. La DRC dell'AVR è indipendente e non può annullare una compressione già incorporata nei campioni di un render precedente. Le tracce originali conservate con stream copy mantengono dati e metadati originali.
-
-Questa scelta non disattiva `dynaudnorm`, i limiter o gli altri filtri della suite e non recupera la dinamica già modificata nei file precedenti. Livelli e picchi possono cambiare sulle sorgenti con metadati DRC attivi: riascoltare i render e controllare l'intervento dei limiter. Lo schema della cache dell'analyzer è aggiornato per ricalcolare le metriche con la nuova decodifica.
+La pipeline 5.1 (preparatore Atmos, analyzer e processore Aegis/Sonar/Wide/Aura/Voiceita) disattiva la **DRC dei metadati Dolby** nella decodifica AC3/EAC3 con l'opzione di input `-drc_scale:<indice_stream> 0`, posta prima di `-i` nel comando FFmpeg. L'opzione è applicata allo stream selezionato; gli altri codec mantengono la propria decodifica. Il DRC dell'AVR è indipendente e non può annullare una compressione già incorporata nei campioni di un render precedente. Le tracce originali conservate con stream copy mantengono dati e metadati originali.
 
 Setup di riferimento: **Yamaha RX-V4A**, frontali **Harman Kardon 3 vie**, centrale/surround **JBL SCS200**, 2x subwoofer **Kenwood ST40**, bass management AVR a **110 Hz**.
 
 I frontali a torre vengono comunque utilizzati come diffusori **Small**: il loro vantaggio è principalmente nella maggiore capacità dinamica e nella migliore riproduzione della gamma medio-alta, mentre il contenuto sotto il crossover resta affidato al bass management dell'AVR.
-
-Il `FRONT_EQ` del processore mantiene il carattere del voicing originale ma riduce leggermente l'enfasi sulle alte frequenze rispetto alla taratura nata per satelliti compatti, senza introdurre widening o modifiche alla scena frontale.
 
 ## Schema di riferimento
 
