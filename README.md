@@ -97,7 +97,7 @@ AC3/EAC3 vengono codificati via CPU. L'accelerazione hardware, quando disponibil
 ## Installazione
 
 ```bash
-git clone https://github.com/Damocle77/Sonary_Suite.git
+git clone https://github.com/Damocle77/Psicoacustics.git
 cd Sonary_Suite
 chmod +x *.sh
 ```
