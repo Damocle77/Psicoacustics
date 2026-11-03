@@ -279,7 +279,7 @@ PRESET_BORDERLINE_MARGIN="0.7"
 # - sotto STRONG_GATE un AURA puo' essere promosso a SONAR;
 # - sotto SOFT_GATE resta AURA ma SONAR diventa alternativa;
 # - Width troppo stretta impedisce la promozione automatica a SONAR.
-ATMOS_SONAR_STRONG_GATE="-10.0"
+ATMOS_SONAR_STRONG_GATE="-9.5"
 ATMOS_SONAR_SOFT_GATE="-8.5"
 
 # Preferenza Atmos graduata: AURA puo' diventare SONAR solo sotto STRONG_GATE,

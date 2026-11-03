@@ -175,11 +175,11 @@ If SONAR is selected and width is also below −7 dB, SONAR remains selected, WI
 
 Virtually silent surrounds (RMS below −65 dBFS or either channel at −inf), a silent center (−inf), or SL/SR imbalance of at least 10 dB block batch publication and require manual inspection. Metrics remain visible, but no CHECK command is generated. Voice weakness/masking remain diagnostic; an empty voice band is reported as N/A.
 
-Atmos detection uses the official FFprobe E-AC-3 profile or a trusted original-track marker. For a measured AURA preset:
+Atmos detection uses the official FFprobe E-AC-3 profile or a trusted original-track marker. The marker may be on the secondary original track while the selected audio is a converted 5.1 bed: pass the complete container. Moving the promotion threshold from −10 to −9.5 dB gives SONAR a slightly stronger preference without changing gain or DSP. Exactly −9.5 dB does not trigger promotion. Regenerate the batch to adopt the decision; cached measurements remain reusable. For a measured AURA preset:
 
 | Condition | Result |
 |---|---|
-| `DeltaSur < -10.0 dB` and `Width MS >= -7 dB` | Promote to SONAR; low confidence, AURA alternative |
+| `DeltaSur < -9.5 dB` and `Width MS >= -7 dB` | Promote to SONAR; low confidence, AURA alternative |
 | No promotion and `DeltaSur < -8.5 dB` | Keep AURA; low confidence, SONAR alternative |
 | Otherwise | Keep AURA |
 | Measured AEGIS | Keep AEGIS; SONAR as a listening alternative |

@@ -409,11 +409,11 @@ Nel ramo `SONAR`, `DeltaSur < -13 dB` continua a selezionare `SONAR`: se nello s
 
 Surround virtualmente muti (RMS < −65 dBFS o un canale a −inf), centrale silenzioso (−inf) o sbilanciamento SL/SR ≥ 10 dB bloccano il batch con un warning e richiedono controllo manuale. Le metriche restano nel report; nessun comando CHECK viene generato. Le soglie voce restano diagnostiche, anche vicino ai confini; se la banda è vuota vengono indicate N/A.
 
-Il discriminante Atmos dell'analyzer usa il profilo E-AC-3 esposto da FFprobe oppure il marker affidabile della traccia originale. Se il classifier ha scelto `AURA`, applica queste regole:
+Il discriminante Atmos dell'analyzer usa il profilo E-AC-3 esposto da FFprobe oppure il marker affidabile della traccia originale. Il marker può essere sulla traccia originale secondaria anche quando si analizza il bed 5.1 riconvertito: passare il contenitore completo. La soglia di promozione è spostata da −10 a −9,5 dB per una preferenza SONAR leggermente maggiore, senza cambiare gain o DSP. A −9,5 dB esatti non c'è promozione. Rigenerare il batch per applicare la nuova decisione; le metriche in cache restano riutilizzabili. Se il classifier ha scelto `AURA`, applica queste regole:
 
 | Condizione | Risultato |
 |---|---|
-| `DeltaSur < -10.0 dB` e `Width MS >= -7 dB` | promozione a `SONAR`, confidenza bassa, alternativa `AURA` |
+| `DeltaSur < -9.5 dB` e `Width MS >= -7 dB` | promozione a `SONAR`, confidenza bassa, alternativa `AURA` |
 | promozione non applicabile e `DeltaSur < -8.5 dB` | resta `AURA`, confidenza bassa, alternativa `SONAR` |
 | altrimenti | resta `AURA` |
 | preset misurato `AEGIS` | resta `AEGIS`, alternativa di ascolto `SONAR` |
