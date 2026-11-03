@@ -2,6 +2,8 @@
   <img src="psico_logo.png" width="700" alt="Sonary Suite Logo">
 </p>
 
+[**Italiano**](README.md) | [English](README.en.md)
+
 # 🎧 Psychoacoustic Suite - Novembre 2026
 
 Suite di script **Bash AWK + FFmpeg** per analizzare, normalizzare, correggere e trasformare tracce audio stereo, 5.1 ed EAC3 Atmos/JOC in modo offline, ripetibile e controllato.
@@ -98,7 +100,7 @@ AC3/EAC3 vengono codificati via CPU. L'accelerazione hardware, quando disponibil
 
 ```bash
 git clone https://github.com/Damocle77/Psicoacustics.git
-cd Sonary_Suite
+cd Psicoacustics
 chmod +x *.sh
 ```
 
@@ -1379,7 +1381,7 @@ Con `run=no`, il batch esistente resta sempre intatto. `INT` e `TERM` fermano il
 
 Restano possibili miglioramenti di manutenzione: uniformare i parser CSV di analyzer/Aegis ai parser chiave/valore degli altri script e completare i preflight. Il batch usa ancora percorsi relativi: eseguirlo dalla directory di generazione con il processore presente, oppure impostare `PROC` con un percorso assoluto.
 
-Questa distribuzione contiene script eseguiti direttamente: non è presente una fase di compilazione né una configurazione CI GitLab. Prima della pubblicazione verificare repository e branch di destinazione; l’URL di installazione sopra è quello storico GitHub.
+Questa distribuzione contiene script eseguiti direttamente: non è presente una fase di compilazione né una configurazione CI GitLab. Prima della pubblicazione verificare repository e branch di destinazione. Il repository corrente è `Damocle77/Psicoacustics`.
 
 ## Lo script non parte
 
