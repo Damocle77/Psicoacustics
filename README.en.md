@@ -2,13 +2,16 @@
   <img src="psico_logo.png" width="700" alt="Sonary Suite Logo">
 </p>
 
-[Italiano](README.md) | **English**
+[Italiano](README.md) | [**English**](README.en.md)
 
-# 🎧 Psychoacoustic Suite — November 2026
+# 🎧 Psychoacoustic Suite - November 2026
 
-A collection of **Bash/awk + FFmpeg** scripts for offline, repeatable analysis, normalization, correction and conversion of stereo, 5.1 and EAC3 Atmos/JOC audio.
+5.1 refactoring: [current release](#current-release) and
+[regression checks](tests/verify_refactor.py).
 
-> Not all heroes wear capes. Some wield `ffmpeg` and rewrite the laws of sound. In the multiverse of sonic chaos, every voice deserves to be heard.
+A suite of **Bash, AWK and FFmpeg** scripts for analyzing, correcting and transforming stereo, 5.1 and EAC3 Atmos/JOC audio offline, with repeatable and controlled processing.
+
+> Not all heroes wear capes. Some wield `ffmpeg` and rewrite the laws of sound. **Because in the multiverse of sonic chaos, every voice deserves to be heard**.
 
 ## Contents
 
@@ -16,45 +19,67 @@ A collection of **Bash/awk + FFmpeg** scripts for offline, repeatable analysis, 
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Included scripts](#included-scripts)
-- [Output checks](#output-checks)
-- [Quick start](#quick-start)
-- [1. Analyzer](#1-analyzer)
-- [2. Aegis / Sonar / Wide / Aura / Voiceita](#2-aegis--sonar--wide--aura--voiceita)
-- [3. Stereo to 5.1 upmix](#3-stereo-to-51-upmix)
-- [4. ASMR / VR](#4-asmr--vr)
-- [5. Atmos to EAC3 5.1](#5-atmos-to-eac3-51)
-- [Recommended workflows](#recommended-workflows)
-- [Processing cost](#processing-cost)
+- [Post-processing checks](#post-processing-checks)
+- [Quick start](#quick-start-manual-commands)
+- [1. Analyzer: 5.1 analysis and classification](#1-audio_analyzer_psychosh)
+- [2. Aegis / Sonar / Wide / Aura / Voiceita: 5.1 processing](#2-aegis_sonar_wide_aura_voice_psychosh)
+- [3. Stereo → 5.1 upmix](#3-stereo251_upmix_psychosh)
+- [4. ASMR / VR: headphone processing](#4-asmr_vr_intimate_psychosh)
+- [5. Atmos: EAC3 5.1 preparation](#5-atmos_to_51_dynaudnorm_psichosh)
+- [Suggested workflows](#suggested-workflows)
+- [Approximate processing cost](#approximate-processing-cost)
 - [Troubleshooting](#troubleshooting)
-- [Limitations](#limitations)
-- [License and author](#license-and-author)
+- [What the suite does not do](#what-the-suite-does-not-do)
+- [License](#license)
+- [Author](#author)
 
-The principle is **measure first, process second**. The analyzer measures the full-band scene, center prominence, voice-band masking and surround width. It selects a preset for each file and can generate a repeatable processing batch. The other scripts handle stereo upmixing, Atmos/EAC3 preparation and headphone processing.
+The approach is simple: **measure first, process second**. The analyzer measures the full-band scene, vocal prominence, masking and surround width, then chooses a preset for each file and can generate a repeatable batch. The other scripts handle stereo upmixing, optional Atmos/EAC3 preparation and headphone processing.
+
+The 5.1 tuning targets a domestic system with front, center and compact surround speakers all configured as **Small**, a single AVR crossover around **110 Hz**, one or two active subwoofers managed by the AVR, moderate or low listening levels, and a focus on speech intelligibility, especially Italian dialogue.
+
+The 5.1 pipeline disables **Dolby metadata DRC** when decoding AC3/EAC3. The Atmos preparer, analyzer and Aegis/Sonar/Wide/Aura/Voiceita processor place the input option `-drc_scale:<stream_index> 0` before `-i` in the FFmpeg command. It applies to the selected stream; other codecs retain their own decoding behavior. AVR DRC is independent and cannot undo compression already baked into a previous render. Original tracks retained through stream copy keep their original data and metadata.
+
+Reference system: **Yamaha RX-V4A**, **Harman Kardon 3-way** front speakers, **JBL SCS200** center/surround speakers, **2× Kenwood ST40** subwoofers, AVR bass management at **110 Hz**.
+
+The floorstanding front speakers are also configured as **Small**. Their main benefits are dynamic capacity and mid/high-frequency reproduction; content below the crossover is handled by the AVR's bass management.
 
 ## Reference setup
-
-The 5.1 tuning targets home listening at low to moderate levels, compact speakers configured as **Small**, a shared AVR crossover around **110 Hz**, and one or two active subwoofers managed by the AVR. Dialogue intelligibility is a priority, particularly for Italian dialogue. Language preference in stream selection remains Italian even when reading this English guide.
-
-Reference equipment: **Yamaha RX-V4A**, **Harman Kardon three-way** front speakers, **JBL SCS200** center/surrounds and two **Kenwood ST40** subwoofers. The tower fronts are also configured as Small: they provide greater dynamic capacity and mid/high-frequency capability, while the AVR handles bass below the crossover.
 
 <p align="left">
   <img src="sonar_room_layout.png" width="700" alt="Sonary Suite 5.1 room layout">
 </p>
 
-The goals are clear dialogue without a megaphone effect, present but unobtrusive surrounds, controlled bass, selective processing and consistent gain staging. SONAR is not applied indiscriminately. Original Atmos playback remains a separate path when retained.
+Main goals:
 
-The Atmos preparer, analyzer and 5.1 processor disable **Dolby metadata DRC** when decoding AC3/EAC3, using the input option `-drc_scale:<stream_index> 0` before `-i`. This applies to the selected stream; other codecs keep their own decoding behavior. AVR DRC is independent and cannot undo compression already baked into a previous render. Stream-copied original tracks retain their data and metadata. This does not disable dynaudnorm, limiters or the suite's other DSP.
+- intelligible dialogue without a megaphone effect;
+- audible surrounds that do not overwhelm the scene;
+- controlled bass, mainly managed by the AVR and subwoofers;
+- selective processing: SONAR is not applied indiscriminately;
+- no automatic loudness normalization in the analyzer/5.1 processor path;
+- listening volume controlled on the AVR;
+- repeatable batches for films, episodes and entire folders;
+- a separate original Atmos playback path when required.
 
 ## Requirements
 
-- **FFmpeg 8.x** and matching **ffprobe**; the suite is developed and validated with **8.1.2**.
-- **Bash 4.x or later**, awk and mktemp.
-- GNU coreutils for the analyzer, including `sha256sum`, `stat -c`, `realpath` and `mv -T`.
-- FFmpeg built with **libsoxr** for upmixing and **libbs2b** for ASMR.
+### Software
 
-The audio scripts do not require Python. FFmpeg 7.x and earlier are outside the supported range. Do not use major version 9 or later until revalidated: astats/ebur128 output, filter options and channel-layout semantics can change. Use ffmpeg and ffprobe from the same build.
+- **FFmpeg 8.x**, required and supported;
+- **ffprobe**;
+- **Bash 4.x+**;
+- **awk** for audio analysis and checks;
+- **mktemp** for temporary files in all five scripts;
+- **GNU coreutils** for the analyzer (`sha256sum`, `stat -c`, `realpath`, `mv -T`), plus standard shell utilities;
+- an FFmpeg build with **libsoxr** for `stereo251_upmix_psycho.sh`;
+- an FFmpeg build with **libbs2b** for `asmr_vr_intimate_psycho.sh`.
 
-Supported platforms are Linux, macOS with Bash 4+ and GNU coreutils on `PATH`, and Windows through MSYS2, Git Bash or WSL2. The macOS system utilities alone do not meet analyzer requirements. AC3/EAC3 encoding runs on the CPU; video is normally copied without re-encoding.
+The audio scripts do not require Python. Python is used only by the separate refactoring verification script.
+
+The suite is developed and verified with **FFmpeg/ffprobe 8.1.2**. Releases above major version 8 (`9.x` and later) require renewed validation: `astats`/`ebur128` text output, filter options and channel-layout semantics may change. FFmpeg 7.x and earlier are also outside the supported scope. Use `ffmpeg` and `ffprobe` from the same build.
+
+The upmixer requires `resampler=soxr` and checks SOXR at startup, without an automatic fallback. The ASMR script checks `bs2b` and exits with an explicit error if it is unavailable.
+
+Useful checks:
 
 ```bash
 ffmpeg -version
@@ -63,7 +88,13 @@ ffmpeg -hide_banner -filters 2>/dev/null | grep -w bs2b
 ffmpeg -hide_banner -h filter=aresample 2>&1 | grep -i soxr
 ```
 
-The upmixer requires SOXR and has no automatic fallback. ASMR exits with an explicit error if BS2B is unavailable.
+### Operating systems
+
+- Linux;
+- macOS with Bash 4+ and GNU coreutils in `PATH` (the system tools alone are insufficient for the analyzer);
+- Windows through MSYS2, Git Bash or WSL2.
+
+AC3/EAC3 encoding runs on the CPU. Hardware acceleration usually concerns video, which this suite copies without re-encoding.
 
 ## Installation
 
@@ -73,9 +104,15 @@ cd Psicoacustics
 chmod +x *.sh
 ```
 
-Extract ZIP downloads completely. The active distribution consists of the five root-level scripts and the README. Old `.rar` archives, if present, are historical copies: do not extract them over the active scripts without comparing versions.
+If downloading a ZIP, extract it completely before running the scripts.
 
-Run commands in Bash, including on Windows, and quote paths containing spaces. In Git Bash, `cd /e/Download` opens `E:\Download`. Scripts can also be invoked as `bash script_name.sh`.
+The active distribution consists of the five main `.sh` scripts and documentation in the repository root. The `.rar` archives are older snapshots: they are not updated with the active files and should not be extracted over them without comparison.
+
+Run the commands in this guide in Bash (Git Bash, MSYS2 or WSL on Windows). For example, `cd /e/Download` in Git Bash opens `E:\Download`. Use `bash script_name.sh` or `./script_name.sh`, and quote paths containing spaces.
+
+**CLI values remain `si` and `no` in English examples.** `si` means yes; do not replace it with `yes`. Preset names, option names, environment variables and metadata markers also remain unchanged.
+
+Quick syntax check:
 
 ```bash
 for f in *.sh; do
@@ -87,182 +124,183 @@ done
 
 | Script | Purpose |
 |---|---|
-| `audio_analyzer_volamp_psycho.sh` | 5.1 classifier; surround/center balance, voice band, masking, width, −21 LUFS reference, automatic 2.0–3.0 dB volamp and optional batch |
-| `aegis_sonar_wide_aura_voice_volamp_psycho.sh` | Existing 5.1 processing with aegis, sonar, wide, aura and voiceita presets, center EQ, surround DSP, LFE control and Atmos bed compensation |
-| `stereo251_upmix_psycho.sh` | V10 stereo-to-5.1 matrix upmix, center assist, adaptive rear bed, minimal synthetic LFE and music-oriented quad mode |
-| `asmr_vr_intimate_psycho.sh` | Stereo headphone/ASMR/VR processing, BS2B, optional ITD/LFO, post-DSP loudnorm and verified output |
-| `atmos_to_51_dynaudnorm_psicho.sh` | MKV with normalized primary EAC3 5.1 and stream-copied original Atmos/EAC3 as the secondary track |
+| `audio_analyzer_psycho.sh` | Audio-metric 5.1 classifier; diagnostic loudness, LFE/Bass Trim corrections and optional batch generation |
+| `aegis_sonar_wide_aura_voice_psycho.sh` | Existing-5.1 processor with `aegis`, `sonar`, `wide`, `aura` and `voiceita`; preserved voice EQ and psychoacoustics, no automatic common gain or Atmos compensation |
+| `stereo251_upmix_psycho.sh` | V10 stereo → 5.1 upmix: L−R matrix, center assist, adaptive rear bed in `to51`, minimal LFE, verified output and a music-oriented `quad` preset |
+| `asmr_vr_intimate_psycho.sh` | Stereo headphone/ASMR/VR processing with BS2B, optional ITD, post-DSP loudnorm, LFO and verified output |
+| `atmos_to_51_dynaudnorm_psicho.sh` | Separate optional preparer: EAC3 5.1 with dynaudnorm and the original track copied as secondary audio |
 
-The Atmos script deliberately retains the historical spelling **`psicho`**. Use the actual filename shown above.
+The Atmos script retains the historical spelling `psicho`; this guide uses its actual filename.
 
-## Output checks
+## Post-processing checks
 
-| Processor | Retained check | Automatic correction |
+| Processor | Retained check | Possible automatic correction |
 |---|---|---|
-| Aegis / Sonar / Wide / Aura / Voiceita | Primary audio format with ffprobe | None |
-| Atmos preparer | Primary audio format with ffprobe | None |
-| TO51 / QUAD upmix | Full-track post-codec True Peak, ceiling −0.1 dBTP | One retry with up to 3 dB attenuation |
-| ASMR | Full-track post-codec True Peak, preset-specific ceiling | One retry with up to 3 dB attenuation |
+| Aegis / Sonar / Wide / Aura / Voiceita | Primary-track format through ffprobe | None |
+| Atmos preparer | Primary-track format through ffprobe | None |
+| TO51 / QUAD upmix | Full-duration post-codec True Peak, −0.1 dBTP ceiling | One retry with up to 3 dB attenuation |
+| ASMR | Full-duration post-codec True Peak, preset ceiling | One retry with up to 3 dB attenuation |
 
-The four processors no longer perform full source/output comparisons of RMS, sample peaks and sample count. FFmpeg errors, preflight checks and temporary-file publication remain. The analyzer retains the measurements needed for its decisions.
+The four processing scripts no longer perform full-duration source/output comparisons for RMS, sample peak and sample count. FFmpeg error handling, preflight checks and temporary-file publication remain. The analyzer retains the measurements needed for its decisions.
 
-A final “track format verified” or “True Peak verified” message does **not** mean the output was fully compared with its source.
+Final messages distinguish **“track format verified”** (`formato traccia verificato`) from **“True Peak verified”** (`True Peak verificato`). Neither indicates a complete comparison with the source signal. Upmix V10 is documented below.
 
-## Quick start
+## Quick start: manual commands
 
-Command tokens remain unchanged: **`si` means yes**, `no` means no. Do not translate them to `yes` in commands. Filenames, preset names and metadata markers also remain unchanged.
+Analyze a file without generating a batch:
 
 ```bash
-# Analyze without generating a batch
-./audio_analyzer_volamp_psycho.sh eac3 no 768k no "film.mkv"
-
-# Process with SONAR and 2 dB volamp
-./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 2.0 "film.mkv"
-
-# Process compatible files in the current directory
-./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 2.0 ""
+./audio_analyzer_psycho.sh eac3 no 768k no "film.mkv"
 ```
 
-SONAR/AEGIS use increased height contribution by default. Recognized Atmos sources enable bed compensation. Direct commands above leave analyzer-derived LFE gain and Bass trim at zero; use the generated batch to apply those corrections.
+Process a file with a chosen preset (SONAR here):
 
-## 1. Analyzer
+```bash
+./aegis_sonar_wide_aura_voice_psycho.sh eac3 si 768k sonar "film.mkv"
+```
 
-`audio_analyzer_volamp_psycho.sh` analyzes existing **5.1** tracks without modifying audio.
+Process all compatible files in the current folder:
+
+```bash
+./aegis_sonar_wide_aura_voice_psycho.sh eac3 si 768k sonar ""
+```
+
+The increased vertical contribution is the default for SONAR and AEGIS. Atmos detection is informational only. Direct commands do not automatically transfer the analyzer's LFE/Bass Trim corrections: both remain zero unless explicitly specified. The generated batch applies them per file.
+
+---
+
+# 1. `audio_analyzer_psycho.sh`
+
+An analyzer for **5.1** tracks. It does not modify the audio files.
+
+The classifier separates the full-band scene from the useful voice band:
 
 ```text
 DeltaSur   = RMS(SL/SR) - RMS(FL/FR/FC)
 DeltaFC    = RMS(FC) - RMS(FL/FR)
-VoiceDelta = RMS 250–5000 Hz(FC) - RMS 250–5000 Hz(FL/FR)
-VoiceMask  = RMS 250–5000 Hz(SL/SR) - RMS 250–5000 Hz(FC)
-Width MS   = RMS(SIDE) - RMS(MID)
+VoiceDelta = RMS 250-5000 Hz(FC) - RMS 250-5000 Hz(FL/FR)
+VoiceMask  = RMS 250-5000 Hz(SL/SR) - RMS 250-5000 Hz(FC)
 ```
 
-VoiceDelta estimates center prominence in the voice band; VoiceMask increases when rear energy may mask the center. These are **energy measurements, not speech recognition**. Music or effects in the center can produce favorable values while obscuring words. `CENTER_FULL_SAFETY_GATE` checks full-band balance; none of these metrics separates dialogue from effects within a channel. Whole-track averages can hide problematic scenes. Recommendations indicate balance, not certified intelligibility.
+`VoiceDelta` measures center prominence in the speech band. `VoiceMask` increases when rear effects and ambience may mask it. Full-band metrics guide the spatial treatment.
 
-VOICEITA is therefore **manual only**. The analyzer never selects it as a preset, alternative or fallback, and excludes its processed outputs from analysis and generated batches.
+**Voice-band limitation:** these metrics measure energy between 250 and 5000 Hz; they do not recognize speech. Music, engines or effects in the center can make `VoiceDelta` and `VoiceMask` look favorable while covering dialogue. `CENTER_FULL_SAFETY_GATE` checks full-band balance. None of these thresholds separates speech from effects within the same channel, and whole-track averages can hide individual problem scenes. A suggested preset is a balance recommendation, not a certified intelligibility measurement.
 
-### Syntax and parameters
+**VOICEITA** prioritizes Italian dialogue through dedicated center tuning and surrounds without spatial expansion. It is a manual choice for muddy or recessed speech. The analyzer measures channel balance, not word comprehension, so it never selects VOICEITA automatically. Choose it by listening to the film and considering personal preferences.
+
+## Features
+
+- scored 5.1 selection using Italian language and the default flag, without comparing track duration to container duration;
+- AC3/EAC3 decoding with Dolby DRC disabled, matching the processor;
+- one full-duration decode measuring `I(full)`, `LRA`, sample peak, full-band RMS, voice-band RMS, `Width MS` and LFE/bass windows;
+- progress reporting during the full scan;
+- persistent metric cache, invalidated when the file, selected stream or analysis schema changes;
+- informational Atmos detection through the official E-AC-3 profile reported by FFprobe, with a stable preparer marker as fallback;
+- integrated loudness and LRA for information only, without a target or normalization;
+- fake-5.1 safety gate: virtually silent surrounds, a silent center or unbalanced SL/SR prevent batch publication;
+- center weakness and masking remain diagnostic; automatic presets are AEGIS, SONAR, WIDE and AURA only;
+- `sonar` for severely recessed surrounds, `aura` for moderately recessed surrounds;
+- `wide` for narrow/collapsed SL/SR, `aegis` for balanced mixes;
+- a modal season verdict requiring at least **2/3 agreement**, otherwise `MIXED`;
+- `MIXED` also when the `DeltaSur` spread exceeds **4 dB**;
+- optional `run_processing.sh` through `run=si|no`;
+- console colors: SONAR red, AEGIS orange, WIDE green, AURA purple/magenta.
+
+## Syntax
 
 ```bash
-./audio_analyzer_volamp_psycho.sh <codec> <keep> <bitrate> <run> <file|directory|"">
-./audio_analyzer_volamp_psycho.sh --files <codec> <keep> <bitrate> [run] <file1> [file2 ...]
+./audio_analyzer_psycho.sh <codec> <keep> <bitrate> <run> <file|directory|"">
+./audio_analyzer_psycho.sh --files <codec> <keep> <bitrate> [run] <file1> [file2 ...]
 ```
 
-The legacy order `<file|directory|""> [codec] [keep] [bitrate] [run]` remains accepted.
+The legacy order `<file|directory|""> [codec] [keep] [bitrate] [run]` is also accepted.
 
-| Parameter | Values | Default |
-|---|---|---|
-| `codec` | `eac3`, `ac3`; written to batch | `eac3` |
-| `keep` | `si`, `no`; retain selected source audio during processing | `no` |
-| `bitrate` | AC3 256k–640k; EAC3 256k–768k, in 64k steps | AC3 640k; EAC3 768k |
-| `run` | `si`: create/update batch; `no`: leave batch untouched | `si` |
-| Input | File, directory or `""` for current directory | Required |
+## Parameters
 
-A bare bitrate number is accepted. Out-of-range or off-step values are rejected. In `--files` mode, the token after bitrate is a run flag only when exactly `si` or `no`; otherwise it is the first filename.
+| Parameter | Values | Default | Notes |
+|---|---|---:|---|
+| `codec` | `eac3`, `ac3` | `eac3` | Codec written into the batch |
+| `keep` | `si`, `no` | `no` | Whether the processor retains the selected source track |
+| `bitrate` | `256k–640k` AC3; `256k–768k` EAC3, in `64k` steps | `640k` AC3, `768k` EAC3 | A number without a suffix is accepted; out-of-range and off-step values are rejected |
+| `run` | `si`, `no` | `si` | Generate/update, or leave `run_processing.sh` untouched |
+| `file|directory|""` | File, directory or empty string | Required | `""` means the current folder |
 
-Stream selection favors suitable 5.1 tracks, Italian language and default disposition; it does not compare track duration against container duration. A single full-duration decode measures integrated loudness, LRA, sample peak, full-band and voice-band RMS, surround width and LFE/bass windows.
+## Automatic LFE balance
 
-### Preset selection
+The analyzer calculates a **static per-file gain within ±2 dB** and passes it through the batch. It does not use AGC, alter preset selection or change the limiters. The Atmos preparer has no dedicated LFE processing; its direct mux and optional high-pass remain unchanged.
 
-| Priority | Condition | Preset | Interpretation |
-|---:|---|---|---|
-| 1 | `DeltaSur < -13 dB` | `sonar` | Very recessed surrounds; stronger Atmos-like treatment |
-| 2 | `Width MS < -7 dB` | `wide` | Narrow/collapsed surrounds; lateral expansion |
-| 3 | `DeltaSur < -7 dB` | `aura` | Moderately recessed surrounds; gentler rear treatment |
-| 4 | Otherwise | `aegis` | Balanced scene; balanced DTS:X-like treatment |
+LFE measurements share the full decode already used for loudness, RMS and voice-band analysis. An analysis-only branch filters all six channels to **20–120 Hz** and splits them into aligned **0.5-second** windows, without padding the final window. This measurement filter does not modify the source or introduce a high-pass into the final processing.
 
-If SONAR is selected and width is also below −7 dB, SONAR remains selected, WIDE is shown as the diagnostic alternative and confidence is low. This alternative takes precedence over borderline AURA; no combined preset is applied.
-
-Virtually silent surrounds (RMS below −65 dBFS or either channel at −inf), a silent center (−inf), or SL/SR imbalance of at least 10 dB block batch publication and require manual inspection. Metrics remain visible, but no CHECK command is generated. Voice weakness/masking remain diagnostic; an empty voice band is reported as N/A.
-
-Atmos detection uses the official FFprobe E-AC-3 profile or a trusted original-track marker. The marker may be on the secondary original track while the selected audio is a converted 5.1 bed: pass the complete container. Moving the promotion threshold from −10 to −9.5 dB gives SONAR a slightly stronger preference without changing gain or DSP. Exactly −9.5 dB does not trigger promotion. Regenerate the batch to adopt the decision; cached measurements remain reusable. For a measured AURA preset:
-
-| Condition | Result |
-|---|---|
-| `DeltaSur < -9.5 dB` and `Width MS >= -7 dB` | Promote to SONAR; low confidence, AURA alternative |
-| No promotion and `DeltaSur < -8.5 dB` | Keep AURA; low confidence, SONAR alternative |
-| Otherwise | Keep AURA |
-| Measured AEGIS | Keep AEGIS; SONAR as a listening alternative |
-
-WIDE or a WIDE alternative prevents Atmos overrides. Preset bias is independent of processor FC/LFE compensation: `bias preset=no` does not disable those offsets. Reports distinguish selected audio layout from verified/unverified Atmos status; `OutputAudio=5.1(side)` in batch comments describes the output layout.
-
-The season summary uses the modal preset with at least **two-thirds agreement**; otherwise it reports MIXED. A DeltaSur spread above 4 dB also produces MIXED. Console colors are SONAR red, AEGIS orange, WIDE green and AURA purple/magenta.
-
-| Width MS | Interpretation |
-|---|---|
-| `< -12 dB` | Collapsed |
-| `-12 .. < -7 dB` | Narrow |
-| `-7 .. < -3 dB` | Medium |
-| `>= -3 dB` | Wide |
-
-### Automatic volamp
-
-The internal loudness reference is **−21 LUFS**. Volamp is total nominal per-channel gain before dedicated limiters and the final join.
-
-| Loudness deficit | Volamp |
-|---|---:|
-| `< 1.8 dB` | 2.0 dB |
-| `1.8 .. < 3.0 dB` | 2.5 dB |
-| `>= 3.0 dB` | 3.0 dB |
-
-Missing/invalid loudness uses 2.0 dB. For **LRA ≥ 18 LU**, volamp is capped at the 2.0 dB base: low integrated loudness with large dynamics can be intentional. These are total gains, not increments to add to the base. Regenerate older batches to adopt this policy. If needed, adjust the AVR input Volume Trim by approximately +1.5–2 dB after listening rather than pushing the DSP harder into its limiters.
-
-### Automatic LFE balance
-
-A fixed per-file LFE gain within **±2 dB** is passed to the processor. It is not AGC, does not alter preset selection/volamp and does not change limiter settings. Measurement shares the existing decode: an analysis-only **20–120 Hz** branch splits all six channels into aligned **0.5-second** windows, without padding the final window.
-
-- **Active RMS:** sample-weighted LFE energy average for windows above the greater of −60 dBFS and maximum window RMS minus 30 dB.
-- **P95:** sample-weighted 95th percentile of those active windows, using 0.1 dB histogram resolution.
+- **Active RMS:** sample-weighted LFE energy average over windows above the greater of `−60 dBFS` and the maximum window RMS minus `30 dB`.
+- **P95:** sample-weighted 95th percentile of those active windows, using a histogram with 0.1 dB resolution.
 - **Peak:** maximum full-band LFE sample peak, including energy outside the analysis band; this is not True Peak.
-- **Bass mains:** summed FL/FR/FC/SL/SR energies over the same active LFE windows, averaged over time. This is not signal summation or an AVR/acoustic simulation.
+- **Bass mains:** time-averaged sum of FL/FR/FC/SL/SR energies over the same active LFE windows. It is not a sum of the waveforms and does not simulate phase, crossover behavior or AVR acoustics.
 - **Delta:** Active RMS minus Bass mains. Zero is not assumed to represent acoustic balance.
 
-| Original LFE − bass mains delta | Class |
+The `LFE_*` thresholds apply to **all supported 5.1 sources**, with or without Atmos. The class describes the original delta:
+
+| LFE − bass mains delta | Class |
 |---|---|
-| `< -18 dB` | VERY_WEAK |
-| `-18 .. < -14 dB` | WEAK |
-| `-14 .. -6 dB` | BALANCED |
-| `> -6 .. -2 dB` | HOT |
-| `> -2 dB` | VERY_HOT |
+| `< −18 dB` | VERY_WEAK |
+| `−18 .. < −14 dB` | WEAK |
+| `−14 .. −6 dB` | BALANCED |
+| `> −6 .. −2 dB` | HOT |
+| `> −2 dB` | VERY_HOT |
 
-Cuts require at least **30 seconds** of active LFE and average mains above −60 dBFS; they do not require 5% whole-file activity. Persistence is the sample-weighted fraction of active LFE time exceeding a window-delta threshold. Windows without mains above −60 dBFS do not confirm excess but remain in the denominator; partial windows count only actual samples.
+### Attenuation: excess and persistence
 
-| After applicable Atmos compensation | Candidate LFE gain |
+A cut requires at least **30 seconds of active LFE** and an average mains reference above `−60 dBFS`. Cuts no longer require activity over 5% of the entire file.
+
+**Persistence** is the sample-weighted percentage of active LFE time during which the individual window delta exceeds a threshold. Windows without mains bass above `−60 dBFS` do not confirm excess, but remain in the denominator. A partial final window contributes only its actual samples.
+
+| Condition on original metrics | Candidate LFE gain |
 |---|---:|
-| Mean delta > −2 dB and at least 50% active time above −2 dB | −2 dB |
-| Otherwise mean delta > −6 dB and at least 25% active time above −6 dB | −1 dB |
-| Occasional excess or already compensated | 0 dB |
+| Average delta `> −2 dB` and at least **50%** of active time with delta `> −2 dB` | **−2 dB** |
+| Otherwise, average delta `> −6 dB` and at least **25%** of active time with delta `> −6 dB` | **−1 dB** |
+| Occasional excess | **0 dB** |
 
-Delta comparisons are strict (`>`); duration/persistence thresholds are inclusive (`>=`). A failed −2 dB condition still allows evaluation of −1 dB. Gain is fixed over the whole file.
+Delta thresholds are strict (`>`); minimum duration and percentages include the threshold (`>=`). If the −2 dB cut is not confirmed, the −1 dB cut is still evaluated. Gain remains fixed throughout the file rather than following individual scenes.
 
 ```bash
 LFE_CUT_MIN_ACTIVE_SECONDS=30.0
 LFE_HOT_MIN_PERSISTENCE=0.25
 LFE_VERY_HOT_MIN_PERSISTENCE=0.50
-LFE_ATMOS_COMPENSATION_DB=-0.5
 ```
 
-These are script constants, not CLI flags. Verified Atmos uses the processor's existing −0.5 dB LFE offset when evaluating cuts; other sources use zero. Thus an original VERY_HOT class can still yield −1 or 0 dB. Reports include original/compensated delta, offset, persistence (`0.43` means 43%), activity, class, gain and reason. Bass trim coordination may reduce the cut further.
+These are script constants, not CLI options. Delta and persistence use the original metrics for every source, without Atmos offsets.
 
-Boosts require **10 active seconds**, **5% of file samples**, and mains above −60 dBFS. VERY_WEAK proposes +2 dB and WEAK +1 dB. Considering volamp, Atmos offset and proposed gain, P95 must remain ≤ −18 dBFS and full-band sample peak ≤ −2 dBFS. Boost can be reduced in 0.5 dB steps or canceled.
+The class may remain `VERY_HOT` while gain is −1 or 0 dB if persistence does not support a larger cut. The report shows delta, persistence as a fraction (`0.43` = 43%), activity, class, gain and reason. Coordination with Bass Trim may further reduce the LFE cut.
 
-Absent LFE, uncertain layout, insufficient data or a 5.1 safety override produce INSUFFICIENT_DATA and 0 dB. Initial probing may extend to 20 MB / 20 seconds to confirm layout. Thresholds are experimental listening heuristics; no new absolute RMS/P95 cut threshold was introduced. Dolby playback gain is not added to the file. The physical subwoofer also receives redirected main-channel bass; zero LFE gain does not imply unchanged overall bass. Peak margins are not a post-codec True Peak check.
+### Boosts and insufficient data
 
-### Automatic Bass trim
+Boosts require at least **10 seconds** of active LFE and **5%** of the file's samples, with mains above `−60 dBFS`. `VERY_WEAK` proposes +2 dB and `WEAK` +1 dB. Only the proposed LFE gain is considered: P95 must stay at or below `−18 dBFS`, and the full-band sample peak at or below `−2 dBFS`. The boost may be reduced in 0.5 dB steps or blocked.
 
-Bass trim addresses bass-heavy mixes including main-channel bass. It applies a fixed **100 Hz low shelf, Q 0.707, from 0 to −3 dB on all six channels**, before limiters. It never boosts bass or changes preset/volamp.
+Absent LFE, an unconfirmed layout, insufficient data or a 5.1 safety override produces `INSUFFICIENT_DATA` and **0 dB**. The initial probe can extend to 20 MB / 20 seconds to confirm the layout.
 
-The analyzer reuses aligned 20–120 Hz windows and adds a synchronized 250–5000 Hz reference:
+These thresholds are experimental and require listening comparisons. No new absolute RMS/P95 threshold has been introduced for cuts. Dolby playback gain is not added to the file. The correction concerns the **LFE channel**: the subwoofer also receives redirected mains bass through bass management. An LFE gain of zero does not prevent Bass Trim from attenuating it. Peak headroom checks are not post-codec True Peak verification.
 
-- Bass energy = summed energies of five mains plus LFE energy weighted by 10 (+10 dB **only in the calculation**).
-- Reference = summed mid/high energies of the five mains in the same windows.
-- Valid windows exceed the greater of −60 dBFS and maximum reference RMS minus 30 dB.
-- Bass Delta is the dB ratio of sample-weighted average bass/reference energies.
-- Persistence is the fraction of valid samples in windows whose ratio exceeds +6 dB; P95 Delta is diagnostic, with 0.1 dB resolution.
+### Batch and cache
 
-This is an energy estimate, not a physical subwoofer reconstruction: phase, crossover, calibration, room modes and speaker response are excluded. Absolute level alone does not decide trim. Analysis filters do not modify audio.
+Regenerate `run_processing.sh` to use current decisions: existing batches retain their previously calculated explicit gains. The batch passes `--lfe-gain` and `--bass-trim`; individual lines can be edited within the allowed ranges.
 
-At least 10 valid seconds, 5% of the file and a reliable layout without a safety override are required. Otherwise trim is zero with INSUFFICIENT_DATA. Persistence below 25% also leaves zero trim despite isolated peaks.
+The cache uses **`classifier-rms-voiceband-ebur-lfe-bass-v7-metrics-only`**, with **36 fields**: LFE/bass measurements, two original LFE persistence values, activity and the latest decisions. Previous records are automatically invalidated. Window size, gates and measurement thresholds enter the cache key; decisions are recalculated even on a cache HIT.
+
+## Automatic Bass Trim: overall bass
+
+LFE balance corrects the LFE-to-mains relationship. **Bass Trim** addresses bass-heavy content across the mains as well: it applies a **100 Hz low shelf, Q 0.707, from 0 to −3 dB on all six channels**, before the limiters. It does not change the preset, introduce a high-pass or boost bass.
+
+The analyzer reuses the 20–120 Hz, 0.5-second windows and adds a synchronized 250–5000 Hz reference within the same decode:
+
+- bass: sum of the five mains' energies plus LFE energy weighted by 10 (+10 dB **only in the calculation**, never added to the file);
+- reference: sum of the five mains' mid/high-band energies over the same windows;
+- valid windows: reference above the greater of −60 dBFS and maximum reference RMS minus 30 dB;
+- Bass Delta: dB ratio between the sample-weighted bass and reference energy averages;
+- persistence: fraction of valid samples in windows whose bass/reference ratio exceeds +6 dB;
+- P95 Delta: diagnostic percentile of the per-window ratio, at 0.1 dB resolution.
+
+This is an **energy estimate**, not a reconstruction of the physical subwoofer signal. It excludes phase, crossover, calibration, room modes and speaker response. Absolute level alone does not determine trim. The analysis filter is not applied to the published audio.
+
+At least 10 valid seconds, 5% of the file and a reliable layout without a 5.1 safety override are required. Otherwise the result is `INSUFFICIENT_DATA`, with zero trim. Persistence below 25% also leaves trim at zero despite strong peaks. With sufficient evidence:
 
 | Bass Delta | Class | Trim |
 |---|---|---:|
@@ -271,99 +309,184 @@ At least 10 valid seconds, 5% of the file and a reliable layout without a safety
 | > +9 .. +12 dB | VERY_HOT | −2 dB |
 | > +12 dB | EXTREME | −3 dB |
 
-`BASS_*` thresholds are initial heuristics, not a mastering standard. Reports show reference, delta, P95, persistence, valid duration, class, trim and reason.
+The analyzer's `BASS_*` constants are initial heuristics for listening-based tuning, not a mastering standard. Attenuation is fixed throughout the file, without AGC. The report includes reference, delta, P95, persistence, valid duration, class, trim and reason.
 
-When Bass trim is negative, any automatic LFE boost is canceled. If LFE gain plus Bass trim would fall below −3 dB, the LFE cut is reduced. This budget excludes volamp and Atmos compensation. The shelf is transitional around 100 Hz, so the sum is not flat gain across the band. Manual values remain authoritative; the processor does not override them with this analyzer policy.
+**Automatic coordination:** negative Bass Trim blocks an LFE boost. If LFE gain + Bass Trim would fall below −3 dB, the LFE cut is reduced. This budget covers both automatic corrections in the deep bass. Around 100 Hz the shelf is in transition, so their sum is not a flat gain throughout the band.
+
+Manual settings are also supported:
 
 ```bash
-./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 no 768k sonar 2.0 --lfe-gain 0 --bass-trim -2 "film.mkv"
-./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files eac3 no 768k sonar 2.0 --bass-trim -1 -- "ep 1.mkv" "ep 2.mkv"
+./aegis_sonar_wide_aura_voice_psycho.sh eac3 no 768k sonar --lfe-gain 0 --bass-trim -2 "film.mkv"
+./aegis_sonar_wide_aura_voice_psycho.sh --files eac3 no 768k sonar --bass-trim -1 -- "ep 1.mkv" "ep 2.mkv"
 ```
 
-`--bass-trim` accepts decimal-point values from −3 to 0, default zero/no added filter. Invalid, positive, missing, duplicated or out-of-range options are rejected. Order: **preset → per-channel bass shelf → volamp/LFE/Atmos gains → channel limiters → join → master limiter**.
+`--bass-trim` accepts dot-decimal values from −3 to 0, default 0 (no added filter). Positive, nonnumeric, out-of-range, missing and repeated values are rejected. The processor applies explicit manual values; budget coordination belongs to the analyzer and does not override manual choices.
 
-### Cache, progress and batches
+Final order: **preset → per-channel Bass shelf → LFE gain on the .1 channel → FC/LFE limiters → join → master 0.92 → FINAL_TRIM −1.0 dB → encoder**. Limiter settings remain unchanged.
 
-Validated measurements are stored in `.clearvoice_analyzer_cache`. The key includes canonical path, size, modification time, stream index and algorithm version. Schema **`classifier-rms-voiceband-ebur-lfe-bass-v6-no-dolby-drc`** has 38 fields, including LFE/Bass measurements, four LFE persistence fractions, activity and latest decisions. Earlier schemas, including measurements with Dolby DRC enabled, are invalidated.
+Regenerate the batch with `run=si` to obtain both automatic corrections. A command without `--bass-trim` still uses zero Bass Trim. The Atmos preparer and its direct mux are unchanged; the new cache schema invalidates old records.
 
-Measurement windows/gates, LFE HOT/VERY_HOT thresholds, Atmos offset and Bass HOT threshold affect the key. Cut-duration and decision-persistence requirements are reevaluated on cache hits. Changing decision-only thresholds can reuse audio measurements. Regenerate batches after tuning: existing batches retain explicit gains.
+## Cache and progress
+
+The first analysis covers the full track. Validated metrics are stored in `.clearvoice_analyzer_cache`; later analysis of the same file can reuse them without another decode. The key includes canonical path, size, modification time, stream index and algorithm version.
 
 ```bash
-ANALYZER_CACHE=0 ./audio_analyzer_volamp_psycho.sh eac3 no 768k si ""
-ANALYZER_PROGRESS_INTERVAL=5 ./audio_analyzer_volamp_psycho.sh eac3 no 768k si ""
-ANALYZER_CACHE_DIR=/path/to/cache ./audio_analyzer_volamp_psycho.sh eac3 no 768k si ""
+ANALYZER_CACHE=0 ./audio_analyzer_psycho.sh eac3 no 768k si ""
+ANALYZER_PROGRESS_INTERVAL=5 ./audio_analyzer_psycho.sh eac3 no 768k si ""
+ANALYZER_CACHE_DIR=/path/to/cache ./audio_analyzer_psycho.sh eac3 no 768k si ""
 ```
 
-Default progress interval is 10 seconds. Delete the cache directory to force a complete rescan. `run=no` never overwrites or deletes an existing batch.
+`ANALYZER_CACHE=0` disables caching. The default progress interval is 10 seconds. Deleting `.clearvoice_analyzer_cache` forces a full recalculation.
+
+After this update, regenerate `run_processing.sh` with `run=si`: older batches contain removed names and arguments. The current schema invalidates old metrics; subsequent changes limited to decision thresholds can reuse the measurements.
+
+With `run=no`, an existing `run_processing.sh` is **neither overwritten nor deleted**.
+
+In `--files` mode, the token after bitrate is treated as `run` only if it is exactly `si` or `no`; otherwise it is the first filename, retaining the older syntax.
+
+## Examples
 
 ```bash
-# One file with batch generation
-./audio_analyzer_volamp_psycho.sh eac3 no 768k si "film.mkv"
+# Single file, EAC3 768k, batch enabled
+./audio_analyzer_psycho.sh eac3 no 768k si "film.mkv"
+
 # Analysis only
-./audio_analyzer_volamp_psycho.sh eac3 si 768k no "film.mkv"
-# Explicit files, no batch
-./audio_analyzer_volamp_psycho.sh --files eac3 si 768k no "ep01.mkv" "ep02.mkv"
-# Legacy-compatible list: run=si is implicit
-./audio_analyzer_volamp_psycho.sh --files eac3 si 768k "ep01.mkv" "ep02.mkv"
+./audio_analyzer_psycho.sh eac3 si 768k no "film.mkv"
+
+# Current folder and batch
+./audio_analyzer_psycho.sh eac3 no 768k si ""
+
+# Explicit list, no batch
+./audio_analyzer_psycho.sh --files eac3 si 768k no \
+  "ep01.mkv" "ep02.mkv" "ep03.mkv"
+
+# Compatible syntax: implicit run=si
+./audio_analyzer_psycho.sh --files eac3 si 768k \
+  "ep01.mkv" "ep02.mkv"
 ```
 
-Generated commands pass per-file volamp, `--lfe-gain` and `--bass-trim`, followed by `--` and the path. They count failures in `BATCH_FAILURES`. Example:
+## Decision → preset
+
+| Priority | Main condition | Preset | Interpretation |
+|---:|---|---|---|
+| 1 | `DeltaSur < -13 dB` | `sonar` | Severely recessed surrounds; stronger Atmos-like treatment |
+| 2 | `Width MS < -7 dB` | `wide` | Narrow/collapsed surrounds; lateral expansion |
+| 3 | `DeltaSur < -7 dB` | `aura` | Moderately recessed surrounds; gentle rear treatment |
+| 4 | Otherwise | `aegis` | Balanced scene; balanced DTS:X-like treatment |
+
+In the SONAR branch, `DeltaSur < -13 dB` still selects SONAR. If `Width MS < -7 dB` too, WIDE is reported as a diagnostic alternative with low confidence and a reason describing severely recessed and narrow/collapsed surrounds. This alternative takes precedence over AURA for borderline SONAR; no combined processing is applied.
+
+Virtually silent surrounds (RMS < −65 dBFS or either surround at −inf), a silent center (−inf) or SL/SR imbalance ≥ 10 dB block the batch and require manual inspection. Metrics remain in the report; no CHECK command is generated. Voice thresholds remain diagnostic, including near boundaries; an empty voice band is reported as N/A.
+
+Atmos is detected through the FFprobe EAC3 profile or the exact markers `EAC3 Atmos Original` / `EAC3 Atmos (Original)`. Provenance is informational only: it changes neither preset, alternative, confidence nor LFE/Bass Trim corrections. Classification relies exclusively on audio metrics and safety gates.
+
+The preset summary separates `Audio` (the selected track's layout, such as `5.1(side)`) from `Atmos` (verified or unverified). In batch comments, `OutputAudio=5.1(side)` describes the processor's output layout.
+
+## Width MS
+
+```text
+Width MS = RMS(SIDE) - RMS(MID)
+```
+
+| Width MS | Diagnosis |
+|---:|---|
+| `< -12 dB` | Collapsed |
+| `-12 / -7 dB` | Narrow |
+| `-7 / -3 dB` | Medium |
+| `>= -3 dB` | Wide |
+
+## Listening level
+
+**No VOLAMP is applied to the signal, and no automatic loudness normalization is performed in the analyzer/5.1 processor path.** `I(full)` and LRA remain diagnostic measurements. Set listening volume on the **AVR**. Voice EQ, psychoacoustics, static LFE/Bass Trim corrections and limiters retain their respective functions.
+
+## `run_processing.sh`
+
+With `run=si`, the batch contains lines such as:
 
 ```bash
-"$PROC" "$CODEC" "$KEEP" "$BITRATE" sonar 2.0 --lfe-gain 0.0 --bass-trim 0.0 -- film.mkv || BATCH_FAILURES=$((BATCH_FAILURES + 1))
+"$PROC" "$CODEC" "$KEEP" "$BITRATE" sonar --lfe-gain 0.0 --bass-trim 0.0 -- film.mkv || BATCH_FAILURES=$((BATCH_FAILURES + 1))  # DeltaSur=-14.2 dB | DeltaFC=1.0 dB | VoiceDelta=2.3 dB | VoiceMask=-12.0 dB | Width=-4.1 dB | I=-21.9 LUFS
 ```
 
-The processor path defaults to:
+The preset is followed by the file's calculated `--lfe-gain` and `--bass-trim`; `--` separates the path. There is no common-gain argument. `BATCH_FAILURES` counts failed commands. Comments include layout, Atmos provenance and metrics.
 
 ```bash
-PROC="${PROC:-./aegis_sonar_wide_aura_voice_volamp_psycho.sh}"
+# DEFAULT_PROCESSOR contains the absolute path to the processor beside the analyzer.
+PROC="${PROC:-$DEFAULT_PROCESSOR}"
 ```
 
-Execute the batch from its generation directory with the processor present, or override `PROC` with an absolute executable path. A failed analysis does not publish a partial batch. To prevent running an older batch after failure:
+Paths containing spaces are protected. An exported `PROC` can override the default. The processor checks Atmos profiles/markers for each file for logging only, without adding offsets to the filtergraph. Atmos and mapping messages during batch execution come from the processor selected by `PROC`; log-text updates alone do not require regenerating the batch.
 
-```bash
-./audio_analyzer_volamp_psycho.sh eac3 no 768k si . && ./run_processing.sh
+The batch always uses each file's preset, derived from `DeltaSur` and `Width MS`, with `DeltaFC`, `VoiceDelta`, `VoiceMask` diagnostics and balance safety checks. P25 `DeltaSur` is diagnostic only. A season verdict requires at least 2/3 agreement and never replaces individual batch presets.
+
+---
+
+# 2. `aegis_sonar_wide_aura_voice_psycho.sh`
+
+The main processing engine for **existing 5.1 tracks**.
+
+## Features
+
+- 5.1 input, AC3/EAC3 `5.1(side)` output;
+- Dolby DRC disabled in the AC3/EAC3 decoder before filters; no Dolby-specific option for other codecs;
+- `aegis`, `sonar`, `wide`, `aura`, `voiceita` presets; VOICEITA is manual only;
+- scored selection among six-channel streams only: Italian `+300`, default flag `+200`, without container duration in the score;
+- `5.1`, `5.1(back)` and `5.1(side)` layouts;
+- six channels with an absent/unknown layout use positional mapping (`FC=c2`, `SL=c4`, `SR=c5`), shown as `5.1(side)` in the log without changing source metadata; the analyzer and Atmos preparer use the same convention;
+- dedicated voice EQ for each preset;
+- center limiter after EQ and Bass Trim, without auto-level;
+- preset-specific surround processing and a controlled air/decorrelation layer;
+- final SL/SR-only presence bell: 3200 Hz, Q 1.2, +0.1 dB in spatial presets and +0.2 dB in VOICEITA;
+- optional 100 Hz Bass Trim low shelf on all six channels before limiters, from −3 to 0 dB;
+- static `--lfe-gain` before the dedicated LFE limiter; dedicated LFE filtering remains the hardware's responsibility;
+- no Atmos compensation; detection is informational only;
+- speakers remain Small, with bass management and the roughly 110 Hz crossover handled by the AVR; mains retain a 20 Hz safety high-pass;
+- FL/FR retain the high-pass and optional Bass Trim without additional tonal EQ; final limiting is handled by the master;
+- no automatic common gain; listening volume is controlled on the AVR;
+- video, subtitles, chapters and attachments copied; optional retention of the selected source 5.1 track;
+- DSP, audio encoding and mux in one FFmpeg process into a temporary MKV;
+- no full-duration comparative source/output scans after DSP;
+- primary-track verification: requested codec, six channels, `5.1(side)`, 48 kHz and default flag;
+- final publication only after successful encode/mux and format verification;
+- no post-codec True Peak scan or retry;
+- final counters and a nonzero exit code if any file fails.
+
+## Direct surround definition
+
+| Preset | Channels | Filter | Frequency | Gain | Q |
+|---|---|---|---:|---:|---:|
+| AEGIS, SONAR, WIDE, AURA | SL and SR | Bell (peaking EQ) | 3200 Hz | +0.1 dB | 1.2 |
+| VOICEITA | SL and SR | Bell (peaking EQ) | 3200 Hz | +0.2 dB | 1.2 |
+
+AEGIS, SONAR, WIDE and AURA keep the **20 Hz, Q 0.707** high-pass on their direct `SLd_in` and `SRd_in` branches. The historical-Q **3200 Hz, Q 1.2** presence bell is applied once to `SL_final` and `SR_final`, after all preset processing and decorrelation.
+
+Order: **preset surround block → final decorrelation/ambience (bypassed in VOICEITA) → SL/SR presence bell → Bass Trim → 5.1 join → master limiter → final trim**. The bell does not change the spatial algorithms' inputs or parameters, or raise overall surround gain. The manual roughly 1 dB surround reduction on the reference system remains listening context, not an added filter. A perceptual benefit from such small increments requires a controlled comparison.
+
+WIDE retains its separate **3500 Hz high shelf, +0.1 dB, Q 0.8** after the SL/SR `amix` stages. Vertical cues still depend on HEIGHT branches, and width on delays, all-pass filters and decorrelated branches.
+
+Direct delays remain **0 ms** in AEGIS/SONAR and **1 ms** in WIDE/AURA. Presence, HEIGHT, late-reflection, decorrelation and ambience branches retain their existing gains, filters and parameters. This refactoring preserves their DSP, along with the voice EQ and limiters.
+
+### VOICEITA — Italian dialogue priority
+
+```mermaid
+flowchart LR
+  FC["FC: HPF 20 Hz, gain 4.2 dB, voice EQ, volume 0.95"] --> BT["Optional Bass Trim"]
+  SUR["SL/SR: HPF 20 Hz, 3200 Hz bell +0.2 dB; no expansion"] --> BT
+  LR["FL/FR: HPF 20 Hz"] --> BT
+  LFE["LFE: no dedicated HPF"] --> BT
+  BT --> LIMIT["FC: limiter 0.89; LFE: static gain and limiter 0.90"]
+  LIMIT --> JOIN["5.1 join, master 0.92"]
+  JOIN --> TRIM["FINAL_TRIM -1.0 dB, encoder"]
 ```
 
-## 2. Aegis / Sonar / Wide / Aura / Voiceita
+**VOICEITA is a manual preset intended to improve the clarity of Italian dialogue.** It reduces some center low-mid energy and adds moderate vocal presence while retaining body. Surrounds receive the 20 Hz high-pass and final +0.2 dB bell at 3200 Hz, without added spatial expansion.
 
-`aegis_sonar_wide_aura_voice_volamp_psycho.sh` processes **existing 5.1**. AEGIS, SONAR, WIDE and AURA combine center EQ with different spatial treatments. VOICEITA is a manual dialogue-oriented alternative without surround expansion.
+Compare it with other presets when dialogue sounds muddy or recessed, especially at moderate/low domestic listening levels. AEGIS, SONAR, WIDE and AURA combine center EQ with different spatial surround treatments; VOICEITA focuses on speech and preserves overall surround gain apart from the small presence bell.
 
-```bash
-./aegis_sonar_wide_aura_voice_volamp_psycho.sh <ac3|eac3> <si|no> <bitrate> <preset> <volamp> <file|"">
-./aegis_sonar_wide_aura_voice_volamp_psycho.sh --files <ac3|eac3> <si|no> <bitrate> <preset> <volamp> <file1> [file2 ...]
-```
+The fixed tuning acts on the **whole center channel**, including music and effects. It does not separate speech or recognize the language/dubbing. Evaluate actual dialogue with perceived loudness matched between presets; improvement is not guaranteed on every mix.
 
-Legacy order `<codec> <keep> <file|""> [bitrate] [preset] [volamp]` remains accepted. Its parser treats the last numeric value from 0 to 5.0 as volamp; a number ≥32 can be a bitrate without suffix.
+**Center level:** `volume=4.2dB` followed by `volume=0.95`, about **+3.75 dB net excluding EQ and before shared processing**. The existing tuning, including the +0.2 dB bell at 150 Hz, is preserved. This static correction does not selectively recover quiet lines and can increase limiter action on peaks. Shared limiters and final trim remain active, without Atmos offsets.
 
-| Parameter | Values/default |
-|---|---|
-| `codec`, `keep` | Required: `ac3`/`eac3`, `si`/`no` |
-| `bitrate` | AC3 256k–640k (default 640k); EAC3 256k–768k (default 768k); 64k steps |
-| `preset` | `aegis`, `sonar` (default), `wide`, `aura`, `voiceita` |
-| `volamp` | 0–5.0 dB; default 3.5 dB when omitted; explicit values take precedence |
-| Input | File or `""`/omitted for current directory |
-| `--lfe-gain` | −2.0 to +2.0 dB, default 0.0 |
-| `--bass-trim` | −3.0 to 0.0 dB, default 0.0 |
-
-Above 2.0 dB volamp, the script warns about possible audible limiting. All five main channels use a **20 Hz, Q 0.707** safety high-pass; dedicated LFE filtering is left to hardware. This does not replace AVR bass management at about 110 Hz. FL/FR receive no additional tonal EQ: their path retains only the 20 Hz high-pass, optional Bass Trim and unchanged VOLAMP, followed by the shared master limiter. The final 12 kHz shelf applies only to FC/SL/SR.
-
-### Direct surround definition
-
-The direct SL/SR branches use a 20 Hz high-pass. A final **3200 Hz bell, Q 1.2** is applied once to SL_final/SR_final: **+0.1 dB** for AEGIS/SONAR/WIDE/AURA, **+0.2 dB** for VOICEITA.
-
-Order: preset surround block → final decorrelation/ambience (bypassed in VOICEITA) → SL/SR presence bell → bass trim/volamp → join, high shelf and limiters. The bell does not retune the spatial algorithms or raise overall surround gain. Direct delays remain 0 ms for AEGIS/SONAR and 1 ms for WIDE/AURA; presence, height, late-reflection and ambience branches retain their tuning. Such small boosts require level-matched listening to establish a perceptual benefit.
-
-### VOICEITA
-
-<p align="left"><img src="voceita_diagram.png" width="700" alt="VOICEITA signal flow"></p>
-<p align="left"><img src="guida_voice_schema.png" width="700" alt="Voice processing reference"></p>
-
-VOICEITA aims to improve Italian dialogue clarity at low/moderate listening levels. It reduces low-mid congestion and adds moderate vocal presence. It acts on the **entire center channel**, including music/effects; it neither isolates speech nor recognizes language. Compare presets at matched perceived loudness on actual dialogue.
-
-The current script uses `volume=4.2dB` followed by `volume=0.95`, approximately **+3.75 dB excluding EQ and shared gains**, 0.5 dB above the earlier 3.7 dB setting. This static center gain is separate from common VOLAMP and can increase limiter activity on peaks.
-
-The dedicated FC chain does not also apply `VOICE_EQ_BASE`:
+**Center EQ (FC):** a standalone chain, without adding `VOICE_EQ_BASE`:
 
 | Filter | Frequency | Gain | Q |
 |---|---:|---:|---:|
@@ -375,88 +498,164 @@ The dedicated FC chain does not also apply `VOICE_EQ_BASE`:
 | Bell | 2450 Hz | +1.4 dB | 1.3 |
 | Bell | 3800 Hz | +0.9 dB | 2.0 |
 
-The cuts target muddy/boomy speech; the boosts target consonant presence. No extra 1100, 5200, 6800 or 7200 Hz filters are added to this chain. Surrounds retain their overall gain, with 20 Hz high-pass and the final +0.2 dB presence bell, without `volume=0.88`. `DECORR_GAIN_VOICEITA=0`: no added expansion, delays, all-pass or decorrelation. Shared volamp, bass trim, limiters and applicable Atmos offsets remain active. To try VOICEITA on an analyzer-generated command, change only its preset while preserving the calculated gains.
+Cuts at **300 and 450 Hz** target thick/muddy speech. Boosts at **1650, 2450 and 3800 Hz** support articulation and consonant presence. This dedicated chain adds no filters at 1100, 5200, 6800 or 7200 Hz.
 
-### Height and decorrelation
+**Surrounds:** 20 Hz high-pass, Q 0.707, and the final 3200 Hz bell at +0.2 dB, Q 1.2, without a general level change (no `volume=0.88`). `DECORR_GAIN_VOICEITA="0"`: no additional expansion, delays, all-pass filters or decorrelation. Bass Trim and shared final processing still apply.
 
-`HEIGHT_MODE` affects only SONAR/AEGIS vertical branches SLh/SRh before summation, for Atmos and non-Atmos sources. The analyzer does not select it.
+**Manual selection:** choose `voiceita` in the processor, or replace only the preset name in a generated batch line while keeping the file's `--lfe-gain` and `--bass-trim`. The analyzer selects only AEGIS, SONAR, WIDE or AURA because its metrics do not directly measure word comprehension. `_AC3_Voiceita.mkv` and `_EAC3_Voiceita.mkv` outputs are recognized for automatic skipping.
 
-| Mode | Multiplier |
-|---|---:|
-| `reduced` | 0.75 |
-| `normal` | 1.00; no extra filter |
-| `increased` | 1.15; default |
+## SONAR / AEGIS vertical contribution
+
+**`HEIGHT_MODE=increased` is the default**. It multiplies only the `SLh` and `SRh` vertical branches by **1.15**, before their sum with the other surround branches. It applies throughout processing to Atmos and non-Atmos sources; the analyzer does not choose it from measurements.
+
+| Environment variable | Vertical-branch multiplier |
+|---|---|
+| `HEIGHT_MODE=reduced` | 0.75 |
+| `HEIGHT_MODE=normal` | 1.00; no added filter, previous level |
+| `HEIGHT_MODE=increased` | **1.15; default** |
+
+This affects **SONAR and AEGIS only**. WIDE, AURA and VOICEITA keep their own processing. Delays, EQ and ambience branches are not adjusted by this variable. Output remains 5.1; the factor is neither a percentage of perceived height nor a gain increase for the whole surround signal.
 
 ```bash
-HEIGHT_MODE=normal ./aegis_sonar_wide_aura_voice_volamp_psycho.sh eac3 si 768k sonar 2.0 "film.mkv"
+# Uses increased unless HEIGHT_MODE is already exported
+./aegis_sonar_wide_aura_voice_psycho.sh eac3 si 768k sonar "film.mkv"
+
+# Restore the previous vertical contribution for this run
+HEIGHT_MODE=normal ./aegis_sonar_wide_aura_voice_psycho.sh eac3 si 768k sonar "film.mkv"
+
+# Pass the setting to processes launched by the batch
 HEIGHT_MODE=reduced ./run_processing.sh
 ```
 
-Batches inherit the environment or use the processor default. Old batches calling the updated processor also use its new default; regenerate them to update calculated gains. Output names do not encode HEIGHT_MODE: use different input/output names to preserve A/B variants.
+The batch does not store per-file HEIGHT_MODE values: it inherits the environment or uses the processor default. Regenerate old batches to adopt the new filenames/CLI and updated calculated gains. Output names do not include HEIGHT_MODE, so retain variants under different names for comparison.
+
+## Static LFE correction
+
+`--lfe-gain <dB>` accepts dot-decimal values from `-2.0` to `+2.0`, default `0.0`. It does not change presets, filters or limiters. Zero adds no filter. Repeated, incomplete or out-of-range options are rejected; `--` ends option parsing to protect filenames.
+
+```bash
+./aegis_sonar_wide_aura_voice_psycho.sh eac3 no 768k sonar --lfe-gain -1.0 "film.mkv"
+./aegis_sonar_wide_aura_voice_psycho.sh --files eac3 no 768k sonar --lfe-gain -0.5 -- "ep 1.mkv" "ep 2.mkv"
+```
+
+Order: **LFE → optional Bass shelf → LFE gain → LFE limiter → join → master → FINAL_TRIM → encoder**. No Atmos offsets are applied. Actual peak gain depends on the limiters; shelf attenuation is frequency-dependent. Without the option, LFE gain is zero.
+
+## Syntax
+
+```bash
+./aegis_sonar_wide_aura_voice_psycho.sh \
+  <ac3|eac3> <si|no> <bitrate> <preset> <file|"">
+./aegis_sonar_wide_aura_voice_psycho.sh --files \
+  <ac3|eac3> <si|no> <bitrate> <preset> <file1> [file2 ...]
+```
+
+The order `<codec> <keep> <file|""> [bitrate] [preset]` is also accepted, without a gain argument. The old common-gain CLI is rejected: regenerate batches with the new analyzer.
+
+## Parameters
+
+| Parameter | Values | Default | Notes |
+|---|---|---:|---|
+| `codec` | `ac3`, `eac3` | Required | Output codec |
+| `keep` | `si`, `no` | Required | Retain the selected source track |
+| `bitrate` | `256k–640k` AC3; `256k–768k` EAC3, in `64k` steps | `640k` AC3, `768k` EAC3 | Out-of-range values are rejected before encoding |
+| `preset` | `aegis`, `sonar`, `wide`, `aura`, `voiceita` | `sonar` | DSP mode; VOICEITA is manual only |
+| `file` | File or empty string | Current folder | `""` means the current folder |
+
+## Current release
+
+The **November 2026** 5.1 processor disables Dolby DRC in decoding, applies **no VOLAMP**, performs **no loudness normalization**, and has **no Atmos compensation**. Voice EQ, presets, decorrelation, filters and their parameters are preserved. Limiter thresholds remain **FC 0.89, LFE 0.90, master 0.92**; default FINAL_TRIM is **−1.0 dB**. FL/FR retain the 20 Hz high-pass and optional Bass Trim; the shared 12 kHz shelf remains disabled.
+
+Limiter attack/release times remain **FC 1.5 / 80 ms**, **LFE 2 / 120 ms** and **master 2.5 / 80 ms**. The main processor and Atmos preparer check primary-track format without post-codec True Peak scans or retries. Output naming remains unchanged, for example `film_EAC3_Sonar.mkv` and `film-0.mkv`. Upmix and ASMR retain their own True Peak checks and retries, documented below.
+
+The separate verification passed on all five presets. On `clearvoice_ab_audio.mka`, the new AURA encode at **640 kbps**, matching `TEST_B_VOLAMP_0.mkv`, produced **identical decoded PCM sample for sample**, with master 0.92, FINAL_TRIM −1.0 dB and zero LFE/Bass Trim corrections. Run the synthetic checks with `python tests/verify_refactor.py`.
+
+## Final chain
+
+```text
+input → Dolby DRC off (AC3/EAC3) → positional 5.1 mapping → split
+→ voice EQ and surround preset → decorrelation → surround presence bell
+→ optional Bass Trim on all six channels
+→ FC: limiter 0.89 (attack 1.5 / release 80 ms)
+→ LFE: --lfe-gain → limiter 0.90 (attack 2.0 / release 120 ms)
+→ join 5.1(side) → master 0.92 (attack 2.5 / release 80 ms)
+→ FINAL_TRIM −1.0 dB → AC3/EAC3 encoder → format check
+```
+
+All limiters retain `level=0:latency=1`, without auto-level. Thresholds are linear amplitudes. No common gain is added before the limiters, and no Atmos offsets are present. The master acts on the recombined 5.1 signal. Format verification does not measure post-codec True Peak.
+
+## Final headroom before encoding
+
+By default the processor applies **−1.0 dB to all six channels after the master limiter**, before AC3/EAC3 encoding. This static trim increases codec headroom without adding scans or retries. It does not guarantee a True Peak ceiling on every source, and the quick format check does not measure True Peak.
+
+```text
+DSP → optional LFE gain and Bass Trim → FC/LFE limiters → join
+    → master limiter → final −1 dB trim → encoder
+```
+
+The trim preserves nominal interchannel ratios, lowers overall level and does not undo prior limiting. It does not automatically recover loudness: set listening volume on the AVR.
+
+`FINAL_TRIM_DB` accepts **−3 to 0 dB**, using a decimal point or comma. Default: `-1.0`. Zero removes the additional filter entirely:
+
+```bash
+# Default: −1 dB after the master, with batches regenerated for the new CLI
+./run_processing.sh
+
+# Disable final trim
+FINAL_TRIM_DB=0 ./run_processing.sh
+
+# Manual trial at −0.7 dB
+FINAL_TRIM_DB=-0.7 ./run_processing.sh
+```
+
+The batch inherits this variable; changing only trim does not require regeneration, provided the updated processor is used. Output names do not change, so save comparison variants separately. Stream-copied original audio is unaffected. A separate post-codec True Peak measurement is required if every file must meet a verified ceiling.
+
+Sample headroom reduces overshoot risk but does not guarantee a True Peak limit after lossy encoding. The 20 Hz high-pass has less effect near the crossover than a 40 Hz filter, but does not eliminate phase rotation or guarantee alignment with the subwoofer/AVR. Measurements and listening on the actual system are needed.
+
+## Informational Atmos detection
+
+The EAC3 Atmos profile takes priority over the exact markers `EAC3 Atmos Original` and `EAC3 Atmos (Original)`, searched across audio tracks in the complete container. A filename or generic title is not evidence. Detection is repeated for every file and handles CRLF. Provenance is logged without changing presets, FC, LFE or the filtergraph. **Atmos compensation has been completely removed.**
+
+## Encoding and publication
+
+DSP, AC3/EAC3 encoding and mux run in one FFmpeg process, writing `mux.mkv` into a unique `.<output_name>.partial.<random>/` directory reserved beside the output with `mktemp`. The first non-attached video stream, subtitles, attachments, metadata and chapters are copied, plus the selected original track when `keep=si`.
+
+The two full-duration comparative source/output scans for RMS, sample peak and sample count have been removed. The primary track must have the **requested codec (`ac3` or `eac3`), six channels, `5.1(side)`, 48 kHz and the default flag**. The initial probe uses up to 20 MB / 20 seconds and does not traverse the full track.
+
+Only successful encoding/mux and format verification allow the candidate to replace the final file. FFmpeg errors are fatal (`-xerror`). Errors/interruption preserve `mux.mkv` and `filter_complex.txt` for debugging; successful publication removes temporary files. `INT` and `TERM` exit with `130` and `143`.
+
+FC, LFE and master limiters are unchanged. There is no post-codec True Peak measurement or retry. Without a full audio comparison, a formally correct container with silence, lost channels or anomalous duration could pass the format check.
+
+## Decorrelation
+
+**Stereo downmix:** delays and decorrelated branches can change timbre when surrounds are summed into the front channels. Synthetic coherent-signal tests show pronounced attenuation at 500 Hz for `wide` and `aura`, partly due to the 1 ms direct-surround delay. This does not describe every real mix or imply a decoding error, but warrants a dedicated check if the output is mainly intended for stereo listening. VOICEITA adds neither these delays nor decorrelation.
+
+The 3200 Hz presence bell follows this block on `SL_final` and `SR_final`, without changing decorrelation parameters. Evaluate real excerpts at matched loudness, including stereo downmixes.
 
 | Preset | `DECORR_GAIN` |
 |---|---:|
-| sonar | 0.055 |
-| aura | 0.048 |
-| wide | 0.042 |
-| aegis | 0.034 |
-| voiceita | 0 |
+| `sonar` | `0.055` |
+| `aura` | `0.048` |
+| `wide` | `0.042` |
+| `aegis` | `0.034` |
+| `voiceita` | `0` |
 
-Delayed/decorrelated surrounds can change timbre when folded into stereo. Synthetic coherent signals show marked attenuation at 500 Hz with WIDE/AURA, partly from their 1 ms direct surround delay. This is not a decoder error or a prediction for every real mix. Check stereo downmixes with level-matched listening; VOICEITA adds neither these delays nor decorrelation.
-
-### Gain staging and Atmos compensation
-
-The common chain is:
-
-```text
-5.1 split → front high-pass, center EQ and surround DSP → optional six-channel bass shelf
-→ individual main-channel volamp
-→ FC: optional Atmos +0.5 dB → FC limiter
-→ LFE: volamp → --lfe-gain → optional Atmos −0.5 dB → LFE limiter
-→ 5.1(side) join → +0.4 dB high shelf at 12 kHz on FC/SL/SR only
-→ master limiter → 48 kHz / fltp → AC3/EAC3 encoding and mux
-```
-
-| Limiter | Limit | Attack | Release | Auto-level | Latency compensation |
-|---|---:|---:|---:|---|---|
-| FC | 0.89 | 1.5 ms | 80 ms | Off | On |
-| LFE | 0.90 | 2 ms | 120 ms | Off | On |
-| Master | 0.92 | 2.5 ms | 80 ms | Off | On |
-
-All use `level=0`. FC 0.89, LFE 0.90 and master 0.92 are linear amplitude thresholds, not gains in dB. The lower FC/LFE thresholds provide dedicated limiting before the slightly higher, channel-linked master threshold on the rejoined 5.1 stream. No improvements in dynamics, sound quality or True Peak are claimed as verified results. Sample headroom does not guarantee a post-codec True Peak ceiling: lossy encoding can create new peaks. Moving the high-pass from 40 to 20 Hz reduces its influence around the AVR crossover but does not eliminate phase rotation or guarantee subwoofer alignment. Measure and listen on the actual system.
-
-`--lfe-gain` is static gain, not EQ or AGC; zero adds no gain filter. Duplicate/incomplete/out-of-range options are rejected. `--` ends option parsing to protect filenames. Example nominal gain: `+4.0 -1.5 -0.5 = +2.0 dB` before the LFE limiter. The shelf remains frequency dependent; actual peak gain may be lower because of limiting.
-
-Atmos compensation is a project-specific bed tuning choice, not a universal property of Dolby Atmos. It adds **FC +0.5 dB / LFE −0.5 dB** after volamp and before dedicated limiters for every preset when an EAC3 Atmos profile exists in the container or an exact trusted audio-track title is found:
-
-| Evidence | Compensation |
-|---|---|
-| FFprobe EAC3 Atmos profile | Enabled, takes precedence |
-| `EAC3 Atmos Original` | Enabled |
-| `EAC3 Atmos (Original)` (legacy) | Enabled |
-| Only `EAC3 Original`, without Atmos profile | Disabled |
-| Generic filename/title containing Atmos | Insufficient |
-
-Title matching uses the full title, case-insensitively, and handles Windows FFprobe CRLF. A marker on the secondary original track can enable compensation while processing the normalized primary track. Detection is reset for each file, never inherited from the previous one.
+## Examples
 
 ```bash
-ATMOS_FC_GAIN_DB="0.5"
-ATMOS_LFE_GAIN_DB="-0.5"
+./aegis_sonar_wide_aura_voice_psycho.sh \
+  eac3 no 768k sonar "film.mkv"
+
+./aegis_sonar_wide_aura_voice_psycho.sh \
+  eac3 no 768k wide "film.mkv"
+
+./aegis_sonar_wide_aura_voice_psycho.sh \
+  ac3 si 640k voiceita "film.mkv"
+
+# Batch in the current folder
+./aegis_sonar_wide_aura_voice_psycho.sh eac3 no 768k sonar ""
 ```
 
-These are script constants, not CLI/environment overrides. If changing the LFE offset, keep analyzer `LFE_ATMOS_COMPENSATION_DB` aligned. Offsets apply even with volamp zero. With volamp 2.0 and zero LFE/Bass correction, nominal final FC/LFE volume stages are +2.5/+1.5 dB before EQ/preset gains and limiting.
-
-Analyzer, processor and preparer report verified/unverified Atmos. The positive message does not identify stream number or evidence type. Analyzer/processor can use a profile or trusted marker; the preparer verifies the profile. Unverified means no recognized evidence was found, not a guarantee that the source is not Atmos.
-
-Pass the **complete intermediate MKV** to the processor: extracting only the bed can remove the secondary-track evidence and disable compensation. The Atmos preparer itself does not apply these offsets. Output remains 5.1 with one LFE; a 5.2 AVR routes that single channel to two subwoofers.
-
-### Encoding and publication
-
-DSP, encoding and mux run in one FFmpeg process with fatal errors (`-xerror`), writing `mux.mkv` under a unique `.<output_name>.partial.<random>/` created beside the final output. The first non-attached video stream, subtitles, attachments, metadata and chapters are copied; `keep=si` also retains the selected original audio.
-
-The primary track must have the requested AC3/EAC3 codec, six channels, `5.1(side)`, 48 kHz and default disposition. Probe examines up to 20 MB / 20 seconds, not the whole track. Only successful encode/mux and format validation replace the final file. Failures preserve `mux.mkv` and `filter_complex.txt` for debugging; successful publication removes temporary files. INT/TERM exit with 130/143.
-
-There is **no post-codec True Peak check or retry** here. Without full source/output comparison, silence, lost channel content or abnormal duration can escape a structural format check. Final counters report failures and return nonzero if any file fails.
+## Output
 
 ```text
 <name>_EAC3_Sonar.mkv
@@ -467,207 +666,574 @@ There is **no post-codec True Peak check or retry** here. Without full source/ou
 <name>_AC3_Voiceita.mkv
 ```
 
-## 3. Stereo to 5.1 upmix
+---
 
-`stereo251_upmix_psycho.sh` creates a plausible multichannel scene from **two-channel stereo**, without claiming to recover discrete information absent from the source.
+# 3. `stereo251_upmix_psycho.sh`
+
+Offline **stereo 2.0 → 5.1** upmixing, designed to produce a plausible multichannel scene without claiming to recover discrete information absent from the source.
+
+The main preset is `to51`:
+
+- FL/FR remain full-band and carry the main scene, with `FRONT_VOL=0.96` for headroom;
+- the center is an `L+R` assist, not a complete replacement for the phantom center;
+- surrounds derive mainly from the `L-R` side component;
+- the mono rear bed is heavily attenuated and filtered in the voice band; V10 lowers it further when L/R are correlated;
+- synthesized LFE is minimal because bass management remains the AVR's responsibility;
+- asymmetric delays and all-pass filters provide gentle decorrelation without constant artificial rear activity.
+
+For two-channel audio with identical L/R (duplicated mono), or very similar channels, nearly silent surrounds are expected: the `L-R` matrix cancels or becomes small, and the adaptive bed is attenuated. A true single-channel track is skipped because this script accepts two-channel input only.
+
+`quad` copies FL toward SL and FR toward SR, with band limiting and Haas delays. It is mainly for **music and concerts**, rather than films, series, anime or cartoons, where it can pull dialogue into the rear speakers.
+
+## Syntax
 
 ```bash
-./stereo251_upmix_psycho.sh <ac3|eac3> <si|no> [file|""] [bitrate] [to51|quad]
+./stereo251_upmix_psycho.sh \
+  <ac3|eac3> <si|no> [file|""] [bitrate] [to51|quad]
 ```
 
-Codec and keep are required. Input defaults to the current directory; bitrate defaults to 448k, accepting AC3 256k–640k or EAC3 up to 768k in 64k steps. `448`, `448K`, decimal leading zeros (`0448K`) and supported M suffixes are normalized to kbps. Invalid values are rejected before encoding.
+## Parameters
 
-Stream scores are stereo +1000, Italian +300 and default +200. Key/value ffprobe parsing avoids positional field dependencies. Read/probe failure counts as failure and returns 1; valid containers without stereo are skipped. AC3/EAC3 decode and encoded-candidate True Peak measurement use `drc_scale=0`; other decoders do not receive this private option.
+| Parameter | Values | Default | Notes |
+|---|---|---:|---|
+| `codec` | `ac3`, `eac3` | Required | Output codec; encoder availability is checked before processing |
+| `keep` | `si`, `no` | Required | Retain the original stereo track as secondary audio |
+| `file` | File or `""` | Current folder | Batch mode when omitted or empty |
+| `bitrate` | `256k–640k` AC3; up to `768k` EAC3 | `448k` | Increments of `64k` |
+| `preset` | `to51`, `quad` | `to51` | Upmix type |
 
-### Presets and tuning
+The parser also accepts `448`, `448K` and values with an `M` suffix, then normalizes to kbps. Leading zeros are decimal: `0448K` equals `448k`. Out-of-range or off-step values are rejected before encoding.
 
-**TO51** is the normal choice for films, series, anime and cartoons. Fronts remain full-band with preventive headroom; center is an L+R assist, not a full phantom-center replacement. Surrounds mainly use L−R/R−L plus a quiet filtered mono rear bed. Synthetic LFE is minimal because bass management belongs to the AVR. Asymmetric delays/all-pass filters add light decorrelation.
-
-**QUAD** feeds FL to SL and FR to SR with limited bandwidth and Haas delay. It is intended for music/concerts and can pull dialogue into the rear; it is not the default fiction preset.
-
-| Setting | TO51 | QUAD |
-|---|---|---|
-| `FRONT_VOL` | 0.96 | 0.96 |
-| `FC_MIX` / `FC_VOL` | 0.28 / 0.86 | 0.28 / 0.78 |
-| `FC_HP` / `FC_LP` | 60 / 6500 Hz | 60 / 5200 Hz |
-| `LFE_VOL` | 0.035 | 0.03 |
-| Side / rear gain | `SUR_PAN=0.50`, `SUR_VOL=0.86` | `QUAD_VOL=0.58` |
-| Rear bed | `SUR_BED_VOL=0.06`, `SUR_ADAPTIVE=1` | Air layer 0.035 |
-| Delays L/R | Side 14/20 ms, bed 24/33 ms | Rear 16/19 ms |
-| Bandwidth | Side 170–8500 Hz, bed 320–5600 Hz | Rear 250–8000 Hz |
-
-The center high-pass is 60 Hz rather than the earlier 102 Hz to avoid excessive attenuation alongside an AVR crossover near 110 Hz. V10 lowers TO51 FC_MIX from 0.32 to 0.28 (about −1.16 dB), keeping FC_VOL 0.86; QUAD retains its own tuning.
-
-Adaptive bed correlation is `r = E[L·R] / sqrt(E[L²]·E[R²])`, with approximately 80 ms exponential averages and division-by-zero protection. Additional bed gain is `0.35 + 0.65*clip(1-r, 0, 1)`. Identical L/R reduce the bed by about 9.1 dB; zero/negative correlation retains the configured level. Calculation and application occur in one filter, without a preliminary scan or added delay. The side matrix is unchanged. `SUR_ADAPTIVE=0` restores a fixed bed, only in TO51.
-
-Duplicated mono cancels the side component and reduces the bed; quiet surrounds are expected. True single-channel inputs are skipped. L=−R cancels center/synthetic LFE while surrounds remain. A left-only sound also contributes to center and surrounds: the matrix does not isolate dialogue or only shared content. Stereo folding of filtered/delayed channels can change timbre and balance; retain the original stereo with `keep=si` and compare at matched volume.
-
-### Processing and checks
+Track selection is scored:
 
 ```text
-Stereo selection → SOXR 48 kHz / precision 28 if needed → FL/FR split
-→ L+R center assist, minimal LFE, matrix/decorrelated surrounds
-→ 5.1(side) join → SOXR 192 kHz / precision 28
-→ alimiter limit=0.97:attack=3:release=60:level=0:latency=1
-→ SOXR 48 kHz / precision 28 / cutoff 0.91
-→ AC3/EAC3, dialnorm −31
+stereo:   +1000
+Italian:  +300
+default:  +200
 ```
 
-SOXR, encoder and required filters are checked first. Full comparative source/output scans are removed. A complete **post-codec True Peak** measurement remains, ceiling **−0.1 dBTP**. Only exceeding this ceiling triggers one retry from the source, with final attenuation `min(measured_TP - (-0.1) + 0.2, 3.0) dB` after returning to 48 kHz. The retry must pass again. Missing/inconclusive measurements or other errors block publication without retry.
+The `ffprobe` parser uses key/value pairs and does not depend on positional field order. Read errors count as failures and produce exit code `1`; valid containers without stereo audio are skipped.
 
-`audio.mka`, optional `audio.retry.mka` and `mux.mkv` live in a unique hidden partial directory. After verification, one complete mux copies the encoded audio and preserves source timestamps. Only successful mux replaces the final file. Errors/interruption preserve temporary files; INT/TERM return 130/143. Full candidate decode catches decode errors, but does not compare duration, RMS or channel identity against the source.
+For AC3/EAC3 input, `drc_scale=0` preserves dynamics without applying Dolby metadata compression. Candidate True Peak measurement also uses `drc_scale=0`. This decoder-specific option is not passed for other codecs.
+
+## Presets
+
+| Preset | Approach | Typical use |
+|---|---|---|
+| `to51` | `L-R` side matrix, center assist and a barely audible mono rear bed | Stereo films, series, anime, cartoons and fiction |
+| `quad` | FL→SL and FR→SR with Haas delays and band limiting | Stereo music and concerts |
+
+Main values:
+
+```text
+SHARED:
+  FRONT_VOL=0.96
+
+TO51:
+  FC_MIX=0.28
+  FC_VOL=0.86
+  FC_HP=60 Hz
+  FC_LP=6500 Hz
+  LFE_VOL=0.035
+
+  SUR_PAN=0.50
+  SUR_VOL=0.86
+  SUR_BED_VOL=0.06
+  SUR_ADAPTIVE=1
+
+  side delay L/R=14/20 ms
+  bed delay  L/R=24/33 ms
+  side band=170–8500 Hz
+  bed band=320–5600 Hz
+  strong bed attenuation in the voice band
+
+QUAD:
+  FC_MIX=0.28
+  FC_VOL=0.78
+  FC_HP=60 Hz
+  FC_LP=5200 Hz
+  LFE_VOL=0.03
+
+  QUAD_VOL=0.58
+  delay L/R=16/19 ms
+  rear band=250–8000 Hz
+  air layer=0.035
+```
+
+The center high-pass starts at **60 Hz**, rather than the previous **102 Hz**, to avoid excessive attenuation when the AVR already applies a roughly **110 Hz** global crossover.
+
+In V10, `to51` center `FC_MIX` changed from `0.32` to `0.28` (about −1.16 dB), while `FC_VOL` remains `0.86`. QUAD retains its own tuning.
+
+With `SUR_ADAPTIVE=1`, the bed uses full-band correlation `r = E[L·R] / sqrt(E[L²]·E[R²])`, with approximately 80 ms exponential averages and division-by-zero protection. Additional gain is `0.35 + 0.65·clip(1-r, 0, 1)`: identical L/R lower the bed by about 9.1 dB; zero or negative correlation leaves it at the `SUR_BED_VOL` level. Calculation and application occur within the same filter, without a preliminary scan or added delays. The side matrix is unchanged. This does not recognize dialogue or create independent rear channels. `SUR_ADAPTIVE=0` restores a fixed bed; the option affects `to51` only.
+
+## Final chain
+
+```text
+scored stereo selection
+→ SOXR 48 kHz / precision 28 (if input resampling is needed)
+→ FL/FR split
+→ L+R center assist
+→ minimal synthesized LFE
+→ matrix/decorrelated surrounds
+→ join 5.1(side)
+→ SOXR 192 kHz / precision 28
+→ alimiter limit=0.97, attack=3 ms, release=60 ms, level=0, latency=1
+→ SOXR 48 kHz / precision 28 / cutoff 0.91
+→ AC3/EAC3 with dialnorm -31
+```
+
+The limiter is final peak protection, without auto-level (`level=0`).
+
+SOXR, the chosen encoder and filters required by the selected path are checked before processing. Full-duration comparative stereo/5.1 source/candidate scans have been removed.
+
+**Full-duration post-codec True Peak measurement** remains, with a **−0.1 dBTP** ceiling. If exceeded, one retry is performed from the source, with final attenuation `min(TP - (-0.1) + 0.2, 3.0) dB` after returning to 48 kHz. The second candidate must pass True Peak verification. Inconclusive measurements and other errors block publication without triggering a retry. The 4× limiter and True Peak ceiling are unchanged.
+
+`audio.mka`, optional `audio.retry.mka` and `mux.mkv` are reserved with `mktemp` inside a hidden `.<output_name>.partial.<random>/` directory. After True Peak verification, one complete mux copies audio and preserves source timestamps. Only a successful mux replaces the final file. Errors/interruption retain temporary files; `INT`/`TERM` exit with `130`/`143`.
+
+True Peak checking decodes the entire candidate and catches decoding errors, but does not compare duration, RMS or channel presence against the source.
+
+## Output
 
 ```text
 <name>_UPMIX_5.1_V10_TO51.mkv
 <name>_UPMIX_5.1_V10_QUAD.mkv
 ```
 
-Language propagates to processed audio and retained stereo. Recognized processed suffixes, including V10, are excluded from folder batches. V10 names distinguish earlier V9 outputs. Counters are OK/FAILED/SKIPPED; any probe/encode/check/mux/publication failure returns 1. If all files are skipped without errors, exit is 0 with “no file processed.”
+Language metadata is propagated to the processed track and, with `keep=si`, the original stereo track. V10 suffixes distinguish these outputs from V9; recognized output suffixes, including V10, are excluded from batch processing.
+
+Counters are `OK/FALLITI/SALTATI` (successful/failed/skipped). Any probe, encode, verification, mux or publication failure produces exit code `1`. If every file is skipped without errors, the script exits `0` with `Nessun file elaborato` (“No files processed”).
+
+## Examples
 
 ```bash
-./stereo251_upmix_psycho.sh eac3 si "episode.mkv" 448k to51
-./stereo251_upmix_psycho.sh eac3 si "concert.mkv" 640k quad
-./stereo251_upmix_psycho.sh ac3 no "" 448k to51
-./stereo251_upmix_psycho.sh eac3 no
+# Films, series, anime or cartoons: recommended preset
+./stereo251_upmix_psycho.sh eac3 si "episodio.mkv" 448k to51
 
-# Reduce center assist
-FC_VOL=0.82 FC_MIX=0.26 ./stereo251_upmix_psycho.sh eac3 no "film.mkv" 448k to51
-# Raise side surrounds before raising the mono bed
-SUR_VOL=0.92 ./stereo251_upmix_psycho.sh eac3 no "film.mkv" 448k to51
-# Reduce QUAD rear level
-QUAD_VOL=0.50 ./stereo251_upmix_psycho.sh eac3 no "concert.mkv" 448k quad
-# Compare fixed versus adaptive bed; preserve variants under different names
-SUR_ADAPTIVE=0 ./stereo251_upmix_psycho.sh eac3 no "film.mkv" 448k to51
+# Music or concert
+./stereo251_upmix_psycho.sh eac3 si "concerto.mkv" 640k quad
+
+# Batch in the current folder
+./stereo251_upmix_psycho.sh ac3 no "" 448k to51
+
+# Defaults: EAC3, 448k, TO51
+./stereo251_upmix_psycho.sh eac3 no
 ```
 
-Other environment controls are `SUR_DELAY_L/R`, `BED_DELAY_L/R`, `QUAD_DELAY_L/R`, `QUAD_HP/LP` and `QUAD_AIR_VOL`, alongside the table's gain/bandwidth controls. Check routing, A/V sync, both presets and stereo downmix on real material. The distribution has no dedicated automated upmix regression suite; `bash -n stereo251_upmix_psycho.sh` checks syntax, and the script itself performs the documented True Peak verification.
+## Matrix limitations and stereo downmix
 
-## 4. ASMR / VR
+TO51 uses an `L+R` center matrix, `L-R` and `R-L` surrounds, and an adaptive mono bed. It neither recognizes dialogue nor isolates only content common to both channels. A left-only sound also contributes to the center and both surrounds. With dual mono, the side component cancels and the small rear bed is further attenuated; with `L=-R`, the synthesized center and LFE cancel while surrounds remain active.
 
-`asmr_vr_intimate_psycho.sh` processes stereo for headphones, ASMR, VR and close sources. Features include score-based stereo selection, key/value probing, encoder preflight, preset-specific two-pole high/low-pass, **BS2B J. Meier** crossfeed, Mid/Side adjustment, controlled crosstalk, sample-delay ITD, proximity EQ, optional tremolo/flanger LFO and post-DSP loudnorm.
+Summing filtered/delayed channels back to stereo can change timbre and balance relative to the source. For stereo listening, retain the original track with `keep=si`. Evaluate center, bed and delay adjustments at matched loudness in both 5.1 and stereo downmix. Raising surrounds indiscriminately does not solve matrix limitations.
+
+## Environment tuning
+
+Moderately reduce center assist:
+
+```bash
+FC_VOL=0.82 FC_MIX=0.26 \
+  ./stereo251_upmix_psycho.sh eac3 no "film.mkv" 448k to51
+```
+
+Carefully raise side surrounds before raising the mono bed:
+
+```bash
+SUR_VOL=0.92 \
+  ./stereo251_upmix_psycho.sh eac3 no "film.mkv" 448k to51
+```
+
+Reduce rear level in the music preset:
+
+```bash
+QUAD_VOL=0.50 \
+  ./stereo251_upmix_psycho.sh eac3 no "concerto.mkv" 448k quad
+```
+
+Compare only the TO51 bed against fixed mode:
+
+```bash
+SUR_ADAPTIVE=0 \
+  ./stereo251_upmix_psycho.sh eac3 no "film.mkv" 448k to51
+```
+
+This changes only the bed; center and other settings remain V10. Output naming stays the same, so use differently named source copies to retain both variants.
+
+| Variable | Effect |
+|---|---|
+| `FRONT_VOL` | FL/FR level and preventive headroom |
+| `FC_VOL` | Center-assist level |
+| `FC_MIX` | Amount of `L+R` sent to the center |
+| `FC_HP`, `FC_LP` | Center frequency band |
+| `SUR_PAN`, `SUR_VOL` | TO51 `L-R` side component |
+| `SUR_BED_VOL` | Mono rear-bed level |
+| `SUR_ADAPTIVE` | `1` (default): attenuate correlated bed; `0`: fixed bed, TO51 only |
+| `SUR_DELAY_L`, `SUR_DELAY_R` | Asymmetric side delays |
+| `BED_DELAY_L`, `BED_DELAY_R` | Asymmetric bed delays |
+| `QUAD_VOL` | QUAD rear level |
+| `QUAD_DELAY_L`, `QUAD_DELAY_R` | QUAD rear delays |
+| `QUAD_HP`, `QUAD_LP` | QUAD rear frequency band |
+| `QUAD_AIR_VOL` | QUAD air-layer level |
+| `LFE_VOL` | Amount of synthesized LFE |
+
+## Upmix checks
+
+There is no automated upmix regression suite in this distribution; `tests/verify_refactor.py` covers the analyzer/main 5.1 processor refactoring. Use `bash -n stereo251_upmix_psycho.sh` for syntax checking. The upmixer runs its own full-duration True Peak check and optional retry on generated candidates, without comparing duration or channel identity to the source. Also check channel routing, A/V sync and preset behavior by listening to real material.
+
+---
+
+# 4. `asmr_vr_intimate_psycho.sh`
+
+Stereo processing for headphones, ASMR, VR and close sources.
+
+## Features
+
+- scored stereo-track selection;
+- key/value `ffprobe` parsing and chosen-encoder preflight;
+- preset-specific two-pole high-pass and low-pass filters;
+- post-DSP loudnorm with distance-specific targets;
+- **BS2B J. Meier** crossfeed;
+- Mid/Side adjustment and controlled crosstalk;
+- sample-delay ITD;
+- psychoacoustic proximity EQ;
+- optional `tremolo + flanger` LFO;
+- ITD independently disabled with `-t`;
+- final limiter **after ITD and LFO**;
+- `aac`, `opus` through `libopus`, or `flac` encoding;
+- optional retention of the original stereo track;
+- full-duration post-codec True Peak, without a comparative stereo scan;
+- one retry from the source, with up to **3.0 dB** final trim;
+- audio-only candidate, one complete mux and atomic publication;
+- actual success/failure counters and exit codes.
+
+The script checks `bs2b` and the selected encoder before starting. BS2B is required for this workflow.
+
+## Syntax
 
 ```bash
 ./asmr_vr_intimate_psycho.sh [options] <file1> [file2 ...]
 ```
 
-| Option | Meaning |
-|---|---|
-| `-o <dir>` | Output directory; created if absent, creation failure is fatal |
-| `-d <mode>` | `whisper` (default), `near`, `center` |
-| `-k` | Retain original stereo track |
-| `-l` | Enable Breathing LFO |
-| `-t` | Disable ITD; useful for already binaural audio |
-| `-c <codec>` | `aac` (default), `opus` through libopus, or `flac` |
-| `-b <rate>` | Default 320k; ignored for FLAC |
-| `-f` | Force overwrite |
-| `-h` | Help |
+## Options
 
-| Preset | Loudnorm target | Distance | Final limiter: limit / attack / release |
-|---|---|---|---|
-| whisper | −20 LUFS, TP −2.0, LRA 13 | 20–30 cm | 0.96 / 2 ms / 40 ms |
-| near | −19 LUFS, TP −1.8, LRA 12 | 30–50 cm | 0.97 / 2.5 ms / 45 ms |
-| center | −18 LUFS, TP −1.5, LRA 11 | Front | 0.97 / 3 ms / 50 ms |
-
-All final limiters use `level=0:latency=1` and follow ITD/LFO. The chain is band-pass → 48 kHz → BS2B → Mid/Side → crosstalk → EQ → ITD → optional LFO → loudnorm → 48 kHz → final limiter → optional retry trim → audio-only encode → full post-codec True Peak → one complete mux with audio copy.
-
-BS2B is mandatory. On existing binaural material, BS2B/crosstalk can alter the original interaural cues; `-t` avoids the additional ITD but does not remove those other stages. Compare by listening.
-
-Full comparative RMS/sample-count scans are removed. Complete candidate decode with `ebur128=peak=true` remains. The ceiling equals the preset TP for **all three codecs**: −2.0, −1.8 or −1.5 dBTP. Decode errors or missing/inconclusive measurements block publication. Only ceiling exceedance triggers one final retry from the source with `min(measured_TP - ceiling + 0.2, 3.0) dB` attenuation after loudnorm, resampling and limiting. DSP settings remain unchanged; trim can lower achieved loudness below target. The retry must pass verification.
-
-Temporary files and atomic publication follow the upmixer's audio-only candidate/one-mux model. The partial directory is beside the output, including with `-o`. Timestamps are preserved; errors/interruption retain temporary files; INT/TERM return 130/143. True Peak does not compare source/output duration, RMS or channel presence.
-
-```bash
-./asmr_vr_intimate_psycho.sh -d whisper -c aac -b 320k "asmr.mkv"
-./asmr_vr_intimate_psycho.sh -d near -k -l -o output "clip01.mkv" "clip02.mkv"
-./asmr_vr_intimate_psycho.sh -d center -c flac "voice.wav"
+```text
+-o <dir>     output directory
+-d <mode>    whisper | near | center
+-k           retain the original track
+-l           enable Breathing LFO
+-t           disable ITD; recommended for already-binaural sources
+-c <codec>   aac | opus | flac
+-b <rate>    bitrate, default 320k; ignored with FLAC
+-f           force overwrite
+-h           help
 ```
 
-Output suffixes are `_INTIMATE_WHISPER.mkv`, `_INTIMATE_NEAR.mkv` and `_INTIMATE_CENTER.mkv`, optionally followed before `.mkv` by `_NOITD`, `_LFO` or `_NOITD_LFO`. Counters and exit codes reflect actual failures.
+The `-o` directory is created if missing; failure to create it stops the script.
 
-## 5. Atmos to EAC3 5.1
+## Presets
 
-`atmos_to_51_dynaudnorm_psicho.sh` prepares **EAC3 Atmos/JOC** material as two separate paths in the same MKV:
+| Preset | Target | Distance | Final limiter |
+|---|---|---|---|
+| `whisper` | `-20 LUFS`, `TP=-2.0`, `LRA=13` | 20–30 cm | `limit=0.96`, attack `2`, release `40`, `level=0`, `latency=1` |
+| `near` | `-19 LUFS`, `TP=-1.8`, `LRA=12` | 30–50 cm | `limit=0.97`, attack `2.5`, release `45`, `level=0`, `latency=1` |
+| `center` | `-18 LUFS`, `TP=-1.5`, `LRA=11` | In front | `limit=0.97`, attack `3`, release `50`, `level=0`, `latency=1` |
 
-1. Normalized **EAC3 5.1**, primary/default, for analysis and optional psychoacoustic processing.
-2. Original **Atmos/EAC3**, bit-perfect stream copy as a secondary/non-default track.
+Processing order:
 
-FFmpeg decodes the available multichannel bed; it does **not render Atmos objects like an AVR**. Select the second track for original Atmos playback. For DSP, pass the complete intermediate MKV to the analyzer/processor so original-track evidence remains available. The script does not automatically reinsert original Atmos into later Aegis outputs.
+```text
+band-pass
+→ 48 kHz
+→ BS2B
+→ Mid/Side
+→ crosstalk
+→ EQ
+→ ITD
+→ optional LFO
+→ loudnorm on the processed signal
+→ 48 kHz
+→ final limiter
+→ optional retry trim
+→ AAC/Opus/FLAC encoding into an audio-only candidate
+→ full-duration post-codec True Peak
+→ one mux with copied audio after True Peak verification
+```
+
+This processing is designed for stereo material. For already-binaural sources, BS2B and crosstalk can alter original interaural cues. Use `-t` to avoid the additional ITD delay and compare A/B.
+
+Full-duration comparative source/candidate RMS and sample-count scans have been removed. Full candidate decoding with `ebur128=peak=true` remains. The **post-codec ceiling equals the preset TP**: `-2.0 dBTP` for `whisper`, `-1.8 dBTP` for `near`, `-1.5 dBTP` for `center`, across AAC, Opus and FLAC. Decoding errors and missing/inconclusive measurements block publication.
+
+Only when True Peak exceeds the ceiling does a second and final encode run from the source, with attenuation `min(measured TP - ceiling + 0.2, 3.0) dB`. Trim follows loudnorm, the return to 48 kHz and the limiter. The second candidate must pass True Peak checking. EQ, BS2B, ITD, LFO and presets are unchanged; trim can lower loudness below the nominal target.
+
+`audio.mka`, optional `audio.retry.mka` and `mux.mkv` are reserved in a hidden `.<output_name>.partial.<random>/` directory beside the output, including with `-o`. One complete mux runs after True Peak checking, with audio copied and timestamps preserved. Only successful mux replaces the final output. Errors/interruption preserve temporary files; `INT`/`TERM` exit with `130`/`143`.
+
+True Peak verification does not compare duration, RMS or channel presence with the source.
+
+## Examples
+
+```bash
+./asmr_vr_intimate_psycho.sh \
+  -d whisper -c aac -b 320k "asmr.mkv"
+
+./asmr_vr_intimate_psycho.sh \
+  -d near -k -l -o output "clip01.mkv" "clip02.mkv"
+
+./asmr_vr_intimate_psycho.sh \
+  -d center -c flac "voce.wav"
+```
+
+## Output
+
+```text
+<name>_INTIMATE_WHISPER.mkv
+<name>_INTIMATE_NEAR.mkv
+<name>_INTIMATE_CENTER.mkv
+<name>_INTIMATE_WHISPER_NOITD.mkv
+<name>_INTIMATE_WHISPER_LFO.mkv
+<name>_INTIMATE_WHISPER_NOITD_LFO.mkv
+```
+
+---
+
+# 5. `atmos_to_51_dynaudnorm_psicho.sh`
+
+An optional preparation stage for **EAC3 Atmos/JOC** material. It creates two playback paths in one MKV:
+
+1. **Normalized EAC3 5.1**, primary/default, usable by the analyzer and psychoacoustic processor;
+2. **Original EAC3 Atmos/EAC3**, copied bit for bit as a secondary, non-default track.
+
+FFmpeg decodes the available multichannel bed; it does not render Atmos objects as an AVR would.
+
+## Intended workflow
+
+```text
+original EAC3 Atmos/JOC
+├─ decode multichannel bed/core with Dolby DRC off
+│  → 5.1(side)
+│  → dynaudnorm (optional 20 Hz high-pass, disabled by default)
+│  → normalized EAC3 5.1, track 1/default
+└─ stream copy
+   → original audio, track 2/non-default
+```
+
+Then choose:
+
+```text
+A. Original Atmos playback:
+   select the second track of the intermediate file.
+
+B. Psychoacoustic path:
+   pass the complete intermediate MKV to the analyzer/processor;
+   the primary 5.1 track is processed; the original marker is informational only.
+```
+
+The script does not automatically reinsert the original Atmos track into Aegis outputs; the two paths remain separate.
+
+## Syntax
 
 ```bash
 ./atmos_to_51_dynaudnorm_psicho.sh [bitrate] <file|directory|"">
 ./atmos_to_51_dynaudnorm_psicho.sh --files <bitrate> <file1> [file2 ...]
 ```
 
-Legacy `<file|directory|""> [bitrate]` is accepted. Input is required; `""` selects current directory. Bitrate is 256k–768k in 64k steps, default 640k.
+The legacy order `<file|directory|""> [bitrate]` is also accepted.
 
-### Selection and normalization
+## Parameters
 
-Only EAC3 streams with **exactly six channels** are eligible, preventing channel loss in positional `c0..c5` mapping. FFprobe's official `Dolby Digital Plus + Dolby Atmos` profile identifies Atmos. One key/value probe reads index, profile, channels, layout, language and default disposition. Eligible Atmos candidates score Italian +300/default +200. If no Atmos candidate is identifiable, the best six-channel EAC3 is used as fallback with a warning on stderr.
+| Parameter | Values | Default | Notes |
+|---|---|---:|---|
+| `file|directory|""` | File, directory or empty string | Required | `""` means the current folder |
+| `bitrate` | `256k–768k` in `64k` steps | `640k` | Normalized EAC3 5.1 bitrate |
 
-Original-track titles are **`EAC3 Atmos Original`** for verified Atmos and **`EAC3 Original`** for fallback. The latter alone does not enable downstream Atmos offsets. Primary audio title is **`EAC3 5.1 Normalized`**, default, with dialnorm −31. Language/main metadata are propagated.
+## Track selection
+
+The script:
+
+- considers EAC3 streams with **exactly six channels** only; other channel counts are excluded with a warning to avoid dropping channels through `c0..c5` mapping;
+- recognizes Atmos through the official `Dolby Digital Plus + Dolby Atmos` E-AC-3 profile reported by FFprobe;
+- uses one key/value probe for index, profile, channels, layout, language and default flag;
+- scores eligible Atmos tracks with Italian `+300` and default `+200`;
+- falls back to the best six-channel EAC3 track using the same score if Atmos cannot be detected;
+- writes the fallback warning to `stderr`, without contaminating the probe function's return value.
+
+If fallback audio is not verified as Atmos, the secondary track title is:
 
 ```text
-Input bed decode with Dolby DRC disabled → aformat 48 kHz/fltp
-→ positional 5.1(side) mapping → optional high-pass
-→ dynaudnorm → limiter → primary EAC3 5.1
-Original audio → stream copy → secondary non-default audio
+EAC3 Original
 ```
 
-The original normalization parameters remain **`peak=0.92` and `maxgain=4`**; there are no measurements justifying their retuning. The appended limiter is a separate stage.
+`EAC3 Original` and `EAC3 Atmos Original` document provenance. The latter is an informational detection marker; neither title enables FC/LFE offsets or preset preferences.
+
+Interactive confirmation reads from the script's terminal: press `s` to overwrite, `n` to skip or `t` to overwrite subsequent outputs, without Enter. Without interactive input, existing outputs are skipped without waiting.
+
+## Dynaudnorm
 
 ```text
-dynaudnorm=framelen=500:gausssize=31:peak=0.92:maxgain=4:targetrms=0:compress=0:coupling=1:altboundary=0,
+dynaudnorm=
+  framelen=500:
+  gausssize=31:
+  peak=0.92:
+  maxgain=4:
+  targetrms=0:
+  compress=0:
+  coupling=1:
+  altboundary=0,
 alimiter=level_in=1:level_out=1:limit=0.89:attack=10:level=0:latency=1
 ```
 
-Frame length is 500 ms with 31-frame Gaussian smoothing. Peak 0.92 is the normalizer's target; maxgain 4 is a **linear factor**, about **+12.04 dB**, not 4 dB. RMS targeting and additional internal compression are disabled; coupling preserves channel balance and altboundary uses standard behavior. The appended limiter has a 10 ms lookahead (`attack`, not a `lookahead` option), default 50 ms release, no auto-level and compensated latency. Its 0.89 sample ceiling is about −1.01 dBFS, without a guaranteed post-codec True Peak bound.
+`peak=0.92` and `maxgain=4` retain their original values; there are no measurements justifying retuning them. The following limiter is a separate stage.
 
-There is no preparer high-pass by default. `ATMOS_HIGHPASS_HZ=20` prepends a 20 Hz, Q 0.707 high-pass to **all channels including LFE**; only 0/default and 20 are accepted. This also attenuates useful energy near 20 Hz and adds to the later processor's main-channel 20 Hz filters. AVR bass management cannot restore removed frequencies. Original stream-copied audio is never filtered.
+- High-pass is disabled by default, without a fixed bass cut before normalization. `ATMOS_HIGHPASS_HZ=20` prepends `highpass=f=20:t=q:w=0.707` to all channels, including LFE, attenuating useful content close to 20 Hz as well.
+- `framelen=500`: 500 ms window.
+- `gausssize=31`: broad smoothing.
+- `peak=0.92`: peak target with headroom.
+- `maxgain=4`: **maximum linear factor**, not 4 dB; nominally about **+12.04 dB** in amplitude.
+- `targetrms=0`: RMS targeting disabled.
+- `compress=0`: additional compression disabled.
+- `coupling=1`: the same gain factor across channels, preserving surround balance.
+- `altboundary=0`: standard boundary mode.
+- Final limiter `0.89` (about −1.01 dBFS), `attack=10` ms lookahead, default 50 ms release, `level=0`, `latency=1`. FFmpeg configures lookahead through `attack`, not a `lookahead` option.
+
+**The optional preparer retains dynaudnorm and its optional general high-pass; this refactoring does not change its DSP.** It is a separate path that alters dynamics. For the analyzer/processor path without normalization, use a suitable 5.1 source directly. The downstream processor applies only explicit/analyzer-calculated LFE correction and its dedicated limiter, without Atmos compensation. Dedicated LFE filtering remains the hardware's responsibility.
+
+## High-pass behavior across the suite
+
+| Script | Behavior |
+|---|---|
+| Atmos → 5.1 | No default high-pass; `ATMOS_HIGHPASS_HZ=20` enables 20 Hz on all channels, including LFE |
+| Stereo → 5.1 | 20 Hz high-pass only on synthesized LFE, in both `to51` and `quad` |
+| Aegis / Sonar / Wide / Aura / Voiceita | Mains retain their 20 Hz high-pass; optional Bass Trim on all six channels; no dedicated LFE high-pass |
+| ASMR | Preset voice high-pass filters remain at 60/70/80 Hz |
+| Analyzer | Measures the signal; does not apply a high-pass to a published file |
+
+Retain the default to preserve original bass in the Atmos preparer:
 
 ```bash
 ./atmos_to_51_dynaudnorm_psicho.sh 640k "film.mkv"
+```
+
+Explicitly enable subsonic filtering:
+
+```bash
 ATMOS_HIGHPASS_HZ=20 ./atmos_to_51_dynaudnorm_psicho.sh 640k "film.mkv"
+```
+
+Only `0` (default, disabled) and `20` are accepted. If followed by Aegis, this filter is cumulative with its 20 Hz mains filtering. AVR bass management cannot restore frequencies already attenuated in the file. The copied original Atmos track is not filtered.
+
+## Verification and publication
+
+The EAC3 encoder is checked before processing. Encoding and mux run in one FFmpeg process with `-xerror`: source, `aformat`, positional mapping and dynaudnorm, then a candidate MKV with video, subtitles, attachments, normalized audio and original audio. There is no intermediate MKA or forced `copyts`/`avoid_negative_ts`.
+
+Full-duration comparative source/candidate scans have been removed to reduce processing time. FFmpeg errors and the first-track structural check remain: **EAC3, six channels, `5.1(side)`, 48 kHz and default**. The initial probe uses up to 20 MB / 20 seconds, also helping after filter buffering. There is no post-codec True Peak measurement or retry.
+
+`mux.mkv` is reserved in a unique `.<output_name>.partial.<random>/` directory. It replaces the final file only after successful encoding/mux and format verification. Errors/interruption preserve the candidate; `INT`/`TERM` exit with `130`/`143`.
+
+Format checking alone cannot detect silence, lost channels or anomalous durations in a formally valid container.
+
+## Output
+
+```text
+<name>-0.mkv
+```
+
+Containing:
+
+```text
+Track 1: EAC3 5.1 Normalized
+         default, dialnorm -31
+
+Track 2: EAC3 Atmos Original
+         or EAC3 Original
+         stream copy, non-default
+```
+
+Language and main metadata are propagated. Counters are `OK/FALLITI/SALTATI`; exit code is `1` if any file fails.
+
+## Examples
+
+```bash
+./atmos_to_51_dynaudnorm_psicho.sh "film.mkv"
 ./atmos_to_51_dynaudnorm_psicho.sh "film.mkv" 768k
 ./atmos_to_51_dynaudnorm_psicho.sh /path/to/folder
 ./atmos_to_51_dynaudnorm_psicho.sh "" 768k
 ```
 
-This stage applies no dedicated LFE processing or FC/LFE compensation. The downstream processor handles applicable +0.5/−0.5 dB offsets. In the upmixer, the 20 Hz high-pass remains confined to synthetic LFE; ASMR retains its preset-specific vocal high-pass at 60/70/80 Hz. Analyzer filters measure rather than modify audio.
+---
 
-### Encoding and output
+# Suggested workflows
 
-EAC3 encoder availability is checked first. One FFmpeg process with `-xerror` performs decode, filtering, encoding and mux with video, subtitles, attachments and both audio tracks. There is no intermediate MKA and no forced `copyts` or `avoid_negative_ts`.
+## Usable 5.1 source
 
-Primary format is verified as EAC3, six channels, `5.1(side)`, 48 kHz, default, using up to 20 MB / 20 seconds of initial probe. No complete comparative scan, post-codec True Peak or retry is performed. The temporary `mux.mkv` is created in `.<output_name>.partial.<random>/`; it replaces the final **`<name>-0.mkv`** only after successful encoding/mux and verification. Errors/interruption preserve the candidate; INT/TERM return 130/143. Structural checks alone cannot detect every silent signal, lost channel or abnormal duration. Counters report OK/FAILED/SKIPPED; any failed file returns 1.
+```text
+AC3/EAC3 5.1
+→ audio_analyzer_psycho.sh
+→ run_processing.sh
+→ aegis/sonar/wide/aura (VOICEITA is manual only)
+```
 
-## Recommended workflows
+## Atmos/JOC source
 
-| Source / destination | Workflow |
-|---|---|
-| Existing usable AC3/EAC3 5.1 | Analyzer → generated batch → per-file AEGIS/SONAR/WIDE/AURA; VOICEITA manual |
-| Atmos/JOC | Atmos preparer → dual-track MKV → analyzer → optional bed DSP; original Atmos remains separately playable |
-| Stereo for 5.1 | TO51 upmix; QUAD mainly for music/concerts |
-| Stereo for headphones | ASMR → AAC/Opus/FLAC |
+```text
+Atmos/JOC
+→ optional atmos_to_51_dynaudnorm_psicho.sh
+→ dual-track file:
+   - normalized 5.1 default
+   - original Atmos secondary track titled EAC3 Atmos Original
+→ analyzer on the complete container
+→ optional psychoacoustic processing with the selected preset
+   - marker: information only; no FC/LFE offsets
+```
 
-An upmix is already a final product. Do not add Aegis by default: it can further boost synthetic surrounds/decorrelation. Use analyzer/Aegis only after measurement and level-matched A/B comparisons, without unjustified extra boosts.
+The dual-track file remains the reference for unaltered Atmos playback. The psychoacoustic output is a separate alternative. To avoid the preparer's normalization too, feed a suitable 5.1 source directly to the analyzer/processor.
 
-## Processing cost
+## Stereo source for 5.1 playback
 
-| Script | Relative cost | Main work |
+```text
+Stereo
+→ stereo251_upmix_psycho.sh
+→ plausible EAC3/AC3 5.1
+```
+
+Normally use `to51` for films, series, anime and cartoons. The upmix is already a final product. Another Aegis pass is not the default recommendation because it can amplify synthesized surrounds and decorrelation again. Use the analyzer/Aegis only after measurements and A/B comparisons, without unjustified additional manual boosts.
+
+## Stereo source for headphones
+
+```text
+Stereo
+→ asmr_vr_intimate_psycho.sh
+→ processed AAC/Opus/FLAC stereo
+```
+
+# Approximate processing cost
+
+| Script | Relative cost | Main reason |
 |---|---|---|
-| Analyzer | Medium/high | One full decode feeding loudness, RMS, voice, width and bass branches; cached later runs |
-| Upmix | Medium/high | Matrix, SOXR, complete True Peak check and possible retry; one mux |
-| ASMR | Medium/high | Loudnorm, BS2B, complete True Peak check and possible retry; one mux |
-| Atmos preparer | Medium | Dynaudnorm and one mux; quick structural check |
-| 5.1 processor | Medium/high | DSP, audio encoding and mux in one process; quick structural check |
+| `audio_analyzer_psycho.sh` | Medium/high | One decode with EBU R128, full/voice-band RMS, width and LFE/bass windows; cached later analyses |
+| `stereo251_upmix_psycho.sh` | Medium/high | Upmix, SOXR, full True Peak and possible audio retry; one mux |
+| `asmr_vr_intimate_psycho.sh` | Medium/high | Loudnorm, BS2B, full True Peak and possible audio retry; one mux |
+| `atmos_to_51_dynaudnorm_psicho.sh` | Medium | Dynaudnorm and one mux; quick codec/layout check |
+| `aegis_sonar_wide_aura_voice_psycho.sh` | Medium/high | 5.1 DSP, audio encoding and mux in one process; quick codec/layout check |
 
-Actual time depends on duration, source codec, CPU, storage and FFmpeg build.
+Actual cost depends on duration, source codec, CPU, storage and FFmpeg build.
 
-## Troubleshooting
+# Troubleshooting
 
-**Analyzer failures and stale batches.** Unsuitable tracks are skipped; probe/analysis errors are failures. Analyzer returns 1 if any file fails or no valid result is obtained. A mixed list of valid/unsuitable files can succeed, but a list with errors never publishes a partial batch. `run=si` writes a same-directory temporary batch and publishes only after successful write/chmod; failure preserves the previous batch with a warning. Do not execute that old batch as a result of the failed run. `run=no` always leaves it intact. INT/TERM stop the decoder, remove temporary files and return 130/143. Analyzer/Aegis use `-xerror`.
+## Error handling and remaining limitations
 
-**Scripts do not start.** Check Bash, executable permission, syntax and tool versions. On Windows use `which bash`, `which ffmpeg`, `which ffprobe`, `which awk`. Use Bash, not a different shell. These scripts run directly: no application compilation or GitLab CI configuration is required. Analyzer/Aegis CSV parser consistency and additional preflight checks remain maintenance opportunities.
+The analyzer distinguishes files without suitable 5.1 audio (skipped) from probe/analysis failures. It returns `1` if any file fails or no valid result is obtained. A mixed list of valid 5.1 and unsuitable files may complete, but errors prevent publication of a partial batch.
+
+With `run=si`, a temporary batch is written in the same directory and published only after successful writing and `chmod`. On failure, the previous batch remains intact with an explicit warning; do not treat it as the failed analysis result. Chain analysis and processing with `&&`:
+
+```bash
+./audio_analyzer_psycho.sh eac3 no 768k si . && ./run_processing.sh
+```
+
+With `run=no`, existing batches always remain intact. `INT`/`TERM` stop the analyzer's decoder, clean up temporary files and exit `130`/`143`. Analyzer and Aegis use `-xerror`. The current cache schema recalculates old metrics with error checking enabled and Dolby DRC disabled. Regenerate batches to update saved explicit presets and gains too.
+
+Aegis removes FFprobe CRLF terminators before scoring tracks, including when language metadata is missing. It distinguishes unsuitable 5.1 files (skipped) from audio/codec probe errors (failed), continues with other files and returns `1` if any fail.
+
+Potential maintenance work includes replacing analyzer/Aegis CSV parsing with the key/value parsers used by the other scripts and completing preflight checks. Generated batches resolve the processor through an absolute path beside the analyzer. Input paths may still be relative: run the batch from its generation directory. An exported `PROC` overrides processor selection.
+
+This distribution runs scripts directly, without a compilation stage or GitLab CI configuration. Check the target repository and branch before publishing. The project repository is `Damocle77/Psicoacustics`.
+
+## A script will not start
 
 ```bash
 chmod +x *.sh
@@ -676,40 +1242,178 @@ ffmpeg -version
 ffprobe -version
 ```
 
-**Missing SOXR/BS2B.** Run the checks in Requirements. Use an FFmpeg build compiled with the required library; ASMR fails before encoding if BS2B is missing.
-
-**No batch wanted / selected episodes only.**
+On Windows/MSYS2/Git Bash:
 
 ```bash
-./audio_analyzer_volamp_psycho.sh eac3 no 768k no .
-./audio_analyzer_volamp_psycho.sh --files eac3 no 768k si "ep01.mkv" "ep04.mkv" "ep08.mkv"
-grep -n '^PROC=' run_processing.sh
+which bash
+which ffmpeg
+which ffprobe
+which awk
 ```
 
-The batch processor path must resolve from its working directory; override `PROC` when needed.
+## `soxr` is unavailable
 
-**Stereo input / Atmos input.** Use the upmixer for stereo, not the existing-5.1 processor. For Atmos, prepare the dual-track file and retain the complete container for downstream detection; choose its second track for untouched Atmos playback.
+A typical symptom is an `aresample` filter error. Check:
 
-**Automatic processing blocked.** A warning about virtually silent surrounds means manual mix inspection is required. The batch is not updated; do not run a previous batch for this failed analysis.
+```bash
+ffmpeg -hide_banner -h filter=aresample 2>&1 | grep -i soxr
+```
 
-**Volamp sounds high.** Processor default is 3.5 dB, allowed manual range 0–5.0. Analyzer uses 2.0/2.5/3.0 dB for its four automatic presets; VOICEITA is manual. The warning above 2.0 dB indicates potentially stronger limiting. Nominal gain is not necessarily the final LUFS increase because EQ/limiting affect the result.
+An FFmpeg build compiled with libsoxr is required.
 
-**Upmix center dominates.** Reduce `FC_MIX` first, then `FC_VOL`, for example `FC_MIX=0.26 FC_VOL=0.82`.
+## `bs2b` is unavailable
 
-**TO51 surrounds too quiet.** Raise `SUR_VOL` first (for example 0.92), then only if needed consider `SUR_BED_VOL=0.08`. Large bed levels increase dialogue leakage; adaptive correlation attenuation still operates. Near-silent surrounds on duplicated mono are expected. Keep TO51 for mono/narrow fiction; one-channel sources are skipped.
+The ASMR script exits before encoding. Check:
 
-**Dialogue in the rear.** Prefer TO51 over QUAD and try `SUR_BED_VOL=0.03`. **QUAD too strong behind:** try `QUAD_VOL=0.50`. Use these environment assignments before the upmix command, and compare at matched volume.
+```bash
+ffmpeg -hide_banner -filters 2>/dev/null | grep -w bs2b
+```
 
-**Output already exists.** Interactive prompts use **`[s/n/t]`**, unchanged in the English documentation: `s` overwrites one file, `n` skips, `t` overwrites all subsequent files. Noninteractive sessions normally skip existing outputs. The Atmos prompt reads a single terminal key without Enter.
+An FFmpeg build with libbs2b is required.
 
-## Limitations
+## Analyze without creating `run_processing.sh`
 
-The suite does not create real Atmos from non-Atmos material, render objects as an AVR does, replace calibration/distances/levels/bass management, recover absent source information or guarantee the same result across rooms/speakers/listening levels. It uses neither AI nor opaque DSP. Controlled A/B listening is still needed.
+```bash
+./audio_analyzer_psycho.sh eac3 no 768k no .
+```
 
-## License and author
+Any existing batch remains untouched.
 
-MIT License.
+## Analyze only selected episodes
+
+```bash
+./audio_analyzer_psycho.sh --files eac3 no 768k si \
+  "ep01.mkv" "ep04.mkv" "ep08.mkv"
+```
+
+## `run_processing.sh` selects the wrong processor
+
+Check:
+
+```bash
+grep -nE '^(DEFAULT_PROCESSOR|PROC)=' run_processing.sh
+```
+
+The generated batch resolves the processor beside the analyzer, including paths with spaces:
+
+```bash
+# DEFAULT_PROCESSOR is the absolute path to aegis_sonar_wide_aura_voice_psycho.sh.
+PROC="${PROC:-$DEFAULT_PROCESSOR}"
+```
+
+Regenerate older batches with `run=si` and check any exported `PROC` override. `run=no` leaves existing batches unchanged.
+
+## The file is stereo rather than 5.1
+
+```bash
+./stereo251_upmix_psycho.sh eac3 no "film_stereo.mkv" 448k to51
+```
+
+Or, for music/concerts:
+
+```bash
+./stereo251_upmix_psycho.sh eac3 no "film_stereo.mkv" 448k quad
+```
+
+## The file is Atmos/EAC3
+
+```bash
+./atmos_to_51_dynaudnorm_psicho.sh "film_atmos.mkv" 768k
+```
+
+The optional preparer outputs a default 5.1 track with dynaudnorm and the original as the second track. Select the second for unaltered Atmos. Markers are informational only in the processor. To avoid preparer normalization too, use a suitable 5.1 source directly.
+
+## The analyzer blocks automatic processing
+
+Typical message:
+
+```text
+Surround virtualmente muti: processing automatico bloccato.
+```
+
+This means the surrounds are virtually silent and automatic processing is blocked. Inspect the mix manually. The batch is not updated; do not execute an older batch as the result of this analysis.
+
+## Listening level is low
+
+The processor does not automatically recover loudness and applies **FINAL_TRIM −1.0 dB after the master**. Adjust listening volume on the AVR. Check `FINAL_TRIM_DB` if the level is unexpected; do not add the old CLI's gain argument. Regenerate `run_processing.sh` with the new analyzer. Voice EQ and psychoacoustics remain active.
+
+## The upmix center dominates
+
+Reduce `FC_MIX` first, then `FC_VOL` if necessary:
+
+```bash
+FC_MIX=0.26 FC_VOL=0.82 \
+  ./stereo251_upmix_psycho.sh eac3 no "film.mkv" 448k to51
+```
+
+## TO51 surrounds are too quiet
+
+Raise the `L-R` side component before raising the mono bed:
+
+```bash
+SUR_VOL=0.92 \
+  ./stereo251_upmix_psycho.sh eac3 no "film.mkv" 448k to51
+```
+
+Only if ambience remains insufficient:
+
+```bash
+SUR_VOL=0.92 SUR_BED_VOL=0.08 \
+  ./stereo251_upmix_psycho.sh eac3 no "film.mkv" 448k to51
+```
+
+Much higher `SUR_BED_VOL` values increase rear dialogue leakage. In V10, adaptive control continues to attenuate correlated bed content even when this variable is raised.
+
+## Surrounds are almost silent with mono content
+
+With identical content in two channels, this is expected: `L-R` cancels, and `SUR_ADAPTIVE=1` reduces the small bed by approximately 9.1 dB relative to fixed mode. True single-channel tracks are skipped. Keep `to51` for mono or very narrow films/series.
+
+## Dialogue is audible behind the listener
+
+First check that the preset is `to51`, rather than `quad`. To further reduce the bed:
+
+```bash
+SUR_BED_VOL=0.03 \
+  ./stereo251_upmix_psycho.sh eac3 no "film.mkv" 448k to51
+```
+
+## QUAD is too loud at the rear
+
+```bash
+QUAD_VOL=0.50 \
+  ./stereo251_upmix_psycho.sh eac3 no "concerto.mkv" 448k quad
+```
+
+## Output already exists
+
+The main scripts use:
+
+```text
+[s/n/t]
+```
+
+- `s`: overwrite this file;
+- `n`: skip;
+- `t`: overwrite subsequent files too.
+
+In noninteractive sessions, existing outputs are normally skipped.
+
+# What the suite does not do
+
+- Create real Atmos from non-Atmos sources.
+- Render Atmos objects as an AVR would.
+- Replace AVR calibration, distances, levels or bass management.
+- Reconstruct information absent from the source.
+- Guarantee identical results across speakers, rooms and listening levels.
+- Use AI or opaque DSP.
+- Remove the need for A/B comparisons.
+
+# License
+
+MIT License
+
+# Author
 
 **Sandro (D@mocle77) Sabbioni**
 
-> Restoring order to the Sonic Force takes just one Bash script. This is the way!
+> Restoring order to the Sonic Force takes only a Bash script. This is the way!

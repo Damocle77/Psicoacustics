@@ -376,7 +376,7 @@ for CUR_FILE in "${FILES[@]}"; do
   info "Traccia audio: idx=$A_IDX, canali=$A_CH, lingua=$A_LANG, tipo=$A_TYPE"
   info "Decoder EAC3: DRC Dolby disattivata prima di dynaudnorm"
   if [[ "$A_TYPE" == "atmos" ]]; then
-    echo -e "${C_ATMOS_FOUND} Atmos verificato nella traccia audio originale. Compensazione FC/LFE demandata al processore finale.\033[0m"
+    echo -e "${C_ATMOS_FOUND} Atmos verificato nella traccia audio originale. Rilevamento solo informativo; nessuna compensazione FC/LFE nel processore finale.\033[0m"
   fi
 
   # Come nel motore principale, il pan usa indici di canale espliciti. In questo
