@@ -6,9 +6,6 @@
 
 # 🎧 Psychoacoustic Suite - (Stable) Novembre 2026
 
-Refactoring 5.1: [versione principale](#versione-principale) e
-[note di aggiornamento e verifica Atmos](#note-di-aggiornamento-e-verifica--6-novembre-2026).
-
 Suite di script **Bash AWK + FFmpeg** per analizzare, correggere e trasformare tracce audio stereo, 5.1 ed EAC3 Atmos/JOC in modo offline, ripetibile e controllato.
 
 >Non tutti gli eroi indossano un mantello. Alcuni impugnano `ffmpeg` e riscrivono le leggi del suono. **Perché nel multiverso del caos sonoro, ogni voce merita di essere ascoltata**.
@@ -109,7 +106,7 @@ chmod +x *.sh
 ```
 
 Se si scarica lo ZIP, estrarlo completamente prima di eseguire gli script.
-La versione di lavoro è costituita dai cinque script principali `.sh` e dal README nella cartella principale, senza copie sperimentali di test. Il processore 5.1 e il preparatore Atmos usano la taratura aggiornata descritta sotto, con DRC Dolby disattivata in decodifica. Gli archivi `.rar` rimasti sono copie precedenti: non vengono aggiornati insieme ai file attivi e non vanno estratti sopra questi ultimi senza un confronto.
+La versione stabile comprende i cinque script principali `.sh` e i README nella cartella principale. Il processore 5.1 e il preparatore Atmos usano la configurazione descritta sotto, con DRC Dolby disattivata in decodifica. Gli archivi `.rar` rimasti sono copie precedenti: non vengono aggiornati insieme ai file attivi e non vanno estratti sopra questi ultimi senza un confronto.
 
 I comandi di questa guida vanno eseguiti in Bash (su Windows: Git Bash, MSYS2
 o WSL). Per esempio, in Git Bash `cd /e/Download` apre `E:\Download`.
@@ -130,11 +127,11 @@ done
 
 | Script | Scopo |
 |---|---|
-| `audio_analyzer_psycho.sh` | Classifier 5.1 basato su metriche audio, loudness e misure LFE/bassi solo diagnostiche, batch opzionale |
-| `aegis_sonar_wide_aura_voice_psycho.sh` | Processore 5.1 con preset `aegis`, `sonar`, `wide`, `aura`, `voiceita`, EQ voce e psicoacustica preservate; nessun gain comune automatico né compensazione Atmos |
-| `stereo251_upmix_psycho.sh` | Upmix V10 stereo → 5.1: matrice L-R, centro assist, rear bed adattivo in `to51`, LFE minimo, output atomico/verificato e preset `quad` dedicato alla musica |
-| `asmr_vr_intimate_psycho.sh` | Processing stereo per cuffie/ASMR/VR con BS2B, ITD opzionale, loudnorm post-DSP, LFO e output atomico/verificato |
-| `atmos_to_51_dynaudnorm_psicho.sh` | Preparatore opzionale: EAC3 5.1 `preserve` predefinita, limiter opzionale e originale copiata; `normalized` conserva il DSP legacy |
+| <img src="docs/script-labels/audio_analyzer_psycho.sh.svg" alt="audio_analyzer_psycho.sh" height="20"> | Classifier 5.1 basato su metriche audio, loudness e misure LFE/bassi solo diagnostiche, batch opzionale |
+| <img src="docs/script-labels/aegis_sonar_wide_aura_voice_psycho.sh.svg" alt="aegis_sonar_wide_aura_voice_psycho.sh" height="20"> | Processore 5.1 con preset `aegis`, `sonar`, `wide`, `aura`, `voiceita`, EQ voce e psicoacustica preservate; nessun gain comune automatico né compensazione Atmos |
+| <img src="docs/script-labels/stereo251_upmix_psycho.sh.svg" alt="stereo251_upmix_psycho.sh" height="20"> | Upmix V10 stereo → 5.1: matrice L-R, centro assist, rear bed adattivo in `to51`, LFE minimo, output atomico/verificato e preset `quad` dedicato alla musica |
+| <img src="docs/script-labels/asmr_vr_intimate_psycho.sh.svg" alt="asmr_vr_intimate_psycho.sh" height="20"> | Processing stereo per cuffie/ASMR/VR con BS2B, ITD opzionale, loudnorm post-DSP, LFO e output atomico/verificato |
+| <img src="docs/script-labels/atmos_to_51_dynaudnorm_psicho.sh.svg" alt="atmos_to_51_dynaudnorm_psicho.sh" height="20"> | Preparatore opzionale: EAC3 5.1 `preserve` predefinita, limiter opzionale e originale copiata; `normalized` conserva il DSP legacy |
 
 > Nota naming: il file Atmos mantiene il nome storico `psicho`. Il README usa il nome reale del file.
 
@@ -177,7 +174,9 @@ Il contributo verticale aumentato è predefinito per SONAR e AEGIS. Il rilevamen
 
 ---
 
-# 1. `audio_analyzer_psycho.sh`
+<a name="1-audio_analyzer_psychosh"></a>
+
+# 1. <img src="docs/script-labels/audio_analyzer_psycho.sh.svg" alt="audio_analyzer_psycho.sh" height="26">
 
 Analyzer per tracce **5.1**. Non modifica i file audio.
 
@@ -363,7 +362,9 @@ Il batch usa sempre il preset per-file, derivato dalla classificazione spaziale 
 
 ---
 
-# 2. `aegis_sonar_wide_aura_voice_psycho.sh`
+<a name="2-aegis_sonar_wide_aura_voice_psychosh"></a>
+
+# 2. <img src="docs/script-labels/aegis_sonar_wide_aura_voice_psycho.sh.svg" alt="aegis_sonar_wide_aura_voice_psycho.sh" height="26">
 
 Motore principale per tracce **5.1 esistenti**.
 
@@ -525,13 +526,13 @@ Compatibilità: resta accettato l’ordine `<codec> <keep> <file|""> [bitrate] [
 | `preset` | `aegis`, `sonar`, `wide`, `aura`, `voiceita` | `sonar` | modalità DSP; `voiceita` solo manuale |
 | `file` | file o stringa vuota | cartella corrente | `""` usa la cartella corrente |
 
-## Versione principale
+## Configurazione del processore 5.1
 
-La versione corrente è **Novembre 2026**, con DRC Dolby disattivata in decodifica, nessun VOLAMP, nessuna normalizzazione del loudness e nessuna compensazione Atmos nel processore 5.1. EQ voce, preset, decorrelazione, filtri e relativi parametri sono preservati. Limiter FC **0.89**, LFE **0.90**, master **0.92**; FINAL_TRIM predefinito **−1,0 dB**. FL/FR mantengono il passa-alto a 20 Hz; lo shelf condiviso a 12 kHz resta disattivato.
+Il processore 5.1 usa DRC Dolby disattivata in decodifica, nessun VOLAMP, nessuna normalizzazione del loudness e nessuna compensazione Atmos. EQ voce, preset, decorrelazione, filtri e relativi parametri sono preservati. Limiter FC **0.89**, LFE **0.90**, master **0.92**; FINAL_TRIM predefinito **−1,0 dB**. FL/FR mantengono il passa-alto a 20 Hz; lo shelf condiviso a 12 kHz resta disattivato.
 
 I tempi dei limiter del processore sono: **FC 1,5 / 80 ms**, **LFE 2 / 120 ms** e **master 2,5 / 80 ms** (attack / release). Processore e preparatore Atmos verificano il formato della traccia primaria, senza scansioni True Peak post-codec o retry. Gli output mantengono i nomi consueti, per esempio `film_EAC3_Sonar.mkv` e `film-0.mkv`; il batch dell'analyzer richiama il processore principale.
 
-I controlli True Peak e gli eventuali retry già presenti nell'upmix e nell'ASMR restano quelli descritti nelle rispettive sezioni. Non sono copie sperimentali del processore 5.1 o del preparatore Atmos.
+I controlli True Peak e gli eventuali retry dell'upmix e dell'ASMR sono descritti nelle rispettive sezioni.
 
 ## Catena finale
 
@@ -639,7 +640,9 @@ Per valutare la decorrelazione restano necessari confronti su estratti reali con
 
 ---
 
-# 3. `stereo251_upmix_psycho.sh`
+<a name="3-stereo251_upmix_psychosh"></a>
+
+# 3. <img src="docs/script-labels/stereo251_upmix_psycho.sh.svg" alt="stereo251_upmix_psycho.sh" height="26">
 
 Upmix offline da **stereo 2.0 a 5.1**, progettato per ottenere una scena multicanale plausibile senza simulare informazioni discrete che non esistono nella sorgente.
 
@@ -852,7 +855,9 @@ Questa distribuzione non include una suite di regressione automatizzata. Per il 
 
 ---
 
-# 4. `asmr_vr_intimate_psycho.sh`
+<a name="4-asmr_vr_intimate_psychosh"></a>
+
+# 4. <img src="docs/script-labels/asmr_vr_intimate_psycho.sh.svg" alt="asmr_vr_intimate_psycho.sh" height="26">
 
 Processing stereo per cuffie, ASMR, VR e sorgenti ravvicinate.
 
@@ -966,7 +971,9 @@ Il True Peak non confronta durata, RMS o presenza dei canali con la sorgente.
 
 ---
 
-# 5. `atmos_to_51_dynaudnorm_psicho.sh`
+<a name="5-atmos_to_51_dynaudnorm_psichosh"></a>
+
+# 5. <img src="docs/script-labels/atmos_to_51_dynaudnorm_psicho.sh.svg" alt="atmos_to_51_dynaudnorm_psicho.sh" height="26">
 
 Pre-stadio per materiale **EAC3 Atmos/JOC**.
 
@@ -1173,26 +1180,6 @@ ATMOS_PEAK_PROTECTION=off ./atmos_to_51_dynaudnorm_psicho.sh 640k "film.mkv"
 ATMOS_MODE=normalized ./atmos_to_51_dynaudnorm_psicho.sh 640k "film.mkv"
 ```
 
-## Note di aggiornamento e verifica — 6 novembre 2026
-
-Il default passa da `dynaudnorm + limiter 0.89` a `preserve + limiter opzionale 0.92`. La CLI posizionale, `--files`, naming, bitrate, 48 kHz, DRC disattivata e mapping dei sei canali restano compatibili. Gli allegati vengono mappati dopo le due tracce audio: è stato riprodotto e corretto un errore preesistente di mux con allegati prima dell'audio filtrato. La selezione degli stream non cambia. Nel processore principale cambia soltanto il messaggio in `[ATMOS] Atmos non verificato`; analyzer e DSP Clearvoice non sono modificati.
-
-Eseguiti **87 controlli** con Git Bash 5.3.15 e FFmpeg/ffprobe **8.1.2**, usando un campione EAC3 5.1 sintetico di 24 secondi con video, sottotitoli, font allegato, capitoli e metadati. Superati `bash -n` sui due script modificati, `preserve` on/off, `normalized` on/off, passa-alto senza limiter, sintassi legacy e `--files`, valori non validi, esclusione di stereo/codec non supportati ed errore FFmpeg simulato (exit 1, nessuna pubblicazione). La rilevazione dei profili Atmos e dei metadati non conclusivi è stata verificata con probe simulati.
-
-Verificati EAC3 5.1(side), 48 kHz, 24,000 s, bitrate 640k e 768k nei relativi casi, titoli, lingua e flag default. Hash identici per originale audio, video, sottotitoli e contenuto dell'allegato; capitoli conservati. In `normalized`, filtergraph e bitstream audio coincidono con la catena precedente, anche con protezione impostata su `off` (confronto legacy senza allegati per evitare il precedente errore di mux).
-
-Misure EBU R128 con DRC disattivata; il segnale sintetico è volutamente molto forte e non rappresenta il loudness di un film:
-
-| Campione/configurazione | Integrato (LUFS) | LRA (LU) | True Peak (dBTP) |
-|---|---:|---:|---:|
-| Sorgente | +3,8 | 19,8 | −0,2 |
-| `preserve`, protezione on | +3,3 | 19,4 | −0,6 |
-| `preserve`, protezione off | +3,8 | 19,8 | −0,1 |
-| `normalized`, on oppure off | +2,3 | 17,7 | −0,9 |
-| `preserve`, protezione off, passa-alto 20 Hz | +3,8 | 19,8 | **+0,6** |
-
-**Segnalazione:** la prova con passa-alto esplicito e protezione disattivata supera 0 dBTP dopo la codifica; non sono stati aggiunti filtri correttivi. Nessuna regressione osservata nei casi eseguiti. Restano da verificare sorgenti Atmos/JOC reali, contenuti lunghi, metadati Dolby DRC effettivi, confronto energetico dei singoli canali e ascolti A/B. Queste prove sintetiche non certificano il rendering Atmos né la qualità percettiva su film.
-
 ---
 
 # Workflow consigliati
@@ -1245,11 +1232,11 @@ Stereo
 
 | Script | Costo relativo | Motivo principale |
 |---|---:|---|
-| `audio_analyzer_psycho.sh` | Medio/Alto | una sola decodifica con rami EBU R128, RMS full-band/voice-band, width e finestre LFE/bassi; cache per le analisi successive |
-| `stereo251_upmix_psycho.sh` | Medio/Alto | upmix, SOXR, True Peak integrale e possibile retry audio; mux unico |
-| `asmr_vr_intimate_psycho.sh` | Medio/Alto | loudnorm, BS2B, True Peak integrale e possibile retry audio; mux unico |
-| `atmos_to_51_dynaudnorm_psicho.sh` | Medio | conversione, limiter opzionale (`preserve`) o dynaudnorm (`normalized`), mux unico e controllo rapido codec/layout |
-| `aegis_sonar_wide_aura_voice_psycho.sh` | Medio/Alto | DSP 5.1, codifica audio e mux in un unico processo; controllo rapido codec/layout |
+| <img src="docs/script-labels/audio_analyzer_psycho.sh.svg" alt="audio_analyzer_psycho.sh" height="20"> | Medio/Alto | una sola decodifica con rami EBU R128, RMS full-band/voice-band, width e finestre LFE/bassi; cache per le analisi successive |
+| <img src="docs/script-labels/stereo251_upmix_psycho.sh.svg" alt="stereo251_upmix_psycho.sh" height="20"> | Medio/Alto | upmix, SOXR, True Peak integrale e possibile retry audio; mux unico |
+| <img src="docs/script-labels/asmr_vr_intimate_psycho.sh.svg" alt="asmr_vr_intimate_psycho.sh" height="20"> | Medio/Alto | loudnorm, BS2B, True Peak integrale e possibile retry audio; mux unico |
+| <img src="docs/script-labels/atmos_to_51_dynaudnorm_psicho.sh.svg" alt="atmos_to_51_dynaudnorm_psicho.sh" height="20"> | Medio | conversione, limiter opzionale (`preserve`) o dynaudnorm (`normalized`), mux unico e controllo rapido codec/layout |
+| <img src="docs/script-labels/aegis_sonar_wide_aura_voice_psycho.sh.svg" alt="aegis_sonar_wide_aura_voice_psycho.sh" height="20"> | Medio/Alto | DSP 5.1, codifica audio e mux in un unico processo; controllo rapido codec/layout |
 
 Il costo effettivo dipende da durata, codec sorgente, CPU, storage e build FFmpeg.
 
