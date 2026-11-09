@@ -2,7 +2,7 @@
 set -uo pipefail
 
 # ╭──────────────────────────────────────────────────────────────────────────────────╮
-# │   aegis_sonar_wide_aura_voice_psycho.sh - Novembre 2026                   │
+# │   aegis_sonar_wide_aura_voice_psycho.sh - (Stable) Novembre 2026                 │
 # │   By Sandro (D@mocle77) Sabbioni                                                 │
 # │                                                                                  │
 # │   Motore di processing audio offline per tracce 5.1 (EAC3/AC3/PCM).              │
@@ -15,7 +15,7 @@ set -uo pipefail
 # │   - DRC Dolby AC3/EAC3 disattivata in decodifica prima del DSP                   │
 # │   - EQ FC senza compressore; limiter FC/master                                   │
 # │   - Surround psicoacustici controllati                                           │
-# │   - LFE: balance statico e limiter dedicato                 │
+# │   - LFE: limiter dedicato                                                        │
 # │   - Pipeline leggibile: input -> split -> voce -> surround -> output             │
 # |   - gestione robusta dei sei canali anche con channel_layout=unknown             |
 # |   - PCM: c0..c5 = FL/FR/FC/LFE/SL/SR assunto; verificare sul render reale        |
@@ -71,7 +71,7 @@ done
 
 usage() {
   cat <<'USAGE'
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────────────────────────────
 UTILIZZO:                                                                                                              
   ./aegis_sonar_wide_aura_voice_psycho.sh <codec> <keep> <bitrate> <preset> <file|"">                  
   ./aegis_sonar_wide_aura_voice_psycho.sh --files <codec> <keep> <bitrate> <preset> <file1> [file2...]
@@ -82,8 +82,6 @@ PARAMETRI:
   file      : File input singolo. Se omesso o "" processa tutti file compatibili nella cartella.
   bitrate   : Es. 640k o 768k (default: 640k per AC3, 768k per EAC3).
   preset    : aegis | sonar | wide | aura | voiceita (default: sonar).
-  --lfe-gain <dB> : correzione statica LFE da -2 a +2 (default 0).
-  --bass-trim <dB>: low-shelf 100 Hz sui sei canali, da -3 a 0 (default 0).
   --        : termina le opzioni prima dei nomi file.
 
 MODALITA' --files:  Processa soltanto i file elencati. 
@@ -99,10 +97,8 @@ PRESET DISPONIBILI:
   aura      -> Simula Dolby (6.1)       | Allargamento Posteriore
   voiceita  -> Dialoghi Italiani (5.1)  | EQ Canale Centrale, Surround senza espansione
 
-NOTA: VOICEITA è un preset manuale per prodotti originali italiani: audio_analyzer non lo seleziona automaticamente.
-FINAL_TRIM_DB: trim dopo il master limiter, da -3 a 0 dB (default -1.0).
-              FINAL_TRIM_DB=0 disattiva il trim; non e' un controllo True Peak.
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+NOTA: VOICEITA è un preset manuale per prodotti originali italiani: audio_analyzer non lo seleziona .
+────────────────────────────────────────────────────────────────────────────────────────────────────────
 USAGE
   exit "${1:-1}"
 }
@@ -121,52 +117,17 @@ is_bitrate_token() {
 
 # Controllo argomenti e modalita' multi-file.
 [[ $# -eq 0 || "${1:-}" == "-h" || "${1:-}" == "--help" ]] && usage 0
-# Opzione nominata rimossa prima del parser storico. -- protegge i nomi file
-# uguali a opzioni; usare ./--lfe-gain per un file con quel nome senza --.
-BASS_TRIM_DB="0.0"
-BASS_TRIM_SEEN=false
-LFE_GAIN_DB="0.0"
-LFE_GAIN_SEEN=false
-LFE_POSITIONAL=()
+# -- separa i parametri dai nomi file prima del parser storico.
+POSITIONAL=()
 while (( $# > 0 )); do
   case "$1" in
-    --) shift; LFE_POSITIONAL+=("$@"); break ;;
-    --bass-trim)
-      [[ "$BASS_TRIM_SEEN" == false && $# -ge 2 ]] || {
-        err "--bass-trim richiede un valore e non puo' essere ripetuto"; exit 1;
-      }
-      BASS_TRIM_DB="$2"
-      BASS_TRIM_SEEN=true
-      shift 2 ;;
-    --lfe-gain)
-      [[ "$LFE_GAIN_SEEN" == false && $# -ge 2 ]] || {
-        err "--lfe-gain richiede un valore e non puo' essere ripetuto"; exit 1;
-      }
-      LFE_GAIN_DB="$2"
-      LFE_GAIN_SEEN=true
-      shift 2 ;;
-    *) LFE_POSITIONAL+=("$1"); shift ;;
+    --) shift; POSITIONAL+=("$@"); break ;;
+    --files) POSITIONAL+=("$1"); shift ;;
+    --*) err "Opzione non riconosciuta: $1"; exit 1 ;;
+    *) POSITIONAL+=("$1"); shift ;;
   esac
 done
-set -- "${LFE_POSITIONAL[@]}"
-if ! [[ "$LFE_GAIN_DB" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]] ||
-   ! awk -v g="$LFE_GAIN_DB" 'BEGIN { exit !(g >= -2 && g <= 2) }'; then
-  err "--lfe-gain non valido: usa un numero tra -2.0 e +2.0 dB"; exit 1
-fi
-LFE_GAIN_FILTER=""
-# Zero deve lasciare il filtergraph esattamente invariato.
-if awk -v g="$LFE_GAIN_DB" 'BEGIN { exit !(g != 0) }'; then
-  LFE_GAIN_FILTER="volume=${LFE_GAIN_DB}dB,"
-fi
-
-if ! [[ "$BASS_TRIM_DB" =~ ^[+-]?[0-9]+([.][0-9]+)?$ ]] ||
-   ! awk -v g="$BASS_TRIM_DB" 'BEGIN { exit !(g >= -3 && g <= 0) }'; then
-  err "--bass-trim non valido: usa un numero tra -3.0 e 0.0 dB"; exit 1
-fi
-BASS_TRIM_FILTER=""
-if awk -v g="$BASS_TRIM_DB" 'BEGIN { exit !(g < 0) }'; then
-  BASS_TRIM_FILTER="bass=g=${BASS_TRIM_DB}:f=100:t=q:w=0.707,"
-fi
+set -- "${POSITIONAL[@]}"
 
 # Margine statico prima dell'encoder, senza scansioni o retry aggiuntivi.
 # Non riduce il lavoro gia' svolto dai limiter e non garantisce un ceiling TP.
@@ -278,8 +239,6 @@ info "Codec output:   $OUT_CODEC"
 info "Surround mode:  $SUR_MODE ($DESC)"
 info "Bitrate Target: $BITRATE"
 info "Output trim:    ${FINAL_TRIM_DB} dB (dopo master limiter, prima del codec)"
-info "LFE balance:    ${LFE_GAIN_DB} dB (statico, prima del limiter)"
-info "Bass trim:      ${BASS_TRIM_DB} dB (low-shelf 100 Hz, tutti i canali)"
 
 # Identifica la traccia 5.1 migliore privilegiando lingua italiana e flag default.
 # Esiti: 0 = traccia trovata, 1 = nessuna 5.1 idonea, 2 = probe fallito.
@@ -378,7 +337,7 @@ report_atmos_source() {
   if [[ "$source_class" == "ATMOS" ]]; then
     echo -e "${C_ATMOS_FOUND} Atmos verificato (${source_evidence}); solo informazione.\033[0m"
   else
-    echo -e "${C_ATMOS_UNKNOWN} Atmos non verificato; solo informazione.\033[0m"
+    echo -e "${C_ATMOS_UNKNOWN} Atmos non verificato nella traccia audio originale.\033[0m"
   fi
 }
 
@@ -414,22 +373,22 @@ read -r -d '' VOICE_EQ_BASE <<'EOF' || true
 [FC]highpass=f=20:t=q:w=0.707,equalizer=f=150:t=q:w=1.1:g=0.2,equalizer=f=450:t=q:w=1.2:g=-0.6,equalizer=f=1100:t=q:w=1.4:g=0.8,equalizer=f=7200:t=q:w=2.5:g=-0.9[FC_pre];
 EOF
 read -r -d '' VOICE_DELTA_SONAR <<'EOF' || true
-[FC_pre]volume=2.7dB,equalizer=f=1650:t=q:w=1.6:g=0.9,equalizer=f=2450:t=q:w=1.3:g=1.6,equalizer=f=3800:t=q:w=2.0:g=1.0,equalizer=f=6800:t=q:w=2.0:g=-1.0,volume=0.96[FCv];
+[FC_pre]volume=3.0dB,equalizer=f=1650:t=q:w=1.6:g=0.9,equalizer=f=2450:t=q:w=1.3:g=1.6,equalizer=f=3800:t=q:w=2.0:g=1.0,equalizer=f=6800:t=q:w=2.0:g=-1.0,volume=0.96[FCv];
 EOF
 read -r -d '' VOICE_DELTA_AEGIS <<'EOF' || true
-[FC_pre]volume=2.7dB,equalizer=f=1650:t=q:w=1.6:g=0.9,equalizer=f=2450:t=q:w=1.3:g=1.5,equalizer=f=3800:t=q:w=2.0:g=1.0,equalizer=f=6800:t=q:w=2.0:g=-1.0,volume=0.96[FCv];
+[FC_pre]volume=3.0dB,equalizer=f=1650:t=q:w=1.6:g=0.9,equalizer=f=2450:t=q:w=1.3:g=1.5,equalizer=f=3800:t=q:w=2.0:g=1.0,equalizer=f=6800:t=q:w=2.0:g=-1.0,volume=0.96[FCv];
 EOF
 read -r -d '' VOICE_DELTA_WIDE <<'EOF' || true
-[FC_pre]volume=2.8dB,equalizer=f=1650:t=q:w=1.6:g=0.9,equalizer=f=2450:t=q:w=1.3:g=1.6,equalizer=f=3800:t=q:w=2.0:g=1.0,equalizer=f=6800:t=q:w=2.0:g=-0.9,volume=0.96[FCv];
+[FC_pre]volume=3.0dB,equalizer=f=1650:t=q:w=1.6:g=0.9,equalizer=f=2450:t=q:w=1.3:g=1.6,equalizer=f=3800:t=q:w=2.0:g=1.0,equalizer=f=6800:t=q:w=2.0:g=-0.9,volume=0.96[FCv];
 EOF
 read -r -d '' VOICE_DELTA_AURA <<'EOF' || true
-[FC_pre]volume=2.5dB,equalizer=f=1650:t=q:w=1.6:g=0.8,equalizer=f=2450:t=q:w=1.3:g=1.4,equalizer=f=3800:t=q:w=2.0:g=0.9,equalizer=f=6800:t=q:w=2.0:g=-1.0,volume=0.96[FCv];
+[FC_pre]volume=3.0dB,equalizer=f=1650:t=q:w=1.6:g=0.8,equalizer=f=2450:t=q:w=1.3:g=1.4,equalizer=f=3800:t=q:w=2.0:g=0.9,equalizer=f=6800:t=q:w=2.0:g=-1.0,volume=0.96[FCv];
 EOF
 # VOICEITA: priorità ai dialoghi italiani con riduzione delle medio-basse e presenza moderata.
 # Catena FC autonoma; non sommare VOICE_EQ_BASE. Taratura fissa da valutare all'ascolto.
-# Sostegno FC +4.2 dB nominali; +0.5 dB rispetto alla taratura da 3.7 dB, a EQ invariata.
+# Sostegno FC +4.0 dB nominali, a EQ invariata.
 read -r -d '' VOICE_DELTA_VOICEITA <<'EOF' || true
-[FC]highpass=f=20:t=q:w=0.707,volume=4.2dB,equalizer=f=150:t=q:w=1.1:g=0.2,equalizer=f=300:t=q:w=1.0:g=-1.0,equalizer=f=450:t=q:w=1.2:g=-0.6,equalizer=f=1650:t=q:w=1.6:g=0.7,equalizer=f=2450:t=q:w=1.3:g=1.4,equalizer=f=3800:t=q:w=2.0:g=0.9,volume=0.95[FCv];
+[FC]highpass=f=20:t=q:w=0.707,volume=4.0dB,equalizer=f=150:t=q:w=1.1:g=0.2,equalizer=f=300:t=q:w=1.0:g=-1.0,equalizer=f=450:t=q:w=1.2:g=-0.6,equalizer=f=1650:t=q:w=1.6:g=0.7,equalizer=f=2450:t=q:w=1.3:g=1.4,equalizer=f=3800:t=q:w=2.0:g=0.9,volume=0.95[FCv];
 EOF
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -584,28 +543,27 @@ EOF
   fi
 }
 
-# Blocco finale: microboost surround invariato, Bass trim opzionale,
-# correzione statica LFE, limiter FC/LFE, join, master e trim finale.
+# Blocco finale: microboost surround, limiter FC/LFE, join, master e trim finale.
 # - nessun passa-alto sul LFE; il preparatore Atmos non ne applica per default;
 #   ATMOS_HIGHPASS_HZ=20 nel preparatore e' una scelta opzionale e cumulativa;
 # - il file resta 5.1 con un solo canale LFE; l'eventuale doppio sub (5.2) e' gestito dall'AVR;
 # - unisce i sei canali in 5.1(side);
-# - FL/FR: solo highpass 20 Hz, bass trim opzionale prima del master;
+# - FL/FR: solo highpass 20 Hz prima del master;
 # - nessuno shelf condiviso a 12 kHz; soglie lineari FC 0.89, LFE 0.90, master 0.92;
 # - mantiene il limiter finale come protezione globale;
 # - applica il trim statico ai sei canali dopo il master, prima della codifica.
-# - EQ dei preset e bass trim restano nei rispettivi rami.
+# - EQ dei preset nei rispettivi rami.
 build_output_join_graph() {
-  # Dopo preset e decorrelazione, prima di bass trim e limiter; una sola volta per surround.
+  # Dopo preset e decorrelazione, prima dei limiter; una sola volta per surround.
   local surround_presence_gain="0.1"
   [[ "$SUR_MODE" = "voiceita" ]] && surround_presence_gain="0.2"
   cat <<EOF
-[FLp]${BASS_TRIM_FILTER}aformat=channel_layouts=mono[FLf];
-[FRp]${BASS_TRIM_FILTER}aformat=channel_layouts=mono[FRf];
-[FCv]${BASS_TRIM_FILTER}alimiter=${FC_LIMITER_OPTS},aformat=channel_layouts=mono[FCf];
-[LFE]aformat=channel_layouts=mono,${BASS_TRIM_FILTER}${LFE_GAIN_FILTER}alimiter=limit=0.90:attack=2.0:release=120:level=0:latency=1[LFEf];
-[SL_final]equalizer=f=3200:t=q:w=1.2:g=${surround_presence_gain},${BASS_TRIM_FILTER}aformat=channel_layouts=mono[SLf];
-[SR_final]equalizer=f=3200:t=q:w=1.2:g=${surround_presence_gain},${BASS_TRIM_FILTER}aformat=channel_layouts=mono[SRf];
+[FLp]aformat=channel_layouts=mono[FLf];
+[FRp]aformat=channel_layouts=mono[FRf];
+[FCv]alimiter=${FC_LIMITER_OPTS},aformat=channel_layouts=mono[FCf];
+[LFE]aformat=channel_layouts=mono,alimiter=limit=0.90:attack=2.0:release=120:level=0:latency=1[LFEf];
+[SL_final]equalizer=f=3200:t=q:w=1.2:g=${surround_presence_gain},aformat=channel_layouts=mono[SLf];
+[SR_final]equalizer=f=3200:t=q:w=1.2:g=${surround_presence_gain},aformat=channel_layouts=mono[SRf];
 [FLf][FRf][FCf][LFEf][SLf][SRf]join=inputs=6:channel_layout=5.1(side):map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR,
 alimiter=${MASTER_LIMITER_OPTS},${FINAL_TRIM_FILTER}aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=5.1(side)[aout]
 EOF
@@ -613,7 +571,7 @@ EOF
 
 # Assembla cinque blocchi: input split, voce, surround del preset, decorrelazione e output join.
 # Il microboost appartiene all'output join: riceve SL_final/SR_final dopo la decorrelazione
-# (bypass in VOICEITA), prima di bass trim, join 5.1 e processing finale condiviso.
+# (bypass in VOICEITA), prima di join 5.1 e processing finale condiviso.
 build_filter_complex() {
   local input_graph psycho_graph output_graph
   input_graph="$(build_input_split_graph)"

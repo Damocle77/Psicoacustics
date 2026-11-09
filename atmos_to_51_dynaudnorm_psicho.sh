@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # ╭──────────────────────────────────────────────────────────────────────────────╮
-# │   atmos_to_51_dynaudnorm_psicho.sh - Novembre 2026                           │
+# │   atmos_to_51_dynaudnorm_psicho.sh - (Stable) Novembre 2026                  │
 # │   By Sandro (D@mocle77) Sabbioni                                             │
 # │                                                                              │
 # │   Prende un file con traccia EAC3 Atmos (JOC) e produce un MKV con:          │
-# │     • Traccia 1: EAC3 5.1 standard con normalizzazione dinamica (default)    │
+# │     • Traccia 1: EAC3 5.1, dinamica preservata (default)                     │
 # │     • Traccia 2: EAC3 Atmos originale (copia bit-perfect)                    │
 # │                                                                              │
 # │   La decodifica FFmpeg di EAC3 JOC espone il bed 5.1 compatibile; FFmpeg     │
-# │   non esegue il rendering degli oggetti Atmos. dynaudnorm applica una        │
-# │   normalizzazione dinamica conservativa al bed, che resta lo stadio          │
-# │   primario da analizzare/elaborare con i preset psicoacustici.               │
-# │   DRC Dolby disattivata in decodifica; dynaudnorm resta attivo.              │
+# │   non esegue il rendering degli oggetti Atmos o delle altezze.               │
+# │   preserve: solo protezione picchi opzionale, senza normalizzazione.         │
+# │   normalized: catena dynaudnorm + limiter legacy, invariata.                 │
+# │   DRC Dolby disattivata in decodifica in entrambe le modalita'.              │
 # │                                                                              │
 # │   UTILIZZO:                                                                  │
 # │   ./atmos_to_51_dynaudnorm_psicho.sh [bitrate] <file|directory|"">           │
@@ -84,11 +84,20 @@ ESEMPI:
   ./atmos_to_51_dynaudnorm_psicho.sh 640k film.mkv       # singolo file
   ./atmos_to_51_dynaudnorm_psicho.sh 768k ""             # batch nella cartella corrente
   ./atmos_to_51_dynaudnorm_psicho.sh --files 768k ep1.mkv ep4.mkv
+  ATMOS_PEAK_PROTECTION=off ./atmos_to_51_dynaudnorm_psicho.sh 640k film.mkv
+  ATMOS_MODE=normalized ./atmos_to_51_dynaudnorm_psicho.sh 640k film.mkv
+
+CONFIGURAZIONE (variabili d'ambiente):
+  ATMOS_MODE            : preserve (default) oppure normalized (legacy).
+  ATMOS_PEAK_PROTECTION : on (default, limiter 0.92) oppure off; solo preserve.
+                         normalized mantiene sempre il limiter legacy 0.89.
+  ATMOS_HIGHPASS_HZ     : 0 (default, disattivato) oppure 20 (tutti i canali).
 
 OUTPUT:
   <nome>-0.mkv con:
-    • Traccia 1: EAC3 5.1 normalizzata (dynaudnorm, default)
-    • Traccia 2: EAC3 Atmos originale (copia bit-perfect)
+    • Traccia 1: EAC3 5.1(side), preserve o normalized, default
+    • Traccia 2: EAC3 Atmos/EAC3 originale (copia bit-perfect)
+  FFmpeg decodifica la rappresentazione 5.1 disponibile, senza rendering oggetti.
 ─────────────────────────────────────────────────────────────────────────────────────────
 USAGE
   exit "$rc"
@@ -140,6 +149,17 @@ if (( BITRATE_KBPS < 256 || BITRATE_KBPS > 768 || ((BITRATE_KBPS - 256) % 64) !=
 fi
 BITRATE="${BITRATE_KBPS}k"
 
+ATMOS_MODE="${ATMOS_MODE:-preserve}"
+ATMOS_PEAK_PROTECTION="${ATMOS_PEAK_PROTECTION:-on}"
+case "$ATMOS_MODE" in
+  preserve|normalized) ;;
+  *) err "ATMOS_MODE non valido: usa preserve oppure normalized."; exit 1 ;;
+esac
+case "$ATMOS_PEAK_PROTECTION" in
+  on|off) ;;
+  *) err "ATMOS_PEAK_PROTECTION non valido: usa on oppure off."; exit 1 ;;
+esac
+
 # Check dipendenze dopo la validazione dei parametri.
 for _bin in ffmpeg ffprobe awk mktemp grep dirname basename mv rmdir; do
   command -v "$_bin" &>/dev/null || { err "$_bin non trovato nel PATH"; exit 1; }
@@ -150,7 +170,7 @@ if ! ffmpeg -hide_banner -encoders 2>/dev/null | grep -E '^[[:space:]]*A[.A-Z]*[
   exit 1
 fi
 
-# Dynaudnorm: parametri conservativi per normalizzazione domestica/notturna
+# Catena legacy: parametri invariati, usata solo con ATMOS_MODE=normalized.
 # framelen=500   : finestra 500ms — buon compromesso reattività/smoothness
 # gausssize=31   : finestra gaussiana 31 frame — smoothing ampio (no pumping)
 # peak=0.92      : picco target lineare del normalizzatore
@@ -163,13 +183,20 @@ DYNAUDNORM="dynaudnorm=framelen=500:gausssize=31:peak=0.92:maxgain=4:targetrms=0
 
 # Limiter con lookahead di 10 ms (attack), senza auto-level e con latenza compensata.
 # Il margine sui campioni non garantisce il True Peak dopo encoding lossy.
+ATMOS_FILTERS=""
+if [[ "$ATMOS_MODE" == "normalized" ]]; then
+  ATMOS_FILTERS="$DYNAUDNORM"
+elif [[ "$ATMOS_PEAK_PROTECTION" == "on" ]]; then
+  # Default alimiter: level_in=1, level_out=1, release=50 ms, asc=0.
+  ATMOS_FILTERS="alimiter=limit=0.92:attack=10:level=0:latency=1"
+fi
 
 # Preserva il basso del bed originale per default. Il filtro opzionale
-# coinvolge tutti i canali, LFE incluso, prima del normalizzatore.
+# coinvolge tutti i canali, LFE incluso, prima della catena selezionata.
 ATMOS_HIGHPASS_HZ="${ATMOS_HIGHPASS_HZ:-0}"
 case "$ATMOS_HIGHPASS_HZ" in
   0) ;;
-  20) DYNAUDNORM="highpass=f=20:t=q:w=0.707,${DYNAUDNORM}" ;;
+  20) ATMOS_FILTERS="highpass=f=20:t=q:w=0.707${ATMOS_FILTERS:+,$ATMOS_FILTERS}" ;;
   *) err "ATMOS_HIGHPASS_HZ non valido: usa 0 (disattivato) oppure 20."; exit 1 ;;
 esac
 # Aegis applica 20 Hz ai canali principali; sul LFE gestisce gain e limiter.
@@ -178,7 +205,7 @@ esac
 # Probe chiave/valore: profilo, layout e lingua dalla stessa interrogazione.
 # Il mapping c0..c5 richiede esattamente sei canali: nessun downmix implicito.
 find_atmos_stream() {
-  local f="$1" raw_data line field idx codec ch def lang profile layout score
+  local f="$1" raw_data line field idx codec ch def lang profile layout score source_type
   local best_atmos="" best_atmos_score=-1 best_fallback="" best_fallback_score=-1
   local -a fields
   raw_data="$(ffprobe -v error -select_streams a \
@@ -215,7 +242,11 @@ find_atmos_stream() {
       fi
     elif (( score > best_fallback_score )); then
       best_fallback_score=$score
-      best_fallback="${idx}|${ch}|${lang}|fallback|${layout}"
+      source_type="fallback"
+      case "${profile,,}" in
+        ""|unknown|n/a) source_type="inconclusive" ;;
+      esac
+      best_fallback="${idx}|${ch}|${lang}|${source_type}|${layout}"
     fi
   done <<<"$raw_data"
   if [[ -n "$best_atmos" ]]; then
@@ -234,13 +265,16 @@ encode_complete_candidate() {
   local output_file="$1" graph="$2"
   local -a cmd=(ffmpeg -hide_banner -nostdin -stats -xerror -loglevel warning -y
     -drc_scale:"$A_IDX" 0 -i "$CUR_FILE" -map_metadata 0 -map_chapters 0
-    -map "0:V:0?" -c:v copy -map "0:s?" -c:s copy -map "0:t?" -c:t copy
+    -map "0:V:0?" -c:v copy -map "0:s?" -c:s copy
     -filter_complex "$graph" -map "[aout]"
     -c:a:0 "$OUT_CODEC" -b:a:0 "$BITRATE"
     -dialnorm -31 -ar:a:0 48000 -ac:a:0 6
     -metadata:s:a:0 "title=$FINAL_AUDIO_TITLE" -disposition:a:0 default
     -map "0:$ORIGINAL_INDEX" -c:a:1 copy
-    -metadata:s:a:1 "title=$ORIGINAL_TITLE" -disposition:a:1 0)
+    -metadata:s:a:1 "title=$ORIGINAL_TITLE" -disposition:a:1 0
+    # Gli allegati vanno dopo gli stream con pacchetti: prima dell'audio
+    # filtrato possono causare "Received a packet for an attachment stream".
+    -map "0:t?" -c:t copy)
   if [[ -n "$A_LANG" && "${A_LANG,,}" != "und" ]]; then
     cmd+=(-metadata:s:a:0 "language=$A_LANG" -metadata:s:a:1 "language=$A_LANG")
   fi
@@ -325,12 +359,12 @@ else
   err "File o cartella non esiste: $INPUT_ARG"; exit 1
 fi
 
-# Filtra file gia' normalizzati (evita doppioni)
+# Filtra file gia' preparati (evita doppioni)
 FILTERED_FILES=()
 for f in "${FILES[@]}"; do
   case "$f" in
     *-0.mkv)
-      info "Skip output gia' normalizzato: $f"
+      info "Skip output gia' preparato: $f"
       continue
       ;;
     *)
@@ -345,11 +379,11 @@ FILES=("${FILTERED_FILES[@]}")
 # Mostra info
 info "Bitrate 5.1: $BITRATE"
 if [[ "$ATMOS_HIGHPASS_HZ" == "0" ]]; then
-  info "Passa-alto Atmos: disattivato (basso originale preservato prima della normalizzazione)"
+  info "Passa-alto Atmos: disattivato (nessun taglio del basso)"
 else
   info "Passa-alto Atmos: 20 Hz su tutti i canali, LFE incluso"
 fi
-info "dynaudnorm:  $DYNAUDNORM"
+info "Filtri Atmos: ${ATMOS_FILTERS:-nessuno (solo formato e mapping)}"
 echo ""
 
 # Ciclo elaborazione
@@ -374,10 +408,31 @@ for CUR_FILE in "${FILES[@]}"; do
   A_LANG="${A_LANG//$'\r'/}"
 
   info "Traccia audio: idx=$A_IDX, canali=$A_CH, lingua=$A_LANG, tipo=$A_TYPE"
-  info "Decoder EAC3: DRC Dolby disattivata prima di dynaudnorm"
-  if [[ "$A_TYPE" == "atmos" ]]; then
-    echo -e "${C_ATMOS_FOUND} Atmos verificato nella traccia audio originale. Rilevamento solo informativo; nessuna compensazione FC/LFE nel processore finale.\033[0m"
+  info "Decoder EAC3: DRC Dolby disattivata in ingresso"
+  case "$A_TYPE" in
+    atmos) echo "[ATMOS] Input: E-AC3 Atmos (profilo FFprobe verificato)" ;;
+    fallback) echo "[ATMOS] Input: E-AC3 5.1 (Atmos non verificato)" ;;
+    inconclusive) echo "[ATMOS] Input: E-AC3 5.1 (metadati profilo non conclusivi; Atmos non verificato)" ;;
+  esac
+  echo "[ATMOS] Output: E-AC3 5.1(side)"
+  echo "[ATMOS] Processing mode: $ATMOS_MODE"
+  if [[ "$ATMOS_MODE" == "normalized" ]]; then
+    echo "[ATMOS] Dynamic normalization: ON (legacy)"
+    echo "[ATMOS] Peak protection: legacy limiter 0.89"
+  else
+    echo "[ATMOS] Dynamic normalization: OFF"
+    if [[ "$ATMOS_PEAK_PROTECTION" == "on" ]]; then
+      echo "[ATMOS] Peak protection: ON (0.92)"
+    else
+      echo "[ATMOS] Peak protection: OFF"
+    fi
   fi
+  if [[ "$A_TYPE" == "atmos" ]]; then
+    echo "[ATMOS] Original Atmos stream: preserved (stream copy)"
+  else
+    echo "[ATMOS] Original E-AC3 stream: preserved (stream copy; Atmos non verificato)"
+  fi
+  info "FFmpeg: decodifica della rappresentazione 5.1 disponibile; nessun rendering oggetti/altezze Atmos."
 
   # Come nel motore principale, il pan usa indici di canale espliciti. In questo
   # modo aformat non puo' rimappare automaticamente i sei canali quando il layout
@@ -406,12 +461,12 @@ for CUR_FILE in "${FILES[@]}"; do
     fi
   fi
 
-  # Filter complex per traccia 5.1: mapping posizionale non distruttivo, poi
-  # dynaudnorm con coupling attivo e passa-alto globale opzionale.
-  FILTER_COMPLEX="[0:${A_IDX}]aformat=sample_rates=48000:sample_fmts=fltp,pan=5.1(side)|FL=c0|FR=c1|FC=c2|LFE=c3|SL=c4|SR=c5,${DYNAUDNORM}[aout]"
+  # Mapping posizionale invariato. Nessuna virgola finale se il DSP e' vuoto.
+  FILTER_COMPLEX="[0:${A_IDX}]aformat=sample_rates=48000:sample_fmts=fltp,pan=5.1(side)|FL=c0|FR=c1|FC=c2|LFE=c3|SL=c4|SR=c5${ATMOS_FILTERS:+,$ATMOS_FILTERS}[aout]"
 
   OUT_CODEC="eac3"
-  FINAL_AUDIO_TITLE="EAC3 5.1 Normalized"
+  FINAL_AUDIO_TITLE="EAC3 5.1 Preserve"
+  [[ "$ATMOS_MODE" == "normalized" ]] && FINAL_AUDIO_TITLE="EAC3 5.1 Normalized"
   ORIGINAL_INDEX="$A_IDX"
   if [[ "$A_TYPE" == "atmos" ]]; then
     ORIGINAL_TITLE="EAC3 Atmos Original"
