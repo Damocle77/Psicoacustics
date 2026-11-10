@@ -1569,7 +1569,7 @@ MIT License
 
 ---
 
-![ClearVoice: onde sonore e circuiti](psicoacustics_workflow.png)
+![ClearVoice: onde sonore e circuiti](banner.png)
 
 # Autore
 
