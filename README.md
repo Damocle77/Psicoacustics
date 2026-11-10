@@ -46,8 +46,8 @@ I frontali a torre vengono comunque utilizzati come diffusori **Small**: il loro
 Lo schema illustra il percorso dalla sorgente alla traccia elaborata: preparazione Atmos opzionale, analisi automatica e processore 5.1 con preset psicoacustici.
 
 <p align="center">
-  <a href="psicoacustics_workflow.png">
-    <img src="psicoacustics_workflow.png" width="1200" alt="Pipeline Clearvoice / Psicoacustics: sorgente audio, preparazione Atmos opzionale, analyzer, processore 5.1 e output">
+  <a href="Psicoacustics%20Workflow.png">
+    <img src="Psicoacustics%20Workflow.png" width="1200" alt="Pipeline Clearvoice / Psicoacustics: sorgente audio, preparazione Atmos opzionale, analyzer, processore 5.1 e output">
   </a>
 </p>
 
@@ -1569,7 +1569,7 @@ MIT License
 
 ---
 
-![ClearVoice: onde sonore e circuiti](banner.png)
+![ClearVoice: onde sonore e circuiti](psicoacustics_workflow.png)
 
 # Autore
 

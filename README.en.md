@@ -1475,7 +1475,7 @@ In noninteractive sessions, existing outputs are normally skipped.
 
 MIT License
 
-![ClearVoice: sound waves and circuits](banner.png)
+![ClearVoice: sound waves and circuits](psicoacustics_workflow.png)
 
 # Author
 
