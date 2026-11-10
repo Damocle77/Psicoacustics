@@ -46,8 +46,8 @@ The floorstanding front speakers are also configured as **Small**. Their main be
 The diagram shows the path from the source to the processed track: optional Atmos preparation, automatic analysis and the 5.1 processor with psychoacoustic presets. The diagram uses Italian labels.
 
 <p align="center">
-  <a href="Psicoacustics%20Workflow.png">
-    <img src="Psicoacustics%20Workflow.png" width="1200" alt="Clearvoice / Psicoacustics pipeline: source audio, optional Atmos preparation, analyzer, 5.1 processor and output">
+  <a href="psicoacustics_workflow.png">
+    <img src="psicoacustics_workflow.png" width="1200" alt="Clearvoice / Psicoacustics pipeline: source audio, optional Atmos preparation, analyzer, 5.1 processor and output">
   </a>
 </p>
 
