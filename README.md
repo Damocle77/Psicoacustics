@@ -1,5 +1,5 @@
 <p align="left">
-  <img src="psico_logo.png" width="700" alt="Sonary Suite Logo">
+  <img src="psico_logo.png" width="1000" alt="Sonary Suite Logo">
 </p>
 
 [**Italiano**](README.md) | [English](README.en.md)
