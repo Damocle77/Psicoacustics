@@ -51,7 +51,7 @@ Lo schema illustra il percorso dalla sorgente alla traccia elaborata: preparazio
   </a>
 </p>
 
-[Apri lo schema a risoluzione completa](Psicoacustics%20Workflow.png).
+[Apri lo schema a risoluzione completa](psicoacustics_workflow.png).
 
 La selezione dei preset è riassunta nello schema. Per i criteri completi, compresa la candidatura SONAR per espansione immersiva quando la relativa preferenza è attiva, consulta il [capitolo dell’analyzer](#1-audio_analyzer_psychosh). La provenienza Atmos rimane esclusivamente informativa.
 

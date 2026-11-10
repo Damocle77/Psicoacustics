@@ -51,7 +51,7 @@ The diagram shows the path from the source to the processed track: optional Atmo
   </a>
 </p>
 
-[Open the full-resolution diagram](Psicoacustics%20Workflow.png).
+[Open the full-resolution diagram](psicoacustics_workflow.png).
 
 Preset selection is summarized in the diagram. For the complete criteria, including SONAR candidacy for immersive expansion when the corresponding preference is enabled, see the [analyzer chapter](#1-audio_analyzer_psychosh). Atmos provenance remains informational only.
 
