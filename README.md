@@ -58,7 +58,7 @@ La selezione dei preset è riassunta nello schema. Per i criteri completi, compr
 ## Schema di riferimento
 
 <p align="left">
-  <img src="sonar_room_layout.png" width="1000" alt="Schema layout stanza 5.1 Sonary Suite">
+  <img src="sonar_room_layout.png" width="700" alt="Schema layout stanza 5.1 Sonary Suite">
 </p>
 
 Obiettivi principali:
