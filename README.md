@@ -4,7 +4,7 @@
 
 [**Italiano**](README.md) | [English](README.en.md)
 
-# 🎧 Psychoacoustic Suite - (Stabile) Novembre 2026
+# 🎧 Psychoacoustic Suite - Novembre 2026 (Stabile)
 
 Suite di script **Bash AWK + FFmpeg** per analizzare, correggere e trasformare tracce audio stereo, 5.1 ed EAC3 Atmos/JOC in modo offline, ripetibile e controllato.
 
