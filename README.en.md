@@ -1475,6 +1475,8 @@ In noninteractive sessions, existing outputs are normally skipped.
 
 MIT License
 
+![ClearVoice: sound waves and circuits](banner.png)
+
 # Author
 
 **Sandro (D@mocle77) Sabbioni**
