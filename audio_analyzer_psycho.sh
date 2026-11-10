@@ -549,6 +549,13 @@ classify_preset() {
     -v domvoicegate="$DOMINANT_VOICE_DELTA_GATE" '
     function finite(v) {return v ~ /^-?[0-9]+([.][0-9]+)?$/}
     function abs(v) {return v<0?-v:v}
+    function veto(label) {
+      if (veto_count<2 && length(veto_text)+length(label)+(veto_shown?2:0)<=44) {
+        veto_text=veto_text (veto_shown?", ":"") label;
+        veto_shown++;
+      }
+      veto_count++;
+    }
     {
       activity=$1; active=$2; p10=$3; p50=$4; p90=$5; aw=$6; corr=$7; persistence=$8;
       valid=$10; seconds=$13; bilateral=$14; corrn=$16;
@@ -581,7 +588,7 @@ classify_preset() {
         else if (moderate) {preset="AURA"; reason="arretramento moderato durante gli eventi: ActiveDeltaSur=" active ", P50=" p50;}
         else if (active>=ag && p50>=ag) {
           preset="AEGIS";
-          reason=(activity<rare?"eventi rari ma energeticamente adeguati":"energia surround adeguata durante gli eventi");
+          reason=(activity<rare?"energia AEGIS, eventi rari":"energia adeguata per AEGIS");
           reason=reason ": Activity=" activity ", ActiveDeltaSur=" active ", P50=" p50;
         } else if (near_aura_boundary) {
           # Pareggio deterministico: la media energetica aggregata decide il lato.
@@ -675,6 +682,23 @@ classify_preset() {
         if (boundary_resolved) reason=reason "; candidatura immersiva esclusa per scelta energetica borderline";
         if (finite(aw) && aw<iwidth) reason=reason "; candidatura immersiva non confermata: ActiveWidth=" aw " dB sotto " iwidth " dB";
         if (finite(p90) && p90>domgate) reason=reason "; candidatura immersiva non confermata: P90=" p90 " dB oltre " domgate " dB";
+        # Diagnosi compatta per la console: al massimo due requisiti espliciti.
+        veto_count=0; veto_shown=0; veto_text="";
+        if (active<imin) veto("energia sotto soglia");
+        else if (active>imax) veto("energia sopra soglia");
+        if (!finite(aw)) veto("width assente");
+        else if (aw<iwidth) veto("width sotto soglia");
+        if (p90>domgate) veto("picchi surround P90");
+        if (p50<ag+margin || central_conflict) veto("mediana");
+        if (activity<iactivity) veto("attivita surround");
+        if (!finite(corr) || abs(corr)>icorr) veto("correlazione");
+        if (!finite(persistence) || persistence>ipersistence) veto("persistenza");
+        if (boundary_resolved || confidence=="BASSA") veto("scelta incerta");
+        if (measurement_confidence=="BASSA" || $11<iratio || valid<highn || seconds<highs ||
+            $9<=0 || bilateral/$9<iratio || corrn/$9<iratio || $15<highs || $17<highs) veto("campione utile");
+        if (!finite(balance) || balance>=balancegate-margin) veto("bilanciamento");
+        if (df<fcgate || (finite(dv) && dv<vgate) || (finite(vm) && vm>vmaskgate)) veto("centrale/voce");
+        if (veto_count) reason=reason "; SONAR: escluso: " veto_text (veto_count>veto_shown?"; altro":"") ".";
       }
       printf "%s|%s|%s|%s|%s|%s|%s",preset,confidence,alt,reason,mode,measurement_confidence,temporal_assessment;
     }' <<<"$temporal") || return 1
@@ -1458,6 +1482,9 @@ scan_delta() {
     reason_summary="Preferenza immersiva attiva; scena misurata AEGIS."
   fi
   printf '  Reason: %s\n' "$reason_summary"
+  if [[ "$preset_reason" == *'; SONAR: '* ]]; then
+    printf '  SONAR: %s\n' "${preset_reason##*; SONAR: }"
+  fi
   if [[ "$selection_mode" == "IMMERSIVE_PREFERENCE" ]]; then
     printf '  Nota: nessuna ricostruzione Atmos; superiorita percettiva non misurata.\n'
   fi
