@@ -2,7 +2,7 @@
 set -uo pipefail
 
 # ╭─────────────────────────────────────────────────────────────────────────────────╮
-# │   audio_analyzer_psycho.sh - (Stable) Novembre 2026                             │
+# │   audio_analyzer_psycho.sh - (Stabile) Novembre 2026                            │
 # │   By Sandro (D@mocle77) Sabbioni                                                │
 # │                                                                                 │
 # │   Sonda euristica per l'analisi offline di container multimediali 5.1.          │
@@ -17,9 +17,9 @@ set -uo pipefail
 # │     - Balance  = differenza assoluta SL/SR                                      │
 # │     - Width    = RMS(SIDE) - RMS(MID)                                           │
 # │                                                                                 │
-# │   DECISIONE: silenzio/falso 5.1 -> sicurezza; voce debole o mascherata          │
-# │   -> diagnostica; surround molto arretrati -> SONAR; surround stretti           │
-# │   -> WIDE; moderatamente arretrati -> AURA; mix equilibrato -> AEGIS.           │
+# │   sicurezza -> evidenza temporale -> SONAR -> WIDE -> AURA -> AEGIS.            │
+# │   Campione insufficiente/contraddittorio -> INCONCLUSIVE, nessun comando.       │
+# │   Voce debole/mascherata e provenienza Atmos restano diagnostiche.              │
 # │   Le misure RMS dei canali vengono raccolte in un solo passaggio FFmpeg.        │
 # │   Decodifica AC3/EAC3 con DRC Dolby disattivata, come nel processore.           │
 # │                                                                                 │
@@ -180,6 +180,7 @@ if (( BITRATE_KBPS < 256 || BITRATE_KBPS > BITRATE_MAX_KBPS || ((BITRATE_KBPS - 
   exit 1
 fi
 BATCH_BITRATE="${BITRATE_KBPS}k"
+printf '\n'
 # Nota: non controllo se i file in --files esistono qui, lo faccio dopo per permettere di passare anche file parzialmente inesistenti senza bloccare tutto.
 if [[ "$MULTI_FILES_MODE" == true ]]; then
   info "Metrica: CLASSIFIER RMS + VOICE BAND | Input: lista manuale (${#MULTI_FILES[@]} file) | Batch: ${BATCH_CODEC} / keep=${BATCH_KEEP} / ${BATCH_BITRATE} / run_processing=${CREATE_RUN}"
@@ -193,7 +194,7 @@ info "Livello di ascolto: regolare sull'AVR; nessun recupero loudness automatico
 # un futuro cambio dell'algoritmo non puo' riutilizzare risultati obsoleti.
 ANALYZER_CACHE="${ANALYZER_CACHE:-1}"
 ANALYZER_CACHE_DIR="${ANALYZER_CACHE_DIR:-.clearvoice_analyzer_cache}"
-ANALYZER_CACHE_SCHEMA="classifier-rms-voiceband-ebur-lfe-bass-v8-diagnostics-only"
+ANALYZER_CACHE_SCHEMA="temporal-surround"
 ANALYZER_PROGRESS_INTERVAL="${ANALYZER_PROGRESS_INTERVAL:-10}"
 
 if ! [[ "$ANALYZER_CACHE" =~ ^[01]$ ]]; then
@@ -247,6 +248,76 @@ AURA_DELTA_GATE="-7.0"
 SUR_BALANCE_WARN_DB="10.0"
 PRESET_BORDERLINE_MARGIN="0.7"
 
+# Classificatore: soglie empiriche/sperimentali, NON una calibrazione percettiva.
+# Configurabili tramite ambiente. Le soglie storiche sopra restano riferimenti
+# globali; quelle attive sono indipendenti, con valori iniziali conservativi.
+TEMPORAL_WINDOW_SAMPLES=24000 # 500 ms, ramo full-band a 48 kHz
+SUR_ACTIVITY_ABS_DB="${SUR_ACTIVITY_ABS_DB:--60}"
+SUR_ACTIVITY_REL_DB="${SUR_ACTIVITY_REL_DB:-35}"
+SUR_ACTIVITY_MIN_SECONDS="${SUR_ACTIVITY_MIN_SECONDS:-1}"
+SUR_MAIN_MIN_DB="${SUR_MAIN_MIN_DB:--80}"
+SUR_CORRELATION_GATE="${SUR_CORRELATION_GATE:-0.8}"
+CLASSIFIER_SONAR_ACTIVE_DB="${CLASSIFIER_SONAR_ACTIVE_DB:--13}"
+CLASSIFIER_AURA_ACTIVE_DB="${CLASSIFIER_AURA_ACTIVE_DB:--7}"
+CLASSIFIER_WIDTH_ACTIVE_DB="${CLASSIFIER_WIDTH_ACTIVE_DB:--7}"
+CLASSIFIER_HIGH_CORR_PERSISTENCE="${CLASSIFIER_HIGH_CORR_PERSISTENCE:-0.75}"
+CLASSIFIER_MIN_VALID_WINDOWS="${CLASSIFIER_MIN_VALID_WINDOWS:-4}"
+CLASSIFIER_MIN_VALID_SECONDS="${CLASSIFIER_MIN_VALID_SECONDS:-2}"
+CLASSIFIER_HIGH_VALID_WINDOWS="${CLASSIFIER_HIGH_VALID_WINDOWS:-20}"
+CLASSIFIER_HIGH_VALID_SECONDS="${CLASSIFIER_HIGH_VALID_SECONDS:-10}"
+CLASSIFIER_VARIABILITY_DB="${CLASSIFIER_VARIABILITY_DB:-10}"
+CLASSIFIER_MEDIAN_AGREEMENT_DB="${CLASSIFIER_MEDIAN_AGREEMENT_DB:-6}"
+CLASSIFIER_GLOBAL_AGREEMENT_DB="${CLASSIFIER_GLOBAL_AGREEMENT_DB:-6}"
+CLASSIFIER_RARE_ACTIVITY_RATIO="${CLASSIFIER_RARE_ACTIVITY_RATIO:-0.2}"
+CLASSIFIER_HIGH_VALID_RATIO="${CLASSIFIER_HIGH_VALID_RATIO:-0.2}"
+CLASSIFIER_CORRELATION_MARGIN="${CLASSIFIER_CORRELATION_MARGIN:-0.05}"
+CLASSIFIER_PERSISTENCE_MARGIN="${CLASSIFIER_PERSISTENCE_MARGIN:-0.1}"
+# Preferenza di classificazione, mai parametro del processore DSP.
+# Default salvato nel file: on. Per preferire AEGIS, cambia :-on in :-off.
+# Un eventuale valore esportato nellambiente continua ad avere precedenza.
+SONAR_IMMERSIVE_PREFERENCE="${SONAR_IMMERSIVE_PREFERENCE:-on}"
+case "$SONAR_IMMERSIVE_PREFERENCE" in
+  off|on) ;;
+  *) err "SONAR_IMMERSIVE_PREFERENCE non valido (usa off oppure on)"; exit 1 ;;
+esac
+# Idoneita immersiva sperimentale: tutte le condizioni devono concordare.
+SONAR_IMMERSIVE_MIN_DELTA_DB="${SONAR_IMMERSIVE_MIN_DELTA_DB:--6}"
+SONAR_IMMERSIVE_MAX_DELTA_DB="${SONAR_IMMERSIVE_MAX_DELTA_DB:-0}"
+SONAR_IMMERSIVE_MIN_ACTIVITY_RATIO="${SONAR_IMMERSIVE_MIN_ACTIVITY_RATIO:-0.5}"
+SONAR_IMMERSIVE_MIN_WIDTH_DB="${SONAR_IMMERSIVE_MIN_WIDTH_DB:--3}"
+SONAR_IMMERSIVE_MAX_ABS_CORRELATION="${SONAR_IMMERSIVE_MAX_ABS_CORRELATION:-0.5}"
+SONAR_IMMERSIVE_MAX_HIGH_CORR_PERSISTENCE="${SONAR_IMMERSIVE_MAX_HIGH_CORR_PERSISTENCE:-0.25}"
+SONAR_IMMERSIVE_MIN_VALID_RATIO="${SONAR_IMMERSIVE_MIN_VALID_RATIO:-0.5}"
+for _setting in SUR_ACTIVITY_ABS_DB SUR_ACTIVITY_REL_DB SUR_ACTIVITY_MIN_SECONDS \
+  SUR_MAIN_MIN_DB SUR_CORRELATION_GATE CLASSIFIER_SONAR_ACTIVE_DB CLASSIFIER_AURA_ACTIVE_DB \
+  CLASSIFIER_WIDTH_ACTIVE_DB CLASSIFIER_HIGH_CORR_PERSISTENCE CLASSIFIER_MIN_VALID_WINDOWS \
+  CLASSIFIER_MIN_VALID_SECONDS CLASSIFIER_HIGH_VALID_WINDOWS CLASSIFIER_HIGH_VALID_SECONDS \
+  CLASSIFIER_VARIABILITY_DB CLASSIFIER_MEDIAN_AGREEMENT_DB CLASSIFIER_GLOBAL_AGREEMENT_DB CLASSIFIER_RARE_ACTIVITY_RATIO \
+  CLASSIFIER_HIGH_VALID_RATIO CLASSIFIER_CORRELATION_MARGIN CLASSIFIER_PERSISTENCE_MARGIN \
+  SONAR_IMMERSIVE_MIN_DELTA_DB SONAR_IMMERSIVE_MAX_DELTA_DB \
+  SONAR_IMMERSIVE_MIN_ACTIVITY_RATIO SONAR_IMMERSIVE_MIN_WIDTH_DB \
+  SONAR_IMMERSIVE_MAX_ABS_CORRELATION SONAR_IMMERSIVE_MAX_HIGH_CORR_PERSISTENCE \
+  SONAR_IMMERSIVE_MIN_VALID_RATIO; do
+  [[ "${!_setting}" =~ ^-?[0-9]+([.][0-9]+)?$ ]] || { err "Soglia non valida: $_setting"; exit 1; }
+done
+awk -v rel="$SUR_ACTIVITY_REL_DB" -v persist="$SUR_ACTIVITY_MIN_SECONDS" \
+  -v corr="$SUR_CORRELATION_GATE" -v hp="$CLASSIFIER_HIGH_CORR_PERSISTENCE" \
+  -v sg="$CLASSIFIER_SONAR_ACTIVE_DB" -v ag="$CLASSIFIER_AURA_ACTIVE_DB" \
+  -v n="$CLASSIFIER_MIN_VALID_WINDOWS" -v sec="$CLASSIFIER_MIN_VALID_SECONDS" \
+  -v hn="$CLASSIFIER_HIGH_VALID_WINDOWS" -v hs="$CLASSIFIER_HIGH_VALID_SECONDS" \
+  -v vr="$CLASSIFIER_VARIABILITY_DB" -v ga="$CLASSIFIER_GLOBAL_AGREEMENT_DB" -v rare="$CLASSIFIER_RARE_ACTIVITY_RATIO" \
+  -v hr="$CLASSIFIER_HIGH_VALID_RATIO" -v cm="$CLASSIFIER_CORRELATION_MARGIN" -v pm="$CLASSIFIER_PERSISTENCE_MARGIN" \
+  -v median_agreement="$CLASSIFIER_MEDIAN_AGREEMENT_DB" \
+  'BEGIN {exit !(rel>0 && persist>=0.5 && corr>0 && corr<=1 && hp>0 && hp<=1 &&
+    sg<ag && n>=1 && n==int(n) && sec>0 && hn>=n && hn==int(hn) && hs>=sec &&
+    vr>0 && ga>0 && rare>=0 && rare<=1 && hr>0 && hr<=1 && cm>=0 && cm<=1 &&
+    pm>=0 && pm<=1 && median_agreement>0)}' || { err "Soglie del classificatore incoerenti"; exit 1; }
+awk -v lo="$SONAR_IMMERSIVE_MIN_DELTA_DB" -v hi="$SONAR_IMMERSIVE_MAX_DELTA_DB" \
+  -v activity="$SONAR_IMMERSIVE_MIN_ACTIVITY_RATIO" -v corr="$SONAR_IMMERSIVE_MAX_ABS_CORRELATION" \
+  -v persistence="$SONAR_IMMERSIVE_MAX_HIGH_CORR_PERSISTENCE" -v valid="$SONAR_IMMERSIVE_MIN_VALID_RATIO" \
+  'BEGIN {exit !(lo<hi && activity>0 && activity<=1 && corr>=0 && corr<1 &&
+    persistence>=0 && persistence<1 && valid>0 && valid<=1)}' || { err "Soglie SONAR immersive incoerenti"; exit 1; }
+
 # Atmos e marker: informazioni di provenienza, senza effetto sulle decisioni.
 ATMOS_ORIGINAL_TITLE="EAC3 Atmos Original"
 ATMOS_ORIGINAL_TITLE_LEGACY="EAC3 Atmos (Original)"
@@ -256,6 +327,7 @@ ATMOS_ORIGINAL_TITLE_LEGACY="EAC3 Atmos (Original)"
 ANALYZER_SILENCE_PEAK_DB="-80.0"
 
 info "Classifier: voice FC/front=${VOICE_DELTA_GATE} dB | voice SUR/FC=${VOICE_MASK_GATE} dB | FC safety=${CENTER_FULL_SAFETY_GATE} dB"
+info "Preferenza immersiva SONAR: ${SONAR_IMMERSIVE_PREFERENCE} (solo classificazione)"
 if [[ "$ANALYZER_CACHE" == "1" ]]; then
   info "Cache metriche: attiva ($ANALYZER_CACHE_DIR) | avanzamento ogni ${ANALYZER_PROGRESS_INTERVAL}s"
 else
@@ -281,6 +353,10 @@ GLOBAL_REASON_VALUES=()
 GLOBAL_SOURCE_CLASS_VALUES=()
 GLOBAL_SOURCE_EVIDENCE_VALUES=()
 GLOBAL_MEASURED_PRESET_VALUES=()
+GLOBAL_TEMPORAL_VALUES=()
+GLOBAL_SELECTION_MODE_VALUES=()
+GLOBAL_MEASUREMENT_CONFIDENCE_VALUES=()
+GLOBAL_TEMPORAL_ASSESSMENT_VALUES=()
 
 # ────────────────────────────────────────────────────────────────────────────────
 # Raccolta file
@@ -397,13 +473,17 @@ detect_atmos_source() {
   local f="$1" audio_count audio_ord stream_meta codec profile title
   local marker_found=false marker_stream=""
 
+  # Cattura nativa senza pipeline: evita pipe FFprobe/MSYS pendenti su Windows.
   audio_count=$(ffprobe -v error -select_streams a -show_entries stream=index \
-    -of csv=p=0 "$f" 2>/dev/null | tr -d '\r' | awk 'NF { n++ } END { print n+0 }')
+    -of csv=p=0 "$f" 2>/dev/null </dev/null) || return 1
+  audio_count="${audio_count//$'\r'/}"
+  audio_count=$(awk 'NF { n++ } END { print n+0 }' <<<"$audio_count")
 
   for (( audio_ord=0; audio_ord<audio_count; audio_ord++ )); do
     stream_meta=$(ffprobe -v error -select_streams "a:${audio_ord}" \
       -show_entries stream=codec_name,profile:stream_tags=title \
-      -of default=nw=1 "$f" 2>/dev/null | tr -d '\r' || true)
+      -of default=nw=1 "$f" 2>/dev/null </dev/null || true)
+    stream_meta="${stream_meta//$'\r'/}"
     codec=$(printf '%s\n' "$stream_meta" | awk -F= '$1=="codec_name" { print $2; exit }')
     profile=$(printf '%s\n' "$stream_meta" | awk -F= '$1=="profile" { sub(/^[^=]*=/,""); print; exit }')
     title=$(printf '%s\n' "$stream_meta" | awk -F= '$1=="TAG:title" { sub(/^[^=]*=/,""); print; exit }')
@@ -447,70 +527,159 @@ preset_color() {
 # Classificatore automatico: quattro preset spaziali; la voce resta diagnostica.
 # VOICEITA richiede una scelta manuale: le metriche non misurano l'intelligibilita'.
 # Resta esclusivamente manuale, mai primario/alternativo/fallback.
-# Output: PRESET|COLORE|CONFIDENCE|ALTERNATIVE|REASON
-classify_preset_v6() {
-  local delta_sur="$1" delta_fc="$2" delta_voice="$3" voice_mask="$4" width="$5"
-  awk -v ds="$delta_sur" -v df="$delta_fc" -v dv="$delta_voice" \
-      -v vm="$voice_mask" -v w="$width" \
-      -v fcgate="$CENTER_FULL_SAFETY_GATE" -v vgate="$VOICE_DELTA_GATE" \
-      -v vmaskgate="$VOICE_MASK_GATE" -v domgate="$SUR_DOMINANT_GATE" \
-      -v domvoicegate="$DOMINANT_VOICE_DELTA_GATE" \
-      -v sonargate="$SONAR_DELTA_GATE" -v auragate="$AURA_DELTA_GATE" \
-      -v wgate="$WIDTH_WIDE_GATE" -v margin="$PRESET_BORDERLINE_MARGIN" '
-  function spatial_preset(delta, width) {
-    if (delta < sonargate) return "SONAR";
-    if (width != "" && width < wgate) return "WIDE";
-    if (delta < auragate) return "AURA";
-    return "AEGIS";
-  }
-  BEGIN {
-    preset="AEGIS"; color="\033[38;5;208m"; confidence="alta"; alt="-"; reason="mix equilibrato";
-    hasvoice=(dv != "" && vm != "");
-    spatial=spatial_preset(ds, w);
-
-    if (ds < sonargate) {
-      preset="SONAR"; color="\033[1;31m";
-      if (w != "" && w < wgate) {
-        confidence="bassa";
-        alt="WIDE";
-        reason="surround molto arretrati e contemporaneamente stretti/collassati";
-      } else {
-        reason="surround molto arretrati";
-        if ((sonargate-ds) <= margin) { confidence="bassa"; alt="AURA"; }
+# Output: PRESET|COLORE|CONFIDENCE|ALTERNATIVE|REASON|SELECTION_MODE|MEASUREMENT_CONFIDENCE|TEMPORAL_ASSESSMENT
+classify_preset() {
+  local ds="$1" df="$2" dv="$3" vm="$4" w="$5" temporal="$6" balance="${7:-0}" decision preset rest
+  decision=$(awk -F'|' -v ds="$ds" -v df="$df" -v dv="$dv" -v vm="$vm" -v w="$w" \
+    -v sg="$CLASSIFIER_SONAR_ACTIVE_DB" -v ag="$CLASSIFIER_AURA_ACTIVE_DB" -v wg="$CLASSIFIER_WIDTH_ACTIVE_DB" \
+    -v globalwg="$WIDTH_WIDE_GATE" -v cg="$SUR_CORRELATION_GATE" -v hp="$CLASSIFIER_HIGH_CORR_PERSISTENCE" \
+    -v minn="$CLASSIFIER_MIN_VALID_WINDOWS" -v mins="$CLASSIFIER_MIN_VALID_SECONDS" \
+    -v highn="$CLASSIFIER_HIGH_VALID_WINDOWS" -v highs="$CLASSIFIER_HIGH_VALID_SECONDS" \
+    -v variability="$CLASSIFIER_VARIABILITY_DB" -v agreement="$CLASSIFIER_GLOBAL_AGREEMENT_DB" \
+    -v median_agreement="$CLASSIFIER_MEDIAN_AGREEMENT_DB" \
+    -v rare="$CLASSIFIER_RARE_ACTIVITY_RATIO" -v margin="$PRESET_BORDERLINE_MARGIN" \
+    -v highratio="$CLASSIFIER_HIGH_VALID_RATIO" -v cmargin="$CLASSIFIER_CORRELATION_MARGIN" -v pmargin="$CLASSIFIER_PERSISTENCE_MARGIN" \
+    -v preference="$SONAR_IMMERSIVE_PREFERENCE" \
+    -v imin="$SONAR_IMMERSIVE_MIN_DELTA_DB" -v imax="$SONAR_IMMERSIVE_MAX_DELTA_DB" \
+    -v iactivity="$SONAR_IMMERSIVE_MIN_ACTIVITY_RATIO" -v iwidth="$SONAR_IMMERSIVE_MIN_WIDTH_DB" \
+    -v icorr="$SONAR_IMMERSIVE_MAX_ABS_CORRELATION" -v ipersistence="$SONAR_IMMERSIVE_MAX_HIGH_CORR_PERSISTENCE" \
+    -v iratio="$SONAR_IMMERSIVE_MIN_VALID_RATIO" -v balance="$balance" -v balancegate="$SUR_BALANCE_WARN_DB" \
+    -v fcgate="$CENTER_FULL_SAFETY_GATE" -v vgate="$VOICE_DELTA_GATE" \
+    -v vmaskgate="$VOICE_MASK_GATE" -v domgate="$SUR_DOMINANT_GATE" \
+    -v domvoicegate="$DOMINANT_VOICE_DELTA_GATE" '
+    function finite(v) {return v ~ /^-?[0-9]+([.][0-9]+)?$/}
+    function abs(v) {return v<0?-v:v}
+    {
+      activity=$1; active=$2; p10=$3; p50=$4; p90=$5; aw=$6; corr=$7; persistence=$8;
+      valid=$10; seconds=$13; bilateral=$14; corrn=$16;
+      preset="INCONCLUSIVE"; confidence="BASSA"; alt="-"; mode="INCONCLUSIVE";
+      measurement_confidence="BASSA"; temporal_assessment="INSUFFICIENT"; boundary_resolved=0; median_resolved=0;
+      reason="evidenza temporale insufficiente: finestre valide=" valid ", secondi=" seconds;
+      if (valid>=minn && seconds>=mins && finite(active) && finite(p10) && finite(p50) && finite(p90)) {
+        # Affidabilita del campione e disponibilita delle statistiche: non
+        # dipendono dalla dinamica o dalla classe energetica.
+        if (bilateral>=minn && corrn>=minn && $17>=mins && aw!="N/A" && finite(corr)) {
+          measurement_confidence="MEDIA";
+          if (valid>=highn && seconds>=highs && $11>=highratio &&
+              bilateral>=highn && $15>=highs && corrn>=highn && $17>=highs)
+            measurement_confidence="ALTA";
+        }
+        central_conflict=(abs(active-p50)>median_agreement);
+        # Tolleranza gia prevista per le decisioni vicine alle soglie.
+        # Il confronto include la precisione di serializzazione (sei decimali).
+        near_aura_boundary=(!central_conflict && abs(active-ag)<=margin+0.000001 &&
+          abs(p50-ag)<=margin+0.000001 && abs(active-p50)<=margin+0.000001);
+        temporal_assessment=(p90-p10>=variability?"VARIABLE_COHERENT":"STABLE");
+        confidence="MEDIA";
+        narrow=(w<globalwg && (aw=="-inf" || (finite(aw) && aw<wg)) &&
+                finite(corr) && corr>=cg && finite(persistence) && persistence>=hp &&
+                bilateral>=minn && corrn>=minn && $17>=mins);
+        severe=(active<sg && p50<sg);
+        moderate=(active<ag && p50<ag);
+        if (severe) {preset="SONAR"; reason="deficit anche durante gli eventi: ActiveDeltaSur=" active ", P50=" p50;}
+        else if (narrow) {preset="WIDE"; reason="separazione persistentemente ridotta: Width=" w ", ActiveWidth=" aw ", correlazione=" corr ", persistenza=" persistence;}
+        else if (moderate) {preset="AURA"; reason="arretramento moderato durante gli eventi: ActiveDeltaSur=" active ", P50=" p50;}
+        else if (active>=ag && p50>=ag) {
+          preset="AEGIS";
+          reason=(activity<rare?"eventi rari ma energeticamente adeguati":"energia surround adeguata durante gli eventi");
+          reason=reason ": Activity=" activity ", ActiveDeltaSur=" active ", P50=" p50;
+        } else if (near_aura_boundary) {
+          # Pareggio deterministico: la media energetica aggregata decide il lato.
+          preset=(active<ag?"AURA":"AEGIS"); reason="energia vicina alla soglia AURA/AEGIS";
+        } else if (measurement_confidence=="ALTA" && !central_conflict &&
+                   active>=ag && active<=ag+margin+0.000001 &&
+                   p50<ag-margin && p50>=sg && abs(active-ds)<agreement) {
+          # Aggregato appena sul lato AEGIS, mediana nella fascia moderata:
+          # scelta empirica AURA con alternativa, mantenendo il disaccordo.
+          preset="AURA"; median_resolved=1;
+          reason="mediana AURA con aggregato vicino al confine AEGIS: ActiveDeltaSur=" active ", P50=" p50;
+        } else {confidence="BASSA"; reason="energia aggregata e mediana discordanti oltre il margine borderline: ActiveDeltaSur=" active ", P50=" p50;}
+        if (preset!="INCONCLUSIVE") {
+          mode=(preset=="SONAR"?"IMMERSIVE_RECOVERY":"CONSERVATIVE");
+          if ((preset=="AURA" || preset=="AEGIS") && near_aura_boundary) {
+            boundary_resolved=1; confidence="BASSA"; temporal_assessment="BORDERLINE";
+            alt=(preset=="AURA"?"AEGIS":"AURA");
+            reason=reason "; confine AURA/AEGIS entro " margin " dB: ActiveDeltaSur=" active ", P50=" p50 "; scelta dal rapporto energetico aggregato";
+          }
+          # Lo spread da solo descrive dinamica cinematografica, non incertezza.
+          # Conta soltanto se la distribuzione attraversa il confine decisivo.
+          distribution_conflict=((preset=="SONAR" && p90>=sg+margin) ||
+            (preset=="AURA" && (p10<sg-margin || p90>=ag+margin)) ||
+            (preset=="AEGIS" && p10<ag-margin && (central_conflict || p50<ag+margin)));
+          unstable=(p90-p10>=variability && distribution_conflict && !boundary_resolved);
+          if (!boundary_resolved && valid>=highn && seconds>=highs && $11>=highratio && !unstable &&
+              abs(active-ds)<agreement && bilateral>=minn && corrn>=minn) confidence="ALTA";
+          if (!boundary_resolved && activity<rare && preset=="AEGIS" && ds<ag) confidence="MEDIA";
+          if (unstable) {
+            # Code in fasce diverse: VARIABLE se il centro concorda; MIXED
+            # per riferimenti discordanti. Nessuna etichetta giudica il mix.
+            confidence="BASSA"; temporal_assessment=(central_conflict?"MIXED":"VARIABLE");
+            if (central_conflict) reason=reason "; distribuzione temporale ampia con centro energetico discordante";
+            else if (preset=="AURA" && median_resolved) reason=reason "; distribuzione ampia; scelta dalla mediana con aggregato vicino alla soglia";
+            else if (preset=="AURA") reason=reason "; P10/P90 attraversano fasce energetiche severe o equilibrate; aggregato e mediana indicano AURA";
+            else if (preset=="SONAR") reason=reason "; deficit surround severo con eventi piu presenti nella coda P90";
+            else reason=reason "; distribuzione temporale attraversa il confine AURA/AEGIS con mediana vicina alla soglia";
+          }
+          if (central_conflict && preset!="WIDE") {
+            confidence="BASSA"; temporal_assessment="MIXED";
+            reason=reason "; ActiveDeltaSur e P50 discordanti oltre " median_agreement " dB";
+          }
+          if (abs(active-ds)>=agreement) {
+            if (!(activity<rare && preset=="AEGIS" && active>=ag && p50>=ag)) {
+              confidence="BASSA"; temporal_assessment="MIXED";
+            }
+            reason=reason "; divergenza globale/attivo";
+          }
+          if (severe && narrow) {confidence="BASSA"; alt="WIDE"; reason=reason "; anche scena stretta (priorita SONAR)";}
+          else if (!boundary_resolved && abs(active-sg)<=margin) {confidence="BASSA"; alt=(preset=="SONAR"?"AURA":"SONAR");}
+          else if (!boundary_resolved && abs(active-ag)<=margin) {confidence="BASSA"; alt=(preset=="AURA"?"AEGIS":"AURA");}
+          else if (!boundary_resolved && finite(aw) && abs(aw-wg)<=margin && corrn>=minn) {confidence="BASSA"; alt=(preset=="WIDE"?(moderate?"AURA":"AEGIS"):"WIDE");}
+          if (preset=="WIDE" && (corr-cg<=cmargin || persistence-hp<=pmargin ||
+              globalwg-w<=margin)) {
+            confidence="BASSA"; alt=(moderate?"AURA":"AEGIS"); reason=reason "; borderline persistenza/correlazione/width globale";
+          }
+          if (bilateral<minn || corrn<minn || $17<mins) {
+            confidence="BASSA"; reason=reason "; campione spaziale bilaterale insufficiente";
+          }
+          if (finite(corr) && corr< -cg) {confidence="BASSA"; reason=reason "; opposizione di fase: verificare manualmente";}
+          if (!narrow && (w<globalwg || aw=="-inf" || (finite(aw) && aw<wg))) {
+            confidence="BASSA"; reason=reason "; indizi di width non confermati dalla persistenza";
+          }
+          if (median_resolved) {
+            confidence="BASSA"; temporal_assessment="MIXED"; alt="AEGIS";
+          }
+        } else temporal_assessment="MIXED";
       }
-    } else if (w != "" && w < wgate) {
-      preset="WIDE"; color="\033[1;32m"; reason="surround stretti o collassati";
-      if ((wgate-w) <= margin) {
-        confidence="bassa";
-        if (ds < auragate) alt="AURA"; else alt="AEGIS";
+      if (df<fcgate) reason=reason "; centro full-band anormalmente debole";
+      if (finite(dv) && dv<vgate) reason=reason "; voce centrale debole (250-5000 Hz)";
+      if (finite(vm) && vm>vmaskgate) reason=reason "; banda voce mascherata dai surround";
+      if (finite(dv) && ds>domgate && dv<domvoicegate) reason=reason "; surround dominanti con voce non prominente";
+      # Il ramo immersivo viene valutato SOLO dopo la scelta energetica/spaziale.
+      # Nessun dato Atmos/codec entra nel classificatore; nessuna stima di altezza.
+      immersive_eligible=(preset=="AEGIS" && !boundary_resolved && confidence!="BASSA" && measurement_confidence!="BASSA" &&
+        active>=imin && active<=imax && p50>=ag+margin && !central_conflict && p90<=domgate &&
+        activity>=iactivity && $11>=iratio && valid>=highn && seconds>=highs &&
+        finite(aw) && aw>=iwidth && finite(corr) && abs(corr)<=icorr &&
+        finite(persistence) && persistence<=ipersistence &&
+        $9>0 && bilateral/$9>=iratio && corrn/$9>=iratio && $15>=highs && $17>=highs &&
+        finite(balance) && balance<balancegate-margin && df>=fcgate &&
+        (!finite(dv) || dv>=vgate) && (!finite(vm) || vm<=vmaskgate));
+      if (preference=="on" && immersive_eligible) {
+        preset="SONAR"; mode="IMMERSIVE_PREFERENCE"; confidence="MEDIA"; alt="AEGIS";
+        reason="scena surround sufficientemente presente e separata: ActiveDeltaSur=" active ", Activity=" activity ", ActiveWidth=" aw ", correlazione=" corr ", persistenza=" persistence ", ValidRatio=" $11 ", P10/P50/P90=" p10 "/" p50 "/" p90;
+        reason=reason "; preferenza psicoacustica immersiva SONAR abilitata; nessuna ricostruzione di oggetti Atmos o canali fisici di altezza; superiorita percettiva non misurata";
+        if (temporal_assessment=="VARIABLE_COHERENT") reason=reason "; variabilita energetica con mediana e rapporto aggregato coerenti; P10 descrittivo";
+      } else if (immersive_eligible) {
+        alt="SONAR"; reason=reason "; candidatura immersiva SONAR idonea; preferenza off, priorita AEGIS";
+      } else if (preference=="on" && preset=="AEGIS") {
+        if (boundary_resolved) reason=reason "; candidatura immersiva esclusa per scelta energetica borderline";
+        if (finite(aw) && aw<iwidth) reason=reason "; candidatura immersiva non confermata: ActiveWidth=" aw " dB sotto " iwidth " dB";
+        if (finite(p90) && p90>domgate) reason=reason "; candidatura immersiva non confermata: P90=" p90 " dB oltre " domgate " dB";
       }
-    } else if (ds < auragate) {
-      preset="AURA"; color="\033[1;35m"; reason="surround moderatamente arretrati";
-      if ((ds-sonargate) <= margin) { confidence="bassa"; alt="SONAR"; }
-      else if ((auragate-ds) <= margin) { confidence="bassa"; alt="AEGIS"; }
-    } else {
-      preset="AEGIS"; color="\033[38;5;208m"; reason="mix surround gia equilibrato";
-      if ((ds-auragate) <= margin) { confidence="bassa"; alt="AURA"; }
-    }
-
-    # Debolezza/mascheramento: diagnostica senza cambiare preset o alternativa.
-    if (df < fcgate) reason=reason "; centro full-band anormalmente debole";
-    else if ((df-fcgate) <= margin) reason=reason " (borderline centro full-band)";
-    if (hasvoice && dv < vgate) reason=reason "; voce centrale debole nella banda 250-5000 Hz";
-    else if (hasvoice && (dv-vgate) <= margin) reason=reason " (borderline prominenza voce)";
-    if (hasvoice && vm > vmaskgate) reason=reason "; banda voce mascherata dai surround";
-    else if (hasvoice && (vmaskgate-vm) <= margin) reason=reason " (borderline mascheramento voce)";
-    if (hasvoice && ds > domgate && dv < domvoicegate)
-      reason=reason "; surround dominanti con voce centrale non prominente";
-    else if (hasvoice && ds > domgate && (dv-domvoicegate) <= margin)
-      reason=reason " (surround dominanti, voce borderline)";
-    if (preset != "SONAR" && w != "" &&
-        (w-wgate) >= 0 && (w-wgate) <= margin) {
-      confidence="bassa"; alt="WIDE"; reason=reason " (borderline width)";
-    }
-
-    printf "%s|%s|%s|%s|%s", preset, color, confidence, alt, reason;
-  }'
+      printf "%s|%s|%s|%s|%s|%s|%s",preset,confidence,alt,reason,mode,measurement_confidence,temporal_assessment;
+    }' <<<"$temporal") || return 1
+  preset="${decision%%|*}"; rest="${decision#*|}"
+  printf '%s|%s|%s' "$preset" "$(preset_color "$preset")" "$rest"
 }
 
 is_finite_db() {
@@ -524,7 +693,7 @@ analysis_cache_file() {
   canonical="$(realpath -- "$f" 2>/dev/null)" || return 1
   identity="$(stat -c '%s|%y' -- "$f" 2>/dev/null)" || return 1
   cache_hash="$(printf '%s\n' \
-    "${ANALYZER_CACHE_SCHEMA}|${canonical}|${identity}|stream=${stream}|lfe=${LFE_WINDOW_SAMPLES},${LFE_ACTIVE_GATE_DB},${LFE_RELATIVE_GATE_DB},${LFE_MAINS_GATE_DB},${LFE_HOT_DB},${LFE_VERY_HOT_DB}|bass=${BASS_REFERENCE_GATE_DB},${BASS_RELATIVE_GATE_DB},${BASS_HOT_DB}" | \
+    "${ANALYZER_CACHE_SCHEMA}|${canonical}|${identity}|stream=${stream}|lfe=${LFE_WINDOW_SAMPLES},${LFE_ACTIVE_GATE_DB},${LFE_RELATIVE_GATE_DB},${LFE_MAINS_GATE_DB},${LFE_HOT_DB},${LFE_VERY_HOT_DB}|bass=${BASS_REFERENCE_GATE_DB},${BASS_RELATIVE_GATE_DB},${BASS_HOT_DB}|sur=${TEMPORAL_WINDOW_SAMPLES},${SUR_ACTIVITY_ABS_DB},${SUR_ACTIVITY_REL_DB},${SUR_ACTIVITY_MIN_SECONDS},${SUR_MAIN_MIN_DB},${SUR_CORRELATION_GATE}" | \
     sha256sum | awk '{print $1}')"
   [[ "$cache_hash" =~ ^[0-9a-fA-F]{64}$ ]] || return 1
   printf '%s/%s.metrics\n' "$ANALYZER_CACHE_DIR" "$cache_hash"
@@ -535,7 +704,35 @@ is_valid_metrics_record() {
   local -a fields
   [[ -n "$record" && "$record" != *$'\n'* && "$record" != *$'\r'* ]] || return 1
   IFS='|' read -r -a fields <<<"$record"
-  [[ ${#fields[@]} -eq 32 ]] || return 1
+  [[ ${#fields[@]} -eq 50 ]] || return 1
+  for i in 0 1; do
+    [[ -z "${fields[$i]}" ]] || is_finite_db "${fields[$i]}" || return 1
+  done
+  for i in {32..49}; do
+    value="${fields[$i]}"
+    case "$i:$value" in
+      33:N/A|34:N/A|35:N/A|36:N/A|37:N/A|37:-inf|37:+inf|38:N/A|39:N/A|49:-inf) ;;
+      *) is_finite_db "$value" || return 1 ;;
+    esac
+  done
+  awk -F'|' '
+    function count(v) {return v>=0 && v==int(v)}
+    function fraction(v) {return v>=0 && v<=1}
+    function abs(v) {return v<0?-v:v}
+    {
+      if(!fraction($33) || !count($41) || $41<1 || !count($42) || $42>$41 ||
+         !fraction($43) || abs($43-$42/$41)>0.000002 || $44<=0 || $45<0 || $45>$44 ||
+         !count($46) || $46>$41 || $47<0 || $47>$44 ||
+         !count($48) || $48>$46 || $49<0 || $49>$47 ||
+         ($39!="N/A" && ($39< -1 || $39>1)) || ($40!="N/A" && !fraction($40)) ||
+         (($42==0)!=($34=="N/A")) || (($42==0)!=($35=="N/A")) ||
+         (($42==0)!=($36=="N/A")) || (($42==0)!=($37=="N/A")) ||
+         (($46==0)!=($38=="N/A")) || (($48==0)!=($39=="N/A")) ||
+         (($48==0)!=($40=="N/A")) || ($42>0 && ($35>$36 || $36>$37)) ||
+         ($42>0 && $45<=0) || ($46>0 && $47<=0) || ($48>0 && $49<=0) ||
+         $45>$33*$44+0.000001*$44+0.000002 ||
+         $44>$41*0.5+0.000001 || $44<=($41-1)*0.5) exit 1
+    }' <<<"$record" || return 1
 
   # I/LRA possono essere vuoti su materiale troppo breve; le metriche di
   # livello (comprese LFE) devono essere numeriche oppure -inf.
@@ -725,8 +922,115 @@ measure_bass_windows() {
 #
 # Astats full-band raccoglie anche il peak LFE; il ramo bassi emette solo
 # RMS per-canale e numero di campioni delle finestre.
-# Output: 15 metriche storiche | 10 LFE | 7 bassi (solo diagnostica).
+# Output: 15 metriche storiche | 10 LFE | 7 bassi | 18 temporali.
 # ────────────────────────────────────────────────────────────────────────────────
+# Un solo ramo full-band: otto canali nella stessa frame (FL/FR/FC/LFE/SL/SR/M/S).
+# Statistiche compatte, O(finestre), mai PCM. Percentili nearest-rank pesati,
+# istogramma 0.1 dB (errore di quantizzazione <0.1 dB, arrotondato per difetto).
+# Pearson: E[SL*SR]=E[M^2]-E[S^2]; sottrarre DC_SL*DC_SR.
+# Sommare covarianze/varianze intra-finestra pesate PRIMA di normalizzare.
+measure_surround_windows() {
+  awk -v gate="$SUR_ACTIVITY_ABS_DB" -v relative="$SUR_ACTIVITY_REL_DB" \
+    -v persistence="$SUR_ACTIVITY_MIN_SECONDS" -v maingate="$SUR_MAIN_MIN_DB" \
+    -v corr_gate="$SUR_CORRELATION_GATE" -v win="$TEMPORAL_WINDOW_SAMPLES" '
+    function finite(v) {return v ~ /^-?[0-9]+([.][0-9]+)?$/}
+    function abs(v) {return v<0?-v:v}
+    function db(p) {return 10*log(p)/log(10)}
+    function ratio(a,b) {return b<=0?(a>0?"+inf":"N/A"):(a<=0?"-inf":sprintf("%.6f",db(a/b)))}
+    function flush(    c) {
+      if(!frame) return
+      if(samples<=0 || samples>win || samples!=int(samples)) bad=1
+      for(c=1;c<=8;c++) {
+        if(!(c in rms) || (rms[c]!="-inf" && !finite(rms[c])) || !(c in dc) || !finite(dc[c])) bad=1
+      }
+      if(bad) return
+      n++; weights[n]=samples; total+=samples
+      for(c=1;c<=8;c++) {power[n,c]=(rms[c]=="-inf"?0:10^(rms[c]/10)); offsets[n,c]=dc[c]+0}
+      main[n]=(power[n,1]+power[n,2]+power[n,3])/3
+      sur[n]=(power[n,5]+power[n,6])/2
+      program+=(3*main[n]+power[n,5]+power[n,6])*samples/5
+    }
+    function accept_run(last,    k) {
+      if(run_samples>=persistence*48000) for(k=start;k<=last;k++) active[k]=1
+      run_samples=0; start=0
+    }
+    index($0,"[ametadata@sur_windows ") {
+      sub(/\r$/, "")
+      if($0 ~ /frame:/) {
+        flush(); frame=1; samples=0
+        for(c in rms) delete rms[c]
+        for(c in dc) delete dc[c]
+        value=$0; sub(/^.*frame:/,"",value); sub(/[[:space:]].*$/,"",value)
+        if(value !~ /^[0-9]+$/ || value+0!=n) bad=1
+      } else if($0 ~ /lavfi.astats.[1-8].(RMS_level|DC_offset)=/) {
+        key=$0; sub(/^.*lavfi.astats./,"",key); split(key,parts,"."); c=parts[1]
+        value=$0; sub(/^.*=/,"",value)
+        if(parts[2] ~ /^RMS_level=/) rms[c]=value; else dc[c]=value
+      } else if($0 ~ /lavfi.astats.Overall.Number_of_samples=/) {
+        value=$0; sub(/^.*=/,"",value)
+        if(!finite(value)) bad=1
+        samples=value+0
+      }
+    }
+    END {
+      flush()
+      if(bad || !n || !total) exit 1
+      program/=total
+      threshold=10^(gate/10)
+      rel=program*10^(-relative/10); if(rel>threshold) threshold=rel
+      # Attivita persistente: sequenze contigue; ultima frame senza padding.
+      for(i=1;i<=n;i++) {
+        if(power[i,5]>threshold || power[i,6]>threshold) {
+          if(!start) start=i
+          run_samples+=weights[i]
+        } else accept_run(i-1)
+      }
+      accept_run(n)
+      for(i=1;i<=n;i++) if(active[i]) {
+        weight=weights[i]; active_samples+=weight
+        if(main[i]>10^(maingate/10) && sur[i]>0) {
+          valid++; valid_samples+=weight; sp+=sur[i]*weight; mp+=main[i]*weight
+          d=db(sur[i]/main[i]); bin=int(d*10); if(bin>d*10) bin--
+          hist[bin]+=weight
+          if(valid==1 || bin<lo) lo=bin
+          if(valid==1 || bin>hi) hi=bin
+        }
+        if(power[i,5]<=threshold || power[i,6]<=threshold) continue
+        bilateral++; bilateral_samples+=weight
+        mid+=power[i,7]*weight; side+=power[i,8]*weight
+        vl=power[i,5]-offsets[i,5]^2; vr=power[i,6]-offsets[i,6]^2
+        cov=power[i,7]-power[i,8]-offsets[i,5]*offsets[i,6]
+        # ametadata DC ha sei decimali: escludere varianze sommerse
+        # dalla precisione numerica; tolleranza coerente con tale precisione.
+        tol_l=2e-6*abs(offsets[i,5])+1e-12
+        tol_r=2e-6*abs(offsets[i,6])+1e-12
+        if(vl<=tol_l || vr<=tol_r) continue
+        r=cov/sqrt(vl*vr)
+        if(r>1.001 || r< -1.001) continue
+        if(r>1) r=1; if(r< -1) r=-1
+        corrn++; corr_samples+=weight; covsum+=cov*weight; vlsum+=vl*weight; vrsum+=vr*weight
+        if(r>=corr_gate) high_samples+=weight
+      }
+      p10=p50=p90="N/A"
+      if(valid_samples) for(b=lo;b<=hi;b++) {
+        cumulative+=hist[b]
+        if(p10=="N/A" && cumulative>=.1*valid_samples) p10=sprintf("%.1f",b/10)
+        if(p50=="N/A" && cumulative>=.5*valid_samples) p50=sprintf("%.1f",b/10)
+        if(cumulative>=.9*valid_samples) {p90=sprintf("%.1f",b/10); break}
+      }
+      correlation=high="N/A"
+      if(corr_samples) {
+        r=covsum/sqrt(vlsum*vrsum); if(r>1) r=1; if(r< -1) r=-1
+        correlation=sprintf("%.6f",r); high=sprintf("%.6f",high_samples/corr_samples)
+      }
+      printf "%.6f|%s|%s|%s|%s|%s|%s|%s|%d|%d|%.6f|%.6f|%.6f|%d|%.6f|%d|%.6f|%s\n", 
+        active_samples/total,(valid_samples?ratio(sp,mp):"N/A"),p10,p50,p90,
+        (bilateral?ratio(side,mid):"N/A"),correlation,high,n,valid+0,valid/n,total/48000,
+        valid_samples/48000,bilateral+0,bilateral_samples/48000,corrn+0,corr_samples/48000,
+        (program>0?sprintf("%.6f",db(program)):"-inf")
+    }' "$1"
+}
+
 measure_classifier_metrics() {
   local f="$1" stream="$2"
   local probe log_file progress_file ffmpeg_rc codec
@@ -753,13 +1057,14 @@ measure_classifier_metrics() {
   ffmpeg -y -nostdin -hide_banner -nostats -xerror -loglevel info \
     -stats_period "$ANALYZER_PROGRESS_INTERVAL" -progress "$progress_file" \
     "${input_decoder_opts[@]}" -i "$f" \
-    -filter_complex "[0:${stream}]asplit=7[loud_in][full_in][mid_in][side_in][voice_in][bass_in][bass_ref_in];\
+    -filter_complex "[0:${stream}]asplit=8[loud_in][full_in][mid_in][side_in][voice_in][bass_in][bass_ref_in][sur_in];\
 [full_in]astats@full=metadata=0:reset=0:measure_perchannel=RMS_level+Peak_level:measure_overall=none,anullsink;\
 [mid_in]pan=1c|c0=0.5*c4+0.5*c5,astats@mid=metadata=0:reset=0:measure_perchannel=RMS_level:measure_overall=none,anullsink;\
 [side_in]pan=1c|c0=0.5*c4-0.5*c5,astats@side=metadata=0:reset=0:measure_perchannel=RMS_level:measure_overall=none,anullsink;\
 [voice_in]highpass=f=250,lowpass=f=5000,astats@voice=metadata=0:reset=0:measure_perchannel=RMS_level:measure_overall=none,anullsink;\
 [bass_in]aformat=sample_rates=48000:sample_fmts=fltp,highpass=f=20:t=q:w=0.707,lowpass=f=120:t=q:w=0.707,asetnsamples=n=${LFE_WINDOW_SAMPLES}:p=0,astats@bass=metadata=1:reset=1:measure_perchannel=RMS_level:measure_overall=Number_of_samples,ametadata@lfe_windows=mode=print,anullsink;\
 [bass_ref_in]aformat=sample_rates=48000:sample_fmts=fltp,highpass=f=250,lowpass=f=5000,asetnsamples=n=${LFE_WINDOW_SAMPLES}:p=0,astats@bass_reference=metadata=1:reset=1:measure_perchannel=RMS_level:measure_overall=Number_of_samples,ametadata@bass_ref=mode=print,anullsink;\
+[sur_in]aformat=sample_rates=48000:sample_fmts=dblp,pan=8c|c0=c0|c1=c1|c2=c2|c3=c3|c4=c4|c5=c5|c6=0.5*c4+0.5*c5|c7=0.5*c4-0.5*c5,asetnsamples=n=${TEMPORAL_WINDOW_SAMPLES}:p=0,astats@surround=metadata=1:reset=1:measure_perchannel=RMS_level+DC_offset:measure_overall=Number_of_samples,ametadata@sur_windows=mode=print,anullsink;\
 [loud_in]ebur128@loudness=peak=sample:framelog=verbose[loud_out]" \
     -map "[loud_out]" -vn -sn -f null - \
     >/dev/null 2>"$log_file" </dev/null &
@@ -769,6 +1074,7 @@ measure_classifier_metrics() {
     sleep 0.2
     processed=$(awk -F= '$1 == "out_time" { value=$2 } END { print value }' "$progress_file" 2>/dev/null)
     if [[ -n "$processed" && "$processed" != "$last_processed" ]]; then
+      [[ -n "$last_processed" ]] || printf '==> Analisi in corso...\n' >&2
       printf '%b Audio analizzato: %s\n' "$C_PROGRESS" "$processed" >&2
       last_processed="$processed"
     fi
@@ -780,6 +1086,7 @@ measure_classifier_metrics() {
   # Mostra anche l'ultimo timestamp, normalmente scritto subito prima di end.
   processed=$(awk -F= '$1 == "out_time" { value=$2 } END { print value }' "$progress_file" 2>/dev/null)
   if [[ -n "$processed" && "$processed" != "$last_processed" ]]; then
+    [[ -n "$last_processed" ]] || printf '==> Analisi in corso...\n' >&2
     printf '%b Audio analizzato: %s\n' "$C_PROGRESS" "$processed" >&2
   fi
 
@@ -788,7 +1095,7 @@ measure_classifier_metrics() {
     return 1
   fi
 
-  local lfe_metrics bass_metrics
+  local lfe_metrics bass_metrics temporal_metrics
   lfe_metrics="$(measure_lfe_windows "$log_file")" || {
     rm -f -- "$log_file" "$progress_file"
     return 1
@@ -797,8 +1104,12 @@ measure_classifier_metrics() {
     rm -f -- "$log_file" "$progress_file"
     return 1
   }
+  temporal_metrics="$(measure_surround_windows "$log_file")" || {
+    rm -f -- "$log_file" "$progress_file"
+    return 1
+  }
   # Evita di copiare tutte le finestre nella variabile e nei parser storici.
-  probe="$(awk '!index($0,"[ametadata@lfe_windows ") && !index($0,"[ametadata@bass_ref ")' "$log_file")"
+  probe="$(awk '!index($0,"[ametadata@lfe_windows ") && !index($0,"[ametadata@bass_ref ") && !index($0,"[ametadata@sur_windows ")' "$log_file")"
   rm -f -- "$log_file" "$progress_file"
   probe="${probe//$'\r'/}"
 
@@ -836,7 +1147,7 @@ measure_classifier_metrics() {
   ' <<<"$probe")
 
   # Assegna la variabile locale del chiamante senza una subshell.
-  all_metrics="${i_val:-}|${lra_val:-}|${peak_val:-}|${rms_values}|${lfe_metrics}|${bass_metrics}"
+  all_metrics="${i_val:-}|${lra_val:-}|${peak_val:-}|${rms_values}|${lfe_metrics}|${bass_metrics}|${temporal_metrics}"
 }
 
 # Media energetica in dB di due o tre valori RMS. I valori devono essere finiti.
@@ -927,6 +1238,8 @@ scan_delta() {
   local lfe_active lfe_p95 lfe_peak lfe_mains lfe_delta lfe_seconds lfe_ratio lfe_windows
   local lfe_hot_p lfe_very_hot_p
   local bass_rms bass_reference bass_delta bass_p95 bass_persistence bass_seconds bass_ratio
+  local activity active_delta p10 p50 p90 active_width correlation high_corr total_windows valid_windows
+  local valid_fraction analyzed_seconds active_seconds bilateral_windows bilateral_seconds corr_windows corr_seconds program_db temporal
 
   cache_file="$(analysis_cache_file "$f" "$target_stream" || true)"
   if [[ -n "$cache_file" && -s "$cache_file" ]]; then
@@ -956,7 +1269,10 @@ scan_delta() {
     rms_vfl rms_vfr rms_vfc rms_vsl rms_vsr \
     lfe_active lfe_p95 lfe_peak lfe_mains lfe_delta lfe_seconds lfe_ratio lfe_windows \
     lfe_hot_p lfe_very_hot_p \
-    bass_rms bass_reference bass_delta bass_p95 bass_persistence bass_seconds bass_ratio <<<"$all_metrics"
+    bass_rms bass_reference bass_delta bass_p95 bass_persistence bass_seconds bass_ratio \
+    activity active_delta p10 p50 p90 active_width correlation high_corr total_windows valid_windows \
+    valid_fraction analyzed_seconds active_seconds bilateral_windows bilateral_seconds corr_windows corr_seconds program_db <<<"$all_metrics"
+  temporal="$(cut -d'|' -f33- <<<"$all_metrics")"
 
   # Il sample peak distingue il vero silenzio dal valore sentinella -70 LUFS
   # restituito da ebur128 per una traccia digitalmente vuota.
@@ -1026,25 +1342,27 @@ scan_delta() {
      awk -v sur="$rms_sur" -v gate="$SUR_FAKE_RMS_GATE" 'BEGIN { exit !(sur < gate) }'; then
     warn "Surround virtualmente muti (${rms_sur} dBFS RMS): processing automatico bloccato."
     forced_preset=1
-    preset_raw="BLOCCATO|\033[1;33m|bassa|-|surround virtualmente muti"
+    preset_raw="BLOCCATO|\033[1;33m|BASSA|-|surround virtualmente muti|SAFETY_OVERRIDE|BASSA|BLOCKED"
   elif [[ "$rms_fc" == "-inf" ]]; then
     warn "Canale centrale silenzioso: processing automatico bloccato; controllo manuale richiesto."
     forced_preset=1
-    preset_raw="BLOCCATO|\033[1;33m|bassa|-|centro silenzioso"
+    preset_raw="BLOCCATO|\033[1;33m|BASSA|-|centro silenzioso|SAFETY_OVERRIDE|BASSA|BLOCKED"
   elif awk -v b="$balance_sur" -v gate="$SUR_BALANCE_WARN_DB" 'BEGIN { exit !(b >= gate) }'; then
     warn "Sbilanciamento SL/SR elevato (${balance_sur} dB): processing automatico bloccato; controllo manuale richiesto."
     forced_preset=1
-    preset_raw="BLOCCATO|\033[1;33m|bassa|-|sbilanciamento SL/SR"
+    preset_raw="BLOCCATO|\033[1;33m|BASSA|-|sbilanciamento SL/SR|SAFETY_OVERRIDE|BASSA|BLOCKED"
   else
-    preset_raw=$(classify_preset_v6 "$delta_sur" "$delta_fc" "$delta_voice" "$voice_mask" "$width_ms")
+    preset_raw=$(classify_preset "$delta_sur" "$delta_fc" "$delta_voice" "$voice_mask" "$width_ms" "$temporal" "$balance_sur") || return 1
   fi
   local measured_preset="${preset_raw%%|*}"
-  local preset p_color confidence alternative preset_reason
-  IFS='|' read -r preset p_color confidence alternative preset_reason <<<"$preset_raw"
+  local preset p_color confidence alternative preset_reason selection_mode measurement_confidence temporal_assessment
+  IFS='|' read -r preset p_color confidence alternative preset_reason selection_mode measurement_confidence temporal_assessment <<<"$preset_raw"
+  # La scena misurata resta AEGIS quando SONAR dipende dalla preferenza.
+  [[ "$selection_mode" != "IMMERSIVE_PREFERENCE" ]] || measured_preset="AEGIS"
   if (( forced_preset == 0 )) && \
      awk -v b="$balance_sur" -v gate="$SUR_BALANCE_WARN_DB" -v margin="$PRESET_BORDERLINE_MARGIN" \
        'BEGIN { exit !(b < gate && (gate-b) <= margin) }'; then
-    confidence="bassa"
+    confidence="BASSA"
     alternative="-"
     preset_reason="${preset_reason} (borderline sbilanciamento)"
   fi
@@ -1074,18 +1392,24 @@ scan_delta() {
   GLOBAL_SOURCE_CLASS_VALUES+=("$source_class")
   GLOBAL_SOURCE_EVIDENCE_VALUES+=("$source_evidence")
   GLOBAL_MEASURED_PRESET_VALUES+=("$measured_preset")
+  GLOBAL_TEMPORAL_VALUES+=("$temporal")
+  GLOBAL_SELECTION_MODE_VALUES+=("$selection_mode")
+  GLOBAL_MEASUREMENT_CONFIDENCE_VALUES+=("$measurement_confidence")
+  GLOBAL_TEMPORAL_ASSESSMENT_VALUES+=("$temporal_assessment")
 
   # Display dei risultati per il file, con colori e descrizioni. Se alcune metriche non sono misurabili, le segnalo come N/A. Se il preset è stato forzato, mostro comunque il preset forzato ma con la descrizione che indica la ragione.
   ok "Risultati Classifier per: $f"
-  info "LFE ANALYSIS (banda 20-120 Hz; finestre coincidenti da 0.5 s)"
-  info "Active RMS: $lfe_active dBFS | P95: $lfe_p95 dBFS | Peak full-band: $lfe_peak dBFS"
+  printf '\n'
+  info "LFE / BASS ANALYSIS (finestre coincidenti da 0.5 s)"
+  info "LFE 20-120 Hz | Active RMS: $lfe_active dBFS | P95: $lfe_p95 dBFS | Peak full-band: $lfe_peak dBFS"
   info "Bass mains (somma energie 5 canali): $lfe_mains dBFS | LFE Delta: $lfe_delta dB"
   info "Attivita LFE: $lfe_seconds s | frazione: $lfe_ratio | finestre totali: $lfe_windows"
   info "Persistenza diagnostica (frazione attivita LFE): HOT=$lfe_hot_p | VERY_HOT=$lfe_very_hot_p"
-  info "BASS ANALYSIS (proxy energetico; LFE +10 dB solo nella misura)"
+  info "BASS (proxy energetico; LFE +10 dB solo nella misura)"
   info "Bass RMS: $bass_rms dBFS | riferimento 250-5000 Hz: $bass_reference dBFS"
   info "Bass Delta: $bass_delta dB | P95 delta: $bass_p95 dB | persistenza: $bass_persistence"
   info "Finestre valide: $bass_seconds s | frazione: $bass_ratio"
+  printf '\n'
   echo -e "  \033[1;33mRMS MAIN: \033[0m  ${rms_main} dBFS  (media energetica FL/FR/FC)"
   echo -e "  \033[1;33mRMS SUR:  \033[0m  ${rms_sur} dBFS  (media energetica SL/SR)"
   echo -e "  \033[1;37mDeltaSur: \033[0m  ${p_color}${delta_sur} dB\033[0m  (SUR - MAIN)"
@@ -1102,8 +1426,44 @@ scan_delta() {
   else
     echo -e "  \033[1;36mAtmos:    \033[0m  non verificato (solo informazione)"
   fi
-  echo -e "  \033[1;37mMisure:   \033[0m  ${measured_preset}"
-  echo -e "  \033[1;37mPreset:   \033[0m  ${p_color}${preset}\033[0m  (${preset_reason})"
+  printf '\n'
+  info "TEMPORAL SURROUND ANALYSIS (full-band; finestre sincronizzate da 500 ms)"
+  printf '  Surround Activity: %s%%\n' "$(awk -v r="$activity" 'BEGIN {printf "%.2f",r*100}')"
+  printf '  Active DeltaSur: %s dB\n' "$active_delta"
+  printf '  DeltaSur P10/P50/P90: %s / %s / %s dB\n' "$p10" "$p50" "$p90"
+  printf '  Active Width: %s dB\n' "$active_width"
+  printf '  Surround Correlation: %s\n' "$correlation"
+  printf '  High Correlation Persistence: %s\n' "$(awk -v r="$high_corr" 'BEGIN {if(r=="N/A") print r; else printf "%.2f%%",r*100}')"
+  printf '  Valid Windows: %s (%s%%; %s s)\n' "$valid_windows" "$(awk -v r="$valid_fraction" 'BEGIN {printf "%.2f",r*100}')" "$active_seconds"
+  printf '  Total Windows: %s | Analyzed Duration: %s s\n' "$total_windows" "$analyzed_seconds"
+  printf '  Bilateral Windows: %s (%s s) | Correlation Windows: %s (%s s)\n' "$bilateral_windows" "$bilateral_seconds" "$corr_windows" "$corr_seconds"
+  printf '\n'
+  info "CLASSIFIER"
+  echo -e "  Preset: ${p_color}${preset}\033[0m"
+  local alternative_color="" alternative_reset=""
+  case "$alternative" in
+    SONAR|AEGIS|WIDE|AURA)
+      alternative_color="$(preset_color "$alternative")"
+      alternative_reset="\033[0m"
+      ;;
+  esac
+  printf '  Alternative: %b%s%b\n' "$alternative_color" "$alternative" "$alternative_reset"
+  printf '  Selection Mode: %s\n' "$selection_mode"
+  printf '  Confidence: %s | Measurement Confidence: %s\n' "$confidence" "$measurement_confidence"
+  printf '  Temporal Assessment: %s\n' "$temporal_assessment"
+  # Sintesi solo a video; la motivazione completa resta nei dati e nel batch.
+  local reason_summary="${preset_reason%%;*}"
+  reason_summary="${reason_summary%%:*}"
+  if [[ "$selection_mode" == "IMMERSIVE_PREFERENCE" ]]; then
+    reason_summary="Preferenza immersiva attiva; scena misurata AEGIS."
+  fi
+  printf '  Reason: %s\n' "$reason_summary"
+  if [[ "$selection_mode" == "IMMERSIVE_PREFERENCE" ]]; then
+    printf '  Nota: nessuna ricostruzione Atmos; superiorita percettiva non misurata.\n'
+  fi
+  if [[ "$preset" == "INCONCLUSIVE" ]]; then
+    printf '  %b Processing automatico escluso.\n' "$C_WARN"
+  fi
   echo ""
   # Le metriche restano nel report, ma il ciclo principale impedisce il batch.
   if (( forced_preset != 0 )); then return 1; fi
@@ -1168,9 +1528,10 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
   done
   dominant_preset=""; dominant_count=0; dominant_tie=0
   preset_distribution=""
-  for p in SONAR AURA WIDE AEGIS; do
+  for p in SONAR AURA WIDE AEGIS INCONCLUSIVE; do
     p_count="${PRESET_COUNTS[$p]:-0}"
     (( p_count > 0 )) && preset_distribution+="${p}:${p_count} "
+    [[ "$p" != "INCONCLUSIVE" ]] || continue
     if (( p_count > dominant_count )); then
       dominant_preset="$p"; dominant_count=$p_count; dominant_tie=0
     elif (( p_count == dominant_count && p_count > 0 )); then
@@ -1179,9 +1540,13 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
   done
 
   low_confidence_count=0
+  medium_confidence_count=0
+  high_confidence_count=0
   forced_count=0
   for (( i=0; i<CNT; i++ )); do
-    [[ "${GLOBAL_CONFIDENCE_VALUES[$i]}" == "bassa" ]] && low_confidence_count=$((low_confidence_count + 1))
+    [[ "${GLOBAL_CONFIDENCE_VALUES[$i]}" == "BASSA" ]] && low_confidence_count=$((low_confidence_count + 1))
+    [[ "${GLOBAL_CONFIDENCE_VALUES[$i]}" == "MEDIA" ]] && medium_confidence_count=$((medium_confidence_count + 1))
+    [[ "${GLOBAL_CONFIDENCE_VALUES[$i]}" == "ALTA" ]] && high_confidence_count=$((high_confidence_count + 1))
     [[ "${GLOBAL_PRESET_FORCED_VALUES[$i]}" == "1" ]] && forced_count=$((forced_count + 1))
   done
 
@@ -1189,7 +1554,11 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
   season_desc="preset piu' frequente tra le decisioni per-file"
   # Oltre alla parita', richiedo almeno due terzi di consenso: una maggioranza
   # debole non e' una base sufficiente per suggerire un preset unico.
-  if (( dominant_tie == 1 || HIGH_SPREAD == 1 || dominant_count * 3 < CNT * 2 )); then
+  if (( dominant_count == 0 )); then
+    season_preset="INCONCLUSIVE"
+    season_color="\033[1;37m"
+    season_desc="nessuna evidenza sufficiente; tutti i file esclusi dal processing automatico"
+  elif (( dominant_tie == 1 || HIGH_SPREAD == 1 || dominant_count * 3 < CNT * 2 )); then
     season_preset="MIXED"
     season_color="\033[1;37m"
     season_desc="nessun preset unico affidabile; usare le decisioni per-file"
@@ -1204,6 +1573,7 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
     echo -e "  Range DeltaSur:      \033[0;37m${m_min} / ${m_max} dB  (spread: ${m_spread} dB)\033[0m"
     echo -e "  Distribuzione:       \033[0;37m${preset_distribution% }\033[0m"
     echo -e "  Decisioni incerte:   \033[0;37m${low_confidence_count}/${CNT}\033[0m"
+    echo "  Confidence: ALTA=${high_confidence_count} MEDIA=${medium_confidence_count} BASSA=${low_confidence_count}"
     echo -e "  Preset Consigliato:  ${season_color}${season_preset}\033[0m  (${season_desc})"
 
     # Le anomalie gravi bloccano il batch prima del riepilogo stagionale.
@@ -1238,9 +1608,11 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
     (
       set -e
       echo '#!/usr/bin/env bash'
-      echo "# ── Batch generato da audio_analyzer (V6 RMS + VOICE BAND) ──"
+      echo "# ── Batch generato da audio_analyzer Temporal Surround Intelligence ──"
+      echo "# SONAR_IMMERSIVE_PREFERENCE=${SONAR_IMMERSIVE_PREFERENCE} (decisione salvata; rigenerare per cambiarla)"
       echo "# Data: $(date '+%Y-%m-%d %H:%M')"
       echo "# Metrica: DeltaSur + DeltaFC + VoiceDelta + VoiceMask + Balance + Width | preset sempre per-file"
+      echo '# Temporal fields: Activity|ActiveDeltaSur|P10|P50|P90|ActiveWidth|Correlation|HighCorrelationPersistence|TotalWindows|ValidWindows|ValidFraction|AnalyzedSeconds|ValidSeconds|BilateralWindows|BilateralSeconds|CorrelationWindows|CorrelationSeconds|ProgramDB'
       echo '#'
       echo '# Modifica le variabili sotto se necessario, poi lancia:'
       echo "#   ./${BATCH_FILE}"
@@ -1269,8 +1641,11 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
         # Il batch usa SEMPRE il preset raffinato per-file gia' calcolato in scan_delta.
         # In questo modo non perde le metriche voce, Width e gli override di sicurezza.
         file_preset="${GLOBAL_PRESET_VALUES[$i]:-}"
-        # Il preset stagionale e' solo diagnostico; fallback neutro se manca il per-file.
-        [[ -z "$file_preset" ]] && file_preset="AEGIS"
+        if [[ "$file_preset" == "INCONCLUSIVE" ]]; then
+          printf '# ESCLUSO INCONCLUSIVE: %q | %s | confidence=%s | SelectionMode=%s\n' \
+            "${GLOBAL_METRIC_PATHS[$i]}" "${GLOBAL_REASON_VALUES[$i]}" "${GLOBAL_CONFIDENCE_VALUES[$i]}" "${GLOBAL_SELECTION_MODE_VALUES[$i]}"
+          continue
+        fi
         case "$file_preset" in
           AEGIS|SONAR|WIDE|AURA) ;;
           *) err "Preset automatico non sicuro: $file_preset"; exit 1 ;;
@@ -1291,6 +1666,10 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
         file_source_evidence="${GLOBAL_SOURCE_EVIDENCE_VALUES[$i]:-nessun segnale Atmos}"
         file_measured_preset="${GLOBAL_MEASURED_PRESET_VALUES[$i]:-N/A}"
         escaped_path=$(printf '%q' "${GLOBAL_METRIC_PATHS[$i]}")
+        printf '# Temporal: %s | reason: %s\n' "${GLOBAL_TEMPORAL_VALUES[$i]}" "${GLOBAL_REASON_VALUES[$i]}"
+        printf '# SelectionMode=%s | MeasurementConfidence=%s | Confidence=%s | Alternative=%s\n' \
+          "${GLOBAL_SELECTION_MODE_VALUES[$i]}" "${GLOBAL_MEASUREMENT_CONFIDENCE_VALUES[$i]}" "$file_confidence" "$file_alternative"
+        printf '# TemporalAssessment=%s\n' "${GLOBAL_TEMPORAL_ASSESSMENT_VALUES[$i]}"
   
         # Il commento conserva metriche, confidenza, alternativa e prova Atmos.
         printf '"$PROC" "$CODEC" "$KEEP" "$BITRATE" %s -- %s || BATCH_FAILURES=$((BATCH_FAILURES + 1))  # OutputAudio=5.1(side) Atmos=%s (%s) MeasuredPreset=%s | DeltaSur=%s dB | DeltaFC=%s dB | VoiceDelta=%s dB | VoiceMask=%s dB | Balance=%s dB | Width=%s dB | conf=%s alt=%s | I=%s LUFS LRA=%s LU\n' \
@@ -1315,8 +1694,7 @@ if [[ "${#GLOBAL_METRIC_VALUES[@]}" -gt 0 ]]; then
     BATCH_TMP=""
     ok "Batch file generato: ${BATCH_FILE}"
   else
-    info "Generazione run_processing.sh disattivata (run=no)."
-    info "Un eventuale run_processing.sh esistente non viene modificato o rimosso."
+    info "Batch disattivato (run=no); eventuale run_processing.sh esistente invariato."
   fi
 else
   if [[ "$CREATE_RUN" == "si" ]]; then

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ╭──────────────────────────────────────────────────────────────────────────────╮
-# │   atmos_to_51_dynaudnorm_psicho.sh - (Stable) Novembre 2026                  │
+# │   atmos_to_51_dynaudnorm_psicho.sh - (Stabile) Novembre 2026                 │
 # │   By Sandro (D@mocle77) Sabbioni                                             │
 # │                                                                              │
 # │   Prende un file con traccia EAC3 Atmos (JOC) e produce un MKV con:          │
@@ -36,9 +36,12 @@ C_OK="\033[0;32m[OK]\033[0m"
 # Funzioni di log
 info(){ echo -e "${C_INFO} $*"; }
 mapping(){ echo -e "${C_MAPPING} $*"; }
+atmos(){ echo -e "${C_ATMOS_FOUND} $*\033[0m"; }
 warn(){ echo -e "${C_WARN} $*"; }
 err(){  echo -e "${C_ERR}  $*"; }
 ok(){   echo -e "${C_OK}  $*"; }
+# Sezioni console: stessa palette dell'analyzer, separate da una riga vuota.
+section(){ printf '\n%b \033[1;36m%s\033[0m\n' "$C_INFO" "$*"; }
 
 # Legge dallo stesso terminale dello script, senza riaprire /dev/tty.
 # In esecuzioni non interattive gli output esistenti vengono saltati.
@@ -279,6 +282,7 @@ encode_complete_candidate() {
     cmd+=(-metadata:s:a:0 "language=$A_LANG" -metadata:s:a:1 "language=$A_LANG")
   fi
   cmd+=("$output_file")
+  printf '==> Elaborazione in corso...\n' >&2
   "${cmd[@]}"
 }
 
@@ -312,6 +316,7 @@ process_verified_audio() {
     err "Impossibile riservare la directory temporanea"
     return 1
   }
+  section "ELABORAZIONE"
   info "Temporanei: $work_dir"
   mux_file="$work_dir/mux.mkv"
   info "Encoding e mux diretto"
@@ -319,6 +324,7 @@ process_verified_audio() {
     err "Encoding/mux fallito; temporanei conservati: $work_dir"
     return 1
   fi
+  section "VERIFICA OUTPUT"
   if ! verify_mux_audio_layout "$mux_file"; then
     err "Traccia primaria del mux non conforme (EAC3, 5.1(side), 48 kHz, default). Temporanei: $work_dir"
     return 1
@@ -328,7 +334,9 @@ process_verified_audio() {
     return 1
   fi
   rmdir -- "$work_dir" || warn "Directory temporanea conservata: $work_dir"
-  ok "Creato (formato traccia verificato): $OUT_FILE"
+  printf '\n'
+  info "Formato verificato: EAC3 | 5.1(side) | 48 kHz | traccia default"
+  ok "Creato: $OUT_FILE"
   return 0
 }
 
@@ -377,6 +385,7 @@ FILES=("${FILTERED_FILES[@]}")
 # Check se ci sono file da processare
 (( ${#FILES[@]} == 0 )) && { err "Nessun file trovato."; exit 1; }
 # Mostra info
+section "CONFIGURAZIONE"
 info "Bitrate 5.1: $BITRATE"
 if [[ "$ATMOS_HIGHPASS_HZ" == "0" ]]; then
   info "Passa-alto Atmos: disattivato (nessun taglio del basso)"
@@ -384,7 +393,6 @@ else
   info "Passa-alto Atmos: 20 Hz su tutti i canali, LFE incluso"
 fi
 info "Filtri Atmos: ${ATMOS_FILTERS:-nessuno (solo formato e mapping)}"
-echo ""
 
 # Ciclo elaborazione
 OK_COUNT=0
@@ -393,7 +401,8 @@ SKIP_COUNT=0
 
 # Ciclo sui file
 for CUR_FILE in "${FILES[@]}"; do
-  info "━━━ Input: $CUR_FILE"
+  section "SORGENTE"
+  info "Input: $CUR_FILE"
 
   # Trova traccia Atmos/EAC3
   PROBE_RESULT=$(find_atmos_stream "$CUR_FILE") || {
@@ -409,28 +418,29 @@ for CUR_FILE in "${FILES[@]}"; do
 
   info "Traccia audio: idx=$A_IDX, canali=$A_CH, lingua=$A_LANG, tipo=$A_TYPE"
   info "Decoder EAC3: DRC Dolby disattivata in ingresso"
+  section "ATMOS / OUTPUT"
   case "$A_TYPE" in
-    atmos) echo "[ATMOS] Input: E-AC3 Atmos (profilo FFprobe verificato)" ;;
-    fallback) echo "[ATMOS] Input: E-AC3 5.1 (Atmos non verificato)" ;;
-    inconclusive) echo "[ATMOS] Input: E-AC3 5.1 (metadati profilo non conclusivi; Atmos non verificato)" ;;
+    atmos) atmos "Input: E-AC3 Atmos (profilo FFprobe verificato)" ;;
+    fallback) atmos "Input: E-AC3 5.1 (Atmos non verificato)" ;;
+    inconclusive) atmos "Input: E-AC3 5.1 (metadati profilo non conclusivi; Atmos non verificato)" ;;
   esac
-  echo "[ATMOS] Output: E-AC3 5.1(side)"
-  echo "[ATMOS] Processing mode: $ATMOS_MODE"
+  atmos "Output: E-AC3 5.1(side)"
+  atmos "Processing mode: $ATMOS_MODE"
   if [[ "$ATMOS_MODE" == "normalized" ]]; then
-    echo "[ATMOS] Dynamic normalization: ON (legacy)"
-    echo "[ATMOS] Peak protection: legacy limiter 0.89"
+    atmos "Dynamic normalization: ON (legacy)"
+    atmos "Peak protection: legacy limiter 0.89"
   else
-    echo "[ATMOS] Dynamic normalization: OFF"
+    atmos "Dynamic normalization: OFF"
     if [[ "$ATMOS_PEAK_PROTECTION" == "on" ]]; then
-      echo "[ATMOS] Peak protection: ON (0.92)"
+      atmos "Peak protection: ON (0.92)"
     else
-      echo "[ATMOS] Peak protection: OFF"
+      atmos "Peak protection: OFF"
     fi
   fi
   if [[ "$A_TYPE" == "atmos" ]]; then
-    echo "[ATMOS] Original Atmos stream: preserved (stream copy)"
+    atmos "Original Atmos stream: preserved (stream copy)"
   else
-    echo "[ATMOS] Original E-AC3 stream: preserved (stream copy; Atmos non verificato)"
+    atmos "Original E-AC3 stream: preserved (stream copy; Atmos non verificato)"
   fi
   info "FFmpeg: decodifica della rappresentazione 5.1 disponibile; nessun rendering oggetti/altezze Atmos."
 
@@ -478,15 +488,16 @@ for CUR_FILE in "${FILES[@]}"; do
   else
     ((ERR_COUNT+=1))
   fi
-  echo ""
 done
 
+section "RIEPILOGO"
+info "Riusciti: $OK_COUNT | Falliti: $ERR_COUNT | Saltati: $SKIP_COUNT"
 if (( ERR_COUNT > 0 )); then
-  err "Elaborazione completata con errori: OK=$OK_COUNT, FALLITI=$ERR_COUNT, SALTATI=$SKIP_COUNT"
+  err "Elaborazione completata con errori."
   exit 1
 fi
 if (( OK_COUNT == 0 )); then
-  warn "Nessun file elaborato: SALTATI=$SKIP_COUNT"
+  warn "Nessun file elaborato."
   exit 0
 fi
-ok "Elaborazione completata: OK=$OK_COUNT, FALLITI=0, SALTATI=$SKIP_COUNT"
+ok "Elaborazione completata."

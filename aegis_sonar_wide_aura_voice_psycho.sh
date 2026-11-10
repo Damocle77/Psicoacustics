@@ -2,7 +2,7 @@
 set -uo pipefail
 
 # ╭──────────────────────────────────────────────────────────────────────────────────╮
-# │   aegis_sonar_wide_aura_voice_psycho.sh - (Stable) Novembre 2026                 │
+# │   aegis_sonar_wide_aura_voice_psycho.sh - (Stabile) Novembre 2026                │
 # │   By Sandro (D@mocle77) Sabbioni                                                 │
 # │                                                                                  │
 # │   Motore di processing audio offline per tracce 5.1 (EAC3/AC3/PCM).              │
@@ -36,6 +36,8 @@ mapping(){ echo -e "${C_MAPPING} $*"; }
 warn(){ echo -e "${C_WARN} $*"; }
 err(){  echo -e "${C_ERR}  $*"; }
 ok(){   echo -e "${C_OK}  $*"; }
+# Sezioni console: stessa palette dell'analyzer, separate da una riga vuota.
+section(){ printf '\n%b \033[1;36m%s\033[0m\n' "$C_INFO" "$*"; }
 
 # Parametri di decorrelazione per i preset surround: valori empirici per creare un layer di aria senza alterare il mix principale.
 DECORR_GAIN_SONAR="0.055"
@@ -235,8 +237,16 @@ case "$SUR_MODE" in
 esac
 
 # Log dei parametri finali: utile per confermare cosa è stato interpretato dallo script, soprattutto con parsing flessibile.
+section "CONFIGURAZIONE"
 info "Codec output:   $OUT_CODEC"
-info "Surround mode:  $SUR_MODE ($DESC)"
+case "$SUR_MODE" in
+  sonar)    MODE_COLOR="\033[1;31m" ;;
+  aegis)    MODE_COLOR="\033[38;5;208m" ;;
+  wide)     MODE_COLOR="\033[1;32m" ;;
+  aura)     MODE_COLOR="\033[1;35m" ;;
+  voiceita) MODE_COLOR="\033[1;37m" ;;
+esac
+info "Surround mode:  ${MODE_COLOR}${SUR_MODE}\033[0m ($DESC)"
 info "Bitrate Target: $BITRATE"
 info "Output trim:    ${FINAL_TRIM_DB} dB (dopo master limiter, prima del codec)"
 
@@ -607,6 +617,7 @@ encode_and_mux_output() {
   fi
 
   cmd+=( "$output_file" )
+  printf '==> Elaborazione in corso...\n' >&2
   "${cmd[@]}"
 }
 
@@ -640,6 +651,7 @@ process_verified_output() {
     err "Impossibile riservare la directory temporanea"
     return 1
   }
+  section "ELABORAZIONE"
   info "Temporanei: $work_dir"
   mux_file="$work_dir/mux.mkv"
   printf '%s\n' "$graph" >"$work_dir/filter_complex.txt" || return 1
@@ -648,6 +660,7 @@ process_verified_output() {
     err "Encoding/mux fallito; output finale invariato. Temporanei: $work_dir"
     return 1
   fi
+  section "VERIFICA OUTPUT"
   if ! verify_mux_audio_layout "$mux_file"; then
     err "Traccia primaria non conforme ($OUT_CODEC, 5.1(side), 48 kHz, default). Temporanei: $work_dir"
     return 1
@@ -659,7 +672,9 @@ process_verified_output() {
   # Solo file creati da questa esecuzione nella directory riservata da mktemp.
   rm -f -- "$work_dir/filter_complex.txt"
   rmdir -- "$work_dir" || warn "Directory temporanea conservata: $work_dir"
-  ok "Creato (formato traccia verificato): $OUT_FILE"
+  printf '\n'
+  info "Formato verificato: ${OUT_CODEC^^} | 5.1(side) | 48 kHz | traccia default"
+  ok "Creato: $OUT_FILE"
   return 0
 }
 
@@ -675,6 +690,7 @@ OK_COUNT=0
 ERR_COUNT=0
 
 for CUR_FILE in "${FILES[@]}"; do
+  section "SORGENTE"
   info "Input: $CUR_FILE"
   # Se è stato specificato un file di input, lo uso. Altrimenti, controllo se il file è già stato processato (nome con suffisso _AC3_ o _EAC3_ + preset). Se sì, skippo il file e loggo un warning.
   if [[ -z "$INPUT_FILE" ]]; then
@@ -814,8 +830,12 @@ for CUR_FILE in "${FILES[@]}"; do
   fi
 done
 # Log finale: riepilogo con exit code reale (1 se almeno un file è fallito).
+# Conteggio per il solo riepilogo: ogni file termina in riuscito, fallito o saltato.
+SKIP_COUNT=$(( ${#FILES[@]} - OK_COUNT - ERR_COUNT ))
+section "RIEPILOGO"
+info "Riusciti: $OK_COUNT | Falliti: $ERR_COUNT | Saltati: $SKIP_COUNT"
 if (( ERR_COUNT > 0 )); then
-  err "Elaborazione completata con errori: OK=$OK_COUNT, FALLITI=$ERR_COUNT"
+  err "Elaborazione completata con errori."
   exit 1
 fi
 # Nessun file effettivamente elaborato (tutti saltati: non-5.1, già processati o non interattivi):
@@ -824,4 +844,4 @@ if (( OK_COUNT == 0 )); then
   warn "Nessun file elaborato."
   exit 0
 fi
-ok "Elaborazione completata: OK=$OK_COUNT, FALLITI=0"
+ok "Elaborazione completata."

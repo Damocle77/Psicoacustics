@@ -4,7 +4,7 @@
 
 [**Italiano**](README.md) | [English](README.en.md)
 
-# 🎧 Psychoacoustic Suite - (Stable) Novembre 2026
+# 🎧 Psychoacoustic Suite
 
 Suite di script **Bash AWK + FFmpeg** per analizzare, correggere e trasformare tracce audio stereo, 5.1 ed EAC3 Atmos/JOC in modo offline, ripetibile e controllato.
 
@@ -12,6 +12,7 @@ Suite di script **Bash AWK + FFmpeg** per analizzare, correggere e trasformare t
 
 ## Indice degli argomenti
 
+- [Pipeline di funzionamento](#pipeline-di-funzionamento)
 - [Schema di riferimento](#schema-di-riferimento)
 - [Requisiti](#requisiti)
 - [Installazione](#installazione)
@@ -30,7 +31,7 @@ Suite di script **Bash AWK + FFmpeg** per analizzare, correggere e trasformare t
 - [Licenza](#licenza)
 - [Autore](#autore)
 
-La filosofia è semplice: **misurare prima, processare dopo**. Il Classifier dell'analyzer misura scena full-band, prominenza della voce, mascheramento e width dei surround; sceglie quindi il preset per-file più adatto e può generare un batch riproducibile. Gli altri script coprono upmix stereo, preparazione Atmos/EAC3 e processing binaurale per cuffie.
+La filosofia è semplice: **misurare prima, processare dopo**. Il classificatore dell'analyzer misura scena full-band, prominenza della voce, mascheramento, width e comportamento temporale dei surround; sceglie quindi il preset per-file più adatto e può generare un batch riproducibile. Gli altri script coprono upmix stereo, preparazione Atmos/EAC3 e processing binaurale per cuffie.
 
 La taratura 5.1 è pensata per un impianto domestico con frontali, centrale e surround compatti, tutti configurati **Small** con crossover AVR unico intorno a **110 Hz**, uno o due subwoofer attivi gestiti dall'AVR, ascolto medio/basso e priorità all'intelligibilità della voce in generale ed italiana in particolare.
 
@@ -39,6 +40,20 @@ La pipeline 5.1 (preparatore Atmos, analyzer e processore Aegis/Sonar/Wide/Aura/
 Setup di riferimento: **Yamaha RX-V4A**, frontali **Harman Kardon 3 vie**, centrale/surround **JBL SCS200**, 2x subwoofer **Kenwood ST40**, bass management AVR a **110 Hz**.
 
 I frontali a torre vengono comunque utilizzati come diffusori **Small**: il loro vantaggio è principalmente nella maggiore capacità dinamica e nella migliore riproduzione della gamma medio-alta, mentre il contenuto sotto il crossover resta affidato al bass management dell'AVR.
+
+## Pipeline di funzionamento
+
+Lo schema illustra il percorso dalla sorgente alla traccia elaborata: preparazione Atmos opzionale, analisi automatica e processore 5.1 con preset psicoacustici.
+
+<p align="center">
+  <a href="Psicoacustics%20Workflow.png">
+    <img src="Psicoacustics%20Workflow.png" width="1200" alt="Pipeline Clearvoice / Psicoacustics: sorgente audio, preparazione Atmos opzionale, analyzer, processore 5.1 e output">
+  </a>
+</p>
+
+[Apri lo schema a risoluzione completa](Psicoacustics%20Workflow.png).
+
+La selezione dei preset è riassunta nello schema. Per i criteri completi, compresa la candidatura SONAR per espansione immersiva quando la relativa preferenza è attiva, consulta il [capitolo dell’analyzer](#1-audio_analyzer_psychosh). La provenienza Atmos rimane esclusivamente informativa.
 
 ## Schema di riferimento
 
@@ -106,7 +121,7 @@ chmod +x *.sh
 ```
 
 Se si scarica lo ZIP, estrarlo completamente prima di eseguire gli script.
-La versione stabile comprende i cinque script principali `.sh` e i README nella cartella principale. Il processore 5.1 e il preparatore Atmos usano la configurazione descritta sotto, con DRC Dolby disattivata in decodifica. Gli archivi `.rar` rimasti sono copie precedenti: non vengono aggiornati insieme ai file attivi e non vanno estratti sopra questi ultimi senza un confronto.
+La suite comprende i cinque script principali `.sh` e i README nella cartella principale. Il processore 5.1 e il preparatore Atmos usano la configurazione descritta sotto, con DRC Dolby disattivata in decodifica. Gli archivi `.rar` rimasti sono copie precedenti: non vengono aggiornati insieme ai file attivi e non vanno estratti sopra questi ultimi senza un confronto.
 
 I comandi di questa guida vanno eseguiti in Bash (su Windows: Git Bash, MSYS2
 o WSL). Per esempio, in Git Bash `cd /e/Download` apre `E:\Download`.
@@ -129,7 +144,7 @@ done
 |---|---|
 | <img src="docs/script-labels/audio_analyzer_psycho.sh.svg" alt="audio_analyzer_psycho.sh" height="20"> | Classifier 5.1 basato su metriche audio, loudness e misure LFE/bassi solo diagnostiche, batch opzionale |
 | <img src="docs/script-labels/aegis_sonar_wide_aura_voice_psycho.sh.svg" alt="aegis_sonar_wide_aura_voice_psycho.sh" height="20"> | Processore 5.1 con preset `aegis`, `sonar`, `wide`, `aura`, `voiceita`, EQ voce e psicoacustica preservate; nessun gain comune automatico né compensazione Atmos |
-| <img src="docs/script-labels/stereo251_upmix_psycho.sh.svg" alt="stereo251_upmix_psycho.sh" height="20"> | Upmix V10 stereo → 5.1: matrice L-R, centro assist, rear bed adattivo in `to51`, LFE minimo, output atomico/verificato e preset `quad` dedicato alla musica |
+| <img src="docs/script-labels/stereo251_upmix_psycho.sh.svg" alt="stereo251_upmix_psycho.sh" height="20"> | Upmix stereo → 5.1: matrice L-R, centro assist, rear bed adattivo in `to51`, LFE minimo, output atomico/verificato e preset `quad` dedicato alla musica |
 | <img src="docs/script-labels/asmr_vr_intimate_psycho.sh.svg" alt="asmr_vr_intimate_psycho.sh" height="20"> | Processing stereo per cuffie/ASMR/VR con BS2B, ITD opzionale, loudnorm post-DSP, LFO e output atomico/verificato |
 | <img src="docs/script-labels/atmos_to_51_dynaudnorm_psicho.sh.svg" alt="atmos_to_51_dynaudnorm_psicho.sh" height="20"> | Preparatore opzionale: EAC3 5.1 `preserve` predefinita, limiter opzionale e originale copiata; `normalized` conserva il DSP legacy |
 
@@ -148,7 +163,7 @@ done
 
 Nei quattro processori sono state rimosse le scansioni comparative integrali della sorgente e dell'output per RMS, sample peak e numero di campioni. Restano gli errori FFmpeg, i controlli preventivi e la pubblicazione tramite file temporaneo. L'analyzer conserva le misure necessarie alle proprie decisioni.
 
-I messaggi finali specificano **«formato traccia verificato»** oppure **«True Peak verificato»**: nessuno dei due indica un confronto completo con il segnale sorgente. Le caratteristiche dell'upmix V10 sono documentate nella sezione dedicata sotto.
+I messaggi finali specificano **«formato traccia verificato»** oppure **«True Peak verificato»**: nessuno dei due indica un confronto completo con il segnale sorgente. Le caratteristiche dell'upmix sono documentate nella sezione dedicata sotto.
 
 ## Quick Start: comandi manuali
 
@@ -214,19 +229,19 @@ La scelta si basa sull'ascolto del film e sulle preferenze personali.
 - selezione del 5.1 score-based: lingua italiana e flag default, senza confronto con la durata del container;
 - decodifica AC3/EAC3 con DRC Dolby disattivata, coerente con il processore;
 - misura in un'unica decodifica full-duration `I(full)`, `LRA`, sample peak,
-  full-band, banda voce, `Width MS` e finestre LFE/bassi;
+  full-band, banda voce, `Width MS`, finestre LFE/bassi e analisi temporale surround;
 - indicatore di avanzamento durante la scansione completa;
 - cache persistente delle metriche, invalidata automaticamente quando cambia il file, lo stream o lo schema analitico;
 - rilevamento Atmos esclusivamente informativo tramite profilo E-AC-3 ufficiale esposto da FFprobe, con marker stabile del pre-processore come fallback;
 - loudness integrata e LRA esclusivamente informative, senza target o normalizzazione;
 - fake-5.1 gate: surround virtualmente muti, centrale silenzioso o SL/SR sbilanciati bloccano la pubblicazione del batch;
 - debolezza e mascheramento del centrale restano diagnostici; i preset automatici sono solo AEGIS, SONAR, WIDE e AURA;
-- `sonar` per surround molto arretrati, `aura` per arretramento moderato;
+- `sonar` per recupero dei surround molto arretrati o, con preferenza `on` e idoneità verificata, espansione immersiva; `aura` per arretramento moderato;
 - `wide` quando SL/SR risultano stretti o collassati, `aegis` per mix equilibrati;
 - verdetto stagionale modale con almeno **2/3 di consenso**; altrimenti `MIXED`;
 - `MIXED` anche quando lo spread di `DeltaSur` supera `4 dB`;
 - `run_processing.sh` opzionale tramite parametro `run=si|no`;
-- colori distinti in console:
+- colori distinti in console per il preset principale e le alternative:
   - SONAR rosso;
   - AEGIS arancione;
   - WIDE verde;
@@ -259,15 +274,15 @@ La stessa decodifica integrale misura l'energia a **20–120 Hz** in finestre co
 
 La diagnostica dei bassi complessivi confronta l'energia bassa dei cinque principali più quella LFE pesata per 10 (+10 dB solo nella misura) con l'energia a **250–5000 Hz** dei cinque principali. Il report mostra RMS, delta, P95, persistenza sopra +6 dB e durata valida. Queste stime energetiche non simulano fase, crossover AVR, calibrazione o acustica della stanza e non modificano l'audio prodotto.
 
-La cache usa lo schema **`classifier-rms-voiceband-ebur-lfe-bass-v8-diagnostics-only`**, con **32 campi di misura** e nessuna decisione di correzione. I record precedenti sono invalidati automaticamente. Rigenerare i `run_processing.sh` esistenti con `run=si` prima di usare il processore aggiornato: i vecchi batch possono contenere le opzioni rimosse.
+La cache conserva le metriche validate, comprese le statistiche temporali dei surround; le decisioni sui preset vengono ricalcolate a ogni esecuzione. La pulizia dei nomi interni cambia la chiave della cache: la prima analisi viene ricalcolata, poi torna a essere riutilizzabile. I file cache già presenti restano sul disco. Rigenerare i `run_processing.sh` esistenti con `run=si` prima di usare il processore aggiornato: i vecchi batch possono contenere le opzioni rimosse.
 
 ## Cache e avanzamento
 
 La prima analisi resta full-duration. Le metriche validate vengono salvate nella
 cartella `.clearvoice_analyzer_cache`; una successiva analisi dello stesso file
 le riutilizza senza decodificare nuovamente l'episodio. La chiave comprende
-percorso canonico, dimensione, data di modifica, indice dello stream e versione
-dell'algoritmo.
+percorso canonico, dimensione, data di modifica, indice dello stream e formato
+delle metriche.
 
 ```bash
 ANALYZER_CACHE=0 ./audio_analyzer_psycho.sh eac3 no 768k si ""
@@ -305,22 +320,128 @@ Nella modalità `--files`, il token dopo il bitrate viene interpretato come `run
   "ep01.mkv" "ep02.mkv"
 ```
 
-## Decisione → preset
+## Temporal Surround Intelligence
 
-| Priorità | Condizione principale | Preset | Interpretazione |
-|---:|---|---|---|
-| 1 | `DeltaSur < -13 dB` | `sonar` | surround molto arretrati, trattamento Atmos-like più energico |
-| 2 | `Width MS < -7 dB` | `wide` | surround stretti/collassati, allargamento laterale |
-| 3 | `DeltaSur < -7 dB` | `aura` | surround moderatamente arretrati, intervento posteriore morbido |
-| 4 | altrimenti | `aegis` | scena equilibrata, trattamento DTS:X-like bilanciato |
+L'analyzer usa un unico classificatore operativo: un'euristica basata su statistiche temporali del segnale, senza intelligenza artificiale. Una sola decodifica FFmpeg alimenta i rami storici invariati e un nuovo ramo full-band a 48 kHz. `pan` aggiunge MID/SIDE agli stessi canali; `asetnsamples=n=24000:p=0`, `astats` e `ametadata` producono finestre sincronizzate di 500 ms senza padding finale. Nessun filtro di banda introduce ritardi nel nuovo ramo. AWK conserva soltanto statistiche compatte, senza PCM in RAM o file PCM temporanei. Nessuna nuova dipendenza.
 
-Nel ramo `SONAR`, `DeltaSur < -13 dB` continua a selezionare `SONAR`: se nello stesso caso `Width MS < -7 dB`, `WIDE` viene riportato come alternativa diagnostica e la confidence diventa bassa, con motivo "surround molto arretrati e contemporaneamente stretti/collassati". Questa alternativa ha precedenza su `AURA` per SONAR borderline; non viene applicato alcun processing combinato.
+### Metriche temporali
 
-Surround virtualmente muti (RMS < −65 dBFS o un canale a −inf), centrale silenzioso (−inf) o sbilanciamento SL/SR ≥ 10 dB bloccano il batch con un warning e richiedono controllo manuale. Le metriche restano nel report; nessun comando CHECK viene generato. Le soglie voce restano diagnostiche, anche vicino ai confini; se la banda è vuota vengono indicate N/A.
+- **SurroundActivityRatio**: durata dei periodi attivi / durata analizzata. Almeno un surround deve superare sia il gate assoluto sia quello relativo al programma. Si accettano solo sequenze contigue che raggiungono la persistenza minima, contando anche la loro parte iniziale. Il programma è la media energetica full-duration dei cinque canali escluso LFE.
+- **ActiveDeltaSur**: `10 log10(sum(P_SUR*n) / sum(P_MAIN*n))`, dove SUR è la media energetica SL/SR, MAIN la media FL/FR/FC e `n` il numero effettivo di campioni. Solo finestre attive con MAIN sopra il gate numerico. Nessuna media dei dB.
+- **ActiveDeltaSurP10/P50/P90**: percentili nearest-rank pesati per campioni delle stesse finestre; istogramma a 0,1 dB, arrotondato per difetto (errore inferiore a 0,1 dB).
+- **ActiveWidth**: `10 log10(sum(P_SIDE*n) / sum(P_MID*n))`, soltanto quando entrambi i surround superano il gate nelle sequenze attive. `MID=(SL+SR)/2`, `SIDE=(SL-SR)/2`. I limiti esatti sono `-inf` per SIDE nullo e `+inf` per MID nullo; entrambi nulli danno `N/A`.
+- **SurroundCorrelation**: Pearson normalizzato dopo la rimozione della media di ciascuna finestra. `E[SL*SR]=P_MID-P_SIDE`; covarianza e varianze intra-finestra vengono sommate pesando per campioni, quindi normalizzate. Non è una semplice differenza Mid/Side, né una media dei coefficienti. Finestre silenziose, costanti o numericamente inaffidabili sono escluse.
+- **HighCorrelationPersistence**: frazione della durata delle finestre con correlazione valida sopra la soglia positiva. Le finestre parziali pesano per i campioni effettivi.
+- Il report distingue finestre totali, valide per DeltaSur, bilaterali per Width e valide per Pearson; mostra percentuale valida per numero, durata totale e durate utili. Le frazioni nella cache sono 0–1; la console le mostra in percentuale.
 
-Atmos è rilevato dal profilo EAC3 FFprobe o dai marker esatti `EAC3 Atmos Original` / `EAC3 Atmos (Original)`. La provenienza è solo informativa: non modifica preset, alternativa, confidenza o filtergraph. La classificazione segue esclusivamente le metriche audio e i gate di sicurezza.
+`ametadata` stampa gli offset DC con sei decimali: varianze non superiori a `2e-6*abs(DC)+1e-12` sono escluse dal Pearson. Questa protezione evita di presentare come correlazione affidabile il rumore numerico vicino a segnali costanti. Valori mancanti sono `N/A`, senza livelli fittizi. La correlazione negativa non prova una buona spazialità: una forte opposizione di fase abbassa la confidenza e richiede ascolto.
 
-Il riepilogo di tutti i preset separa `Audio` (layout della traccia selezionata, ad esempio `5.1(side)`) da `Atmos` (`verificato` o `non verificato`). Nei commenti del batch, `OutputAudio=5.1(side)` indica il layout prodotto dal processore.
+### Soglie configurabili
+
+Le soglie si impostano come variabili d'ambiente. Le opzioni generali del classificatore usano il prefisso descrittivo `CLASSIFIER_`; i valori predefiniti restano invariati. Sono **empiriche e sperimentali**, senza validazione scientifica o percettiva su film reali.
+
+| Variabile | Default | Significato |
+|---|---:|---|
+| `SUR_ACTIVITY_ABS_DB` | −60 dBFS | Esclude rumore/silenzio |
+| `SUR_ACTIVITY_REL_DB` | 35 dB | Margine sotto l'energia media del programma |
+| `SUR_ACTIVITY_MIN_SECONDS` | 1 s | Durata minima della sequenza attiva |
+| `SUR_MAIN_MIN_DB` | −80 dBFS | MAIN minimo per i rapporti energetici |
+| `SUR_CORRELATION_GATE` | 0,8 | Correlazione positiva elevata |
+| `CLASSIFIER_SONAR_ACTIVE_DB` | −13 dB | Deficit attivo severo |
+| `CLASSIFIER_AURA_ACTIVE_DB` | −7 dB | Deficit attivo moderato |
+| `CLASSIFIER_WIDTH_ACTIVE_DB` | −7 dB | Width attiva ridotta |
+| `CLASSIFIER_HIGH_CORR_PERSISTENCE` | 0,75 | Persistenza minima per WIDE |
+| `CLASSIFIER_MIN_VALID_WINDOWS` / `CLASSIFIER_MIN_VALID_SECONDS` | 4 / 2 s | Evidenza attiva minima per decidere |
+| `CLASSIFIER_HIGH_VALID_WINDOWS` / `CLASSIFIER_HIGH_VALID_SECONDS` | 20 / 10 s | Evidenza minima per confidenza ALTA |
+| `CLASSIFIER_VARIABILITY_DB` | 10 dB | Identifica variabilità ampia; non è un veto autonomo |
+| `CLASSIFIER_MEDIAN_AGREEMENT_DB` | 6 dB | Massima divergenza ActiveDeltaSur/P50 per un riferimento energetico centrale coerente |
+| `CLASSIFIER_GLOBAL_AGREEMENT_DB` | 6 dB | Divergenza globale/attivo che limita la confidenza |
+| `CLASSIFIER_RARE_ACTIVITY_RATIO` | 0,2 | Eventi rari: permette una divergenza attesa senza penalizzare oltre MEDIA |
+| `CLASSIFIER_HIGH_VALID_RATIO` | 0,2 | Copertura minima per confidence ALTA |
+| `CLASSIFIER_CORRELATION_MARGIN` / `CLASSIFIER_PERSISTENCE_MARGIN` | 0,05 / 0,1 | Margini borderline per WIDE |
+
+Le soglie storiche `SONAR_DELTA_GATE=-13`, `AURA_DELTA_GATE=-7`, `WIDTH_WIDE_GATE=-7` restano riferimenti globali nel codice. Le nuove soglie attive sono separate: i valori iniziali simili sono un punto di partenza sperimentale, non un'assunzione di equivalenza statistica. `WIDTH_WIDE_GATE` viene ancora incrociato con Width attiva per WIDE. Il margine borderline resta 0,7 dB.
+
+### Priorità deterministica e confidence
+
+| Priorità | Evidenza | Risultato |
+|---:|---|---|
+| 0 | Silenzio, fake 5.1, centrale silenzioso, SL/SR ≥10 dB | Blocco di sicurezza |
+| 1 | Campione attivo insufficiente o rapporti non disponibili | `INCONCLUSIVE` |
+| 2 | ActiveDeltaSur e P50 sotto la soglia severa | SONAR |
+| 3 | Width globale e attiva ridotte, Pearson positivo elevato e persistente, campione bilaterale/correlazione sufficiente | WIDE |
+| 4 | ActiveDeltaSur e P50 sotto la soglia moderata | AURA |
+| 5 | ActiveDeltaSur e P50 almeno alla soglia moderata | AEGIS; con preferenza `on` e tutti i controlli di idoneità superati, SONAR immersivo |
+| 6 | Aggregato e P50 a cavallo della soglia moderata, entrambi entro il margine di 0,7 dB e distanti tra loro al massimo dello stesso margine | AURA se aggregato < −7 dB, altrimenti AEGIS; BASSA, alternativa esplicita |
+| 7 | Aggregato appena sul lato AEGIS, mediana moderata, misure ALTA e limiti di accordo rispettati (vedi sotto) | AURA; BASSA, MIXED, alternativa AEGIS |
+| 8 | Altri disaccordi tra aggregato e P50 su lati opposti oltre il margine ammesso | `INCONCLUSIVE` |
+
+SONAR di recupero ha precedenza se anche WIDE è vero: alternativa WIDE e confidence BASSA. WIDE precede AURA. Un DeltaSur globale basso da solo non seleziona SONAR/AURA. La voce resta diagnostica per la classe energetica e può escludere la candidatura immersiva; VOICEITA rimane esclusivamente manuale. Atmos, rilevato dal profilo EAC3 FFprobe o dai marker esatti `EAC3 Atmos Original` / `EAC3 Atmos (Original)`, resta informativo.
+
+`Measurement Confidence`, per le tracce ammesse dai controlli di sicurezza, descrive affidabilità e disponibilità del campione statistico: almeno 4 finestre DeltaSur / 2 s e statistiche bilaterali/Pearson disponibili per MEDIA; almeno 20 finestre / 10 s per DeltaSur, bilaterale e Pearson, più copertura DeltaSur almeno 20%, per ALTA. Quantità di dati, varianze valide e disponibilità delle misure sono distinte dall'energia rilevata: P10 basso, spread ampio, correlazione negativa o uno sbilanciamento borderline realmente misurato non rendono automaticamente inaffidabile il campione. Questa confidence resta euristica, non un intervallo di errore metrologico.
+
+`Confidence` riguarda invece la stabilità della classificazione e della scelta. Restano i controlli su divergenza globale/attivo, vicinanza alle soglie, campione spaziale insufficiente, opposizione di fase, width contraddittoria e balance borderline. Una divergenza ActiveDeltaSur/P50 superiore a `CLASSIFIER_MEDIAN_AGREEMENT_DB` segnala un riferimento energetico non concorde nei preset energetici; WIDE conserva la valutazione della separazione persistente senza una penalità energetica autonoma. Lo spread sopra 10 dB riduce la confidence energetica se attraversa i confini decisivi per SONAR di recupero/AURA; per AEGIS la coda P10 debole la riduce soltanto se anche la mediana è vicina al confine AURA oppure discordante dal rapporto aggregato. P10 basso da solo non penalizza più una scena con energia aggregata e mediana adeguate e concordi.
+
+`Temporal Assessment` separa **STABLE**, **VARIABLE_COHERENT**, **VARIABLE**, **BORDERLINE**, **MIXED**, **INSUFFICIENT** e **BLOCKED**. `VARIABLE` indica una distribuzione ampia che attraversa le fasce decisionali, con aggregato e mediana concordi; `MIXED` indica riferimenti energetici discordanti (aggregato/mediana o globale/attivo). Le etichette descrivono le misure e non giudicano la qualita del mix. Una distribuzione ampia ma con riferimento centrale adeguato e coerente può quindi avere Measurement Confidence ALTA e classificazione affidabile. Non viene riconosciuto il contenuto narrativo: la variabilità può essere compatibile con alternanza di dialoghi, effetti e ambienza, senza costituire un difetto dimostrato del mix. Nessuna di queste etichette misura intelligibilità, altezza percepita o superiorità d'ascolto di un preset.
+
+Il margine `PRESET_BORDERLINE_MARGIN` già esistente gestisce anche piccoli disaccordi AURA/AEGIS. Se ActiveDeltaSur e P50 sono entrambi entro 0,7 dB dalla soglia −7 dB e differiscono al massimo di 0,7 dB, la classe segue il rapporto energetico aggregato: sotto soglia AURA, sulla soglia o sopra AEGIS. Vale anche quando P50 quantizzato cade esattamente sul confine. La scelta resta `CONSERVATIVE`, con `Confidence: BASSA`, alternativa reciproca e `Temporal Assessment: BORDERLINE`; Measurement Confidence resta determinata dal campione. Una tolleranza numerica di 0,000001 dB tiene conto dei sei decimali della serializzazione, senza cambiare il margine decisionale empirico.
+
+Per esempio, ActiveDeltaSur −7,17 dB e P50 −7,0 dB producono AURA con alternativa AEGIS: lo scarto di 0,17 dB è un confine decisionale incerto, non una carenza di misure.
+
+Queste decisioni borderline possono entrare nel batch con preset e diagnostica espliciti. La preferenza immersiva non le trasforma in SONAR. Campioni insufficienti e disaccordi su lati opposti oltre il margine, salvo il caso di mediana moderata descritto sotto, restano `INCONCLUSIVE`, senza comandi; SONAR di recupero e WIDE mantengono precedenza. Le motivazioni distinguono l'incertezza vicino al confine dalla distribuzione ampia: per AURA, code in altre fasce energetiche non vengono descritte come assenza di un centro stabile quando aggregato e mediana concordano. Quando AEGIS non diventa SONAR, i veto su ActiveWidth e P90 sono riportati con i relativi valori e soglie.
+
+### SONAR: recupero o preferenza immersiva
+
+SONAR resta raggiungibile come **recupero immersivo** quando ActiveDeltaSur e P50 indicano deficit severo: `Selection Mode: IMMERSIVE_RECOVERY`. Con questa priorità, un deficit severo e una scena contemporaneamente stretta continuano a riportare WIDE come alternativa.
+
+Per scene già equilibrate, AEGIS rimane il riferimento. AEGIS e SONAR condividono parte della struttura spaziale: le sole misure della sorgente non possono dimostrare quale suoni meglio. `SONAR_IMMERSIVE_PREFERENCE` accetta esclusivamente `off` e `on`, con **`on` predefinito nel file**. Il comando ordinario non richiede prefissi:
+
+```bash
+# Preferenza immersiva già attiva: SONAR solo quando la scena è idonea
+./audio_analyzer_psycho.sh eac3 no 768k si "film.mkv"
+
+# Override facoltativo per una singola analisi conservativa
+SONAR_IMMERSIVE_PREFERENCE=off ./audio_analyzer_psycho.sh eac3 no 768k si "film.mkv"
+```
+
+Per salvare la scelta conservativa direttamente nello script, cambia `:-on` in `:-off` nella riga di configurazione `SONAR_IMMERSIVE_PREFERENCE`. Un valore già esportato nell'ambiente prevale sul default del file. L'opzione è un interruttore decisionale: non assegna punti e non modifica guadagni o parametri DSP.
+
+`on` valuta la candidatura **soltanto nel ramo già classificato AEGIS**, con confidence delle caratteristiche e della classificazione almeno MEDIA. Non scavalca WIDE, AURA, SONAR di recupero, `INCONCLUSIVE` o i blocchi di sicurezza. Tutti i seguenti gate devono essere superati insieme; le nuove soglie sono empiriche e configurabili, quelle esistenti rimangono invariate:
+
+| Variabile nuova | Default | Scopo |
+|---|---:|---|
+| `SONAR_IMMERSIVE_MIN_DELTA_DB` / `SONAR_IMMERSIVE_MAX_DELTA_DB` | −6 / 0 dB | Energia attiva presente senza dominanza posteriore |
+| `SONAR_IMMERSIVE_MIN_ACTIVITY_RATIO` | 0,5 | Attività in almeno metà della durata |
+| `SONAR_IMMERSIVE_MIN_WIDTH_DB` | −3 dB | Separazione attiva sufficiente; niente valori non finiti |
+| `SONAR_IMMERSIVE_MAX_ABS_CORRELATION` | 0,5 | Esclude forte somiglianza e opposizione di fase |
+| `SONAR_IMMERSIVE_MAX_HIGH_CORR_PERSISTENCE` | 0,25 | Contenuto comune elevato non persistente |
+| `SONAR_IMMERSIVE_MIN_VALID_RATIO` | 0,5 | Copertura minima per finestre DeltaSur, bilaterali e Pearson |
+
+Si riutilizzano inoltre `CLASSIFIER_HIGH_VALID_WINDOWS` / `CLASSIFIER_HIGH_VALID_SECONDS` (20 finestre DeltaSur e 10 s utili, compresi almeno 10 s bilaterali e Pearson), P50 ≥ `CLASSIFIER_AURA_ACTIVE_DB` + margine (−6,3 dB), differenza assoluta ActiveDeltaSur/P50 ≤ `CLASSIFIER_MEDIAN_AGREEMENT_DB` (6 dB) e P90 ≤ `SUR_DOMINANT_GATE` (+1 dB). P10 rimane descrittivo e non è più un veto autonomo: le scene quiete nella coda inferiore non escludono da sole la candidatura. Il gate P90 rimane una protezione contro dominanza surround nella coda superiore. Il balance deve essere inferiore a 10−0,7 dB; centro full-band, VoiceDelta e VoiceMask non devono evidenziare le anomalie diagnostiche esistenti (quando la banda voce è disponibile). I gate restrittivi lasciano quindi molte scene equilibrate ad AEGIS anche con `on`.
+
+Quando la preferenza prevale, il report riporta `Preset: SONAR`, `Selection Mode: IMMERSIVE_PREFERENCE`, `Alternative: AEGIS` e `Confidence: MEDIA`. `Measurement Confidence` può restare ALTA: l'idoneità del segnale e la preferenza psicoacustica sono distinte. La motivazione specifica che la preferenza è configurata, che la superiorità percettiva non è misurata e che non vengono ricostruiti oggetti Atmos o canali fisici di altezza. Quando la scena è idonea ma la preferenza è `off`, AEGIS mantiene priorità e SONAR compare come alternativa. `Temporal Assessment: VARIABLE_COHERENT` resta visibile anche nel batch. Le altre selezioni ordinarie usano `CONSERVATIVE`; i blocchi usano `SAFETY_OVERRIDE`.
+
+La provenienza Atmos non entra nei gate e non abilita SONAR. Una sorgente derivata da Atmos segue gli stessi criteri. Le metriche non misurano altezza percepita e non dimostrano che SONAR sia migliore di AEGIS. La preferenza cambia soltanto il preset salvato nel batch: nessun parametro DSP viene aggiunto o modificato. I commenti del batch conservano preferenza, modalità, confidence delle caratteristiche, confidence della scelta e alternativa. `MeasuredPreset=AEGIS` conserva la classe di partenza quando il preset operativo diventa SONAR per preferenza. Per cambiare la scelta di un batch esistente occorre rigenerarlo; la cache delle sole metriche resta valida in entrambe le modalità, senza nuova decodifica.
+
+Scelta AURA con mediana moderata: con Measurement Confidence ALTA, aggregato tra la soglia AURA e la soglia piu il margine (default da -7 a -6,3 dB), P50 sotto soglia meno margine ma non sotto la soglia SONAR, scarto aggregato/P50 non oltre 6 dB e scarto globale/attivo sotto 6 dB, viene scelto AURA anche se i due riferimenti sono su lati opposti. I limiti riutilizzano le soglie configurate. La scelta resta empirica: CONSERVATIVE, Confidence BASSA, Temporal Assessment MIXED e alternativa AEGIS. WIDE e SONAR di recupero mantengono precedenza; la preferenza immersiva non scavalca questa scelta. Ghosted (-6,775598 dB, P50 -10,8 dB) rientra in questo caso; non e una regola specifica del film. La cache delle misure resta valida e viene riclassificata senza decodifica.
+
+`INCONCLUSIVE` resta nel report e nel riepilogo stagionale, con motivo e confidence BASSA; non viene trasformato in AEGIS. In un batch misto gli altri file affidabili ricevono i propri comandi, mentre quelli inconclusivi compaiono soltanto come commenti `ESCLUSO INCONCLUSIVE`. Se tutti sono inconclusivi viene pubblicato un batch senza comandi. Gli errori e i blocchi gravi conservano il comportamento precedente: nessuna pubblicazione, uscita 1. `run=no` lascia intatto il batch esistente.
+
+Il verdetto stagionale conta anche gli inconclusivi nel denominatore del consenso 2/3; tutti inconclusivi danno `INCONCLUSIVE`. Parità, consenso insufficiente o spread globale >4 dB danno `MIXED`. La distribuzione e i conteggi ALTA/MEDIA/BASSA sono riportati; il verdetto non sostituisce le scelte per-file.
+
+### Verifiche locali e costo
+
+```bash
+bash tests/test_analyzer.sh
+bash tests/test_sonar_batch.sh
+bash tests/test_upmix_naming.sh
+```
+
+I test generano segnali FLAC sintetici in una directory temporanea e non eseguono il processore DSP. Coprono deficit costante/eventi rari, correlazione +1/0/−1, DC, silenzio, fake 5.1, centrale, balance, percentili, finestre parziali, cache, batch, singola decodifica, DRC Dolby, CLI e regressione dei 32 campi storici contro un filtergraph di riferimento indipendente. Nessun download o servizio esterno.
+
+Il costo aggiunto è un ramo full-band con otto statistiche di livello/DC per finestra e aggregazione AWK O(numero di finestre). I percentili usano un istogramma compatto. Rimane una sola decodifica; i log di metadati crescono linearmente con la durata. Le prove sintetiche verificano i calcoli, non dimostrano superiorità percettiva sul materiale cinematografico.
+
+Misura locale su FLAC sintetico da 100 s, media di tre prove senza cache: riferimento storico 2,81 s / analyzer 4,01 s in UCRT64 (+42%); 2,79 s / 4,23 s con Git Bash e FFmpeg UCRT64 (+52%). Non è un benchmark cinematografico. La verifica iniziale comprendeva 23 gruppi. Gli affinamenti successivi, il replay delle metriche del log Frankenstein e le prove di esecuzione batch su una scena sintetica variabile sono documentati in [tests/RESULTS.md](tests/RESULTS.md).
 
 ## Width MS
 
@@ -358,7 +479,7 @@ Il processore rileva profilo e marker Atmos a ogni file esclusivamente per il lo
 
 I messaggi Atmos e di mapping visualizzati durante `run_processing.sh` provengono dal processore indicato da `PROC`. Per aggiornare queste descrizioni basta aggiornare lo script del processore usato dal batch; non serve rigenerare il batch.
 
-Il batch usa sempre il preset per-file, derivato dalla classificazione spaziale `DeltaSur` e `Width MS`, con diagnostica `DeltaFC`, `VoiceDelta`, `VoiceMask` e controllo di sicurezza balance. Il P25 di `DeltaSur` è soltanto diagnostico; il verdetto stagionale richiede almeno 2/3 di consenso e non sostituisce mai il preset scritto nelle singole righe del batch.
+Il batch usa sempre il preset per-file, derivato esclusivamente dal classificatore e dalle sue metriche temporali e globali, con diagnostica `DeltaFC`, `VoiceDelta`, `VoiceMask` e controllo di sicurezza balance. Il P25 di `DeltaSur` è soltanto diagnostico; il verdetto stagionale richiede almeno 2/3 di consenso e non sostituisce mai il preset scritto nelle singole righe del batch.
 
 ---
 
@@ -651,7 +772,7 @@ Il preset principale è `to51`:
 - FL/FR restano full-band e mantengono il ruolo principale, con `FRONT_VOL=0.96` per creare headroom;
 - il centrale è un assist ricavato da `L+R`, non sostituisce completamente il phantom center;
 - i surround derivano soprattutto dalla componente laterale `L-R`;
-- il rear bed mono è fortemente attenuato e filtrato nella banda vocale; V10 ne riduce ulteriormente il livello quando L/R sono correlati;
+- il rear bed mono è fortemente attenuato e filtrato nella banda vocale; il controllo adattivo ne riduce ulteriormente il livello quando L/R sono correlati;
 - il LFE sintetico è quasi nullo, perché il bass management resta affidato all'AVR;
 - delay asimmetrici e all-pass producono una decorrelazione leggera senza attività posteriore artificiale costante.
 
@@ -737,7 +858,7 @@ QUAD:
 
 Il filtro del centrale parte da `60 Hz`, invece dei precedenti `102 Hz`, per evitare una doppia attenuazione quando l'AVR applica già il crossover globale intorno a `110 Hz`.
 
-In V10 il centrale `to51` passa da `FC_MIX=0.32` a `0.28` (circa −1,16 dB); `FC_VOL` resta `0.86`. Il preset `quad` mantiene la propria taratura.
+Il centrale `to51` usa `FC_MIX=0.28` e `FC_VOL=0.86`. Il preset `quad` mantiene la propria taratura.
 
 Con `SUR_ADAPTIVE=1`, il bed usa la correlazione full-band `r = E[L·R] / sqrt(E[L²]·E[R²])`, con medie esponenziali da circa 80 ms e protezione dalla divisione per zero. Il gain aggiuntivo è `0.35 + 0.65·clip(1-r, 0, 1)`: con L/R identici il bed scende di circa 9,1 dB, con correlazione nulla o negativa resta al livello impostato da `SUR_BED_VOL`. Calcolo e applicazione avvengono nello stesso filtro, senza una scansione preliminare o ritardi aggiuntivi. La side matrix resta invariata. Non è un riconoscitore di dialoghi e non crea canali posteriori indipendenti. `SUR_ADAPTIVE=0` ripristina il bed fisso; l'opzione riguarda solo `to51`.
 
@@ -770,11 +891,11 @@ Il controllo True Peak comprende la decodifica completa del candidato e ne inter
 ## Output
 
 ```text
-<nome>_UPMIX_5.1_V10_TO51.mkv
-<nome>_UPMIX_5.1_V10_QUAD.mkv
+<nome>_UPMIX_5.1_TO51.mkv
+<nome>_UPMIX_5.1_QUAD.mkv
 ```
 
-La lingua viene propagata sia alla traccia processata sia, quando `keep=si`, alla traccia stereo originale. Il suffisso V10 distingue i nuovi risultati dai file V9; gli output con i suffissi riconosciuti dallo script, V10 compresa, vengono esclusi dal batch. Lo script mantiene i contatori `OK/FALLITI/SALTATI` e restituisce exit code `1` se almeno un file fallisce durante probe, encoding, verifica, mux o pubblicazione. Se tutti i file vengono saltati senza errori, termina con codice `0` e il messaggio «Nessun file elaborato».
+La lingua viene propagata sia alla traccia processata sia, quando `keep=si`, alla traccia stereo originale. I nomi degli output indicano il preset applicato. I file già upmixati, anche con suffissi precedenti, vengono riconosciuti ed esclusi dal batch. Lo script mantiene i contatori `OK/FALLITI/SALTATI` e restituisce exit code `1` se almeno un file fallisce durante probe, encoding, verifica, mux o pubblicazione. Se tutti i file vengono saltati senza errori, termina con codice `0` e il messaggio «Nessun file elaborato».
 
 ## Esempi
 
@@ -828,7 +949,7 @@ SUR_ADAPTIVE=0 \
   ./stereo251_upmix_psycho.sh eac3 no "film.mkv" 448k to51
 ```
 
-L'opzione cambia soltanto il bed; il centrale e le altre impostazioni restano quelli V10. L'output mantiene lo stesso nome V10: per conservare entrambe le varianti del confronto usare copie dell'ingresso con nomi diversi.
+L'opzione cambia soltanto il bed; il centrale e le altre impostazioni restano invariati. Il nome dell'output non cambia: per conservare entrambe le varianti del confronto usare copie dell'ingresso con nomi diversi.
 
 Variabili principali:
 
@@ -1232,7 +1353,7 @@ Stereo
 
 | Script | Costo relativo | Motivo principale |
 |---|---:|---|
-| <img src="docs/script-labels/audio_analyzer_psycho.sh.svg" alt="audio_analyzer_psycho.sh" height="20"> | Medio/Alto | una sola decodifica con rami EBU R128, RMS full-band/voice-band, width e finestre LFE/bassi; cache per le analisi successive |
+| <img src="docs/script-labels/audio_analyzer_psycho.sh.svg" alt="audio_analyzer_psycho.sh" height="20"> | Medio/Alto | una sola decodifica con rami EBU R128, RMS full-band/voice-band, width, finestre LFE/bassi e statistiche temporali surround; cache per le analisi successive |
 | <img src="docs/script-labels/stereo251_upmix_psycho.sh.svg" alt="stereo251_upmix_psycho.sh" height="20"> | Medio/Alto | upmix, SOXR, True Peak integrale e possibile retry audio; mux unico |
 | <img src="docs/script-labels/asmr_vr_intimate_psycho.sh.svg" alt="asmr_vr_intimate_psycho.sh" height="20"> | Medio/Alto | loudnorm, BS2B, True Peak integrale e possibile retry audio; mux unico |
 | <img src="docs/script-labels/atmos_to_51_dynaudnorm_psicho.sh.svg" alt="atmos_to_51_dynaudnorm_psicho.sh" height="20"> | Medio | conversione, limiter opzionale (`preserve`) o dynaudnorm (`normalized`), mux unico e controllo rapido codec/layout |
@@ -1392,7 +1513,7 @@ SUR_VOL=0.92 SUR_BED_VOL=0.08 \
   ./stereo251_upmix_psycho.sh eac3 no "film.mkv" 448k to51
 ```
 
-Valori molto più alti di `SUR_BED_VOL` aumentano il rischio di udire dialoghi nei posteriori. In V10 il controllo adattivo continua ad attenuare il bed quando L/R sono correlati, anche aumentando questa variabile.
+Valori molto più alti di `SUR_BED_VOL` aumentano il rischio di udire dialoghi nei posteriori. Il controllo adattivo continua ad attenuare il bed quando L/R sono correlati, anche aumentando questa variabile.
 
 ## I surround sono quasi muti su una sorgente mono
 

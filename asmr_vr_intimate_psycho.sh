@@ -2,14 +2,14 @@
 set -uo pipefail
 
 # ╭──────────────────────────────────────────────────────────────────────────────╮
-# │   asmr_vr_intimate_psycho.sh - (Stable) Novembre 2026                        │
+# │   asmr_vr_intimate_psycho.sh - (Stabile) Novembre 2026                       │
 # │   By Sandro (D@mocle77) Sabbioni                                             │
 # │                                                                              │
 # │   Processing binaurale ottimizzato per ASMR / VR / contenuto intimo.         │
 # │   Simula vicinanza della sorgente sonora (20-50cm) con crossfeed BS2B        │
 # │   J.Meier, ITD (Interaural Time Difference) e EQ psicoacustico.              │
 # │                                                                              │
-# │   CHANGELOG V3:                                                              │
+# │   CARATTERISTICHE:                                                           │
 # │     - Rimosso set -e (allineato a aegis/analyzer/upmix)                      │
 # │     - Selezione stream score-based (stereo, default, ita)                    │
 # │     - Output atomico e controllo True Peak prima della pubblicazione         │
@@ -31,6 +31,8 @@ info(){ echo -e "${C_INFO} $*"; }
 warn(){ echo -e "${C_WARN} $*"; }
 err(){  echo -e "${C_ERR}  $*"; }
 ok(){   echo -e "${C_OK}  $*"; }
+# Sezioni console: stessa palette dell'analyzer, separate da una riga vuota.
+section(){ printf '\n%b \033[1;36m%s\033[0m\n' "$C_INFO" "$*"; }
 
 for _bin in ffmpeg ffprobe awk mktemp; do
   command -v "$_bin" &>/dev/null || { err "$_bin non trovato nel PATH"; exit 1; }
@@ -146,6 +148,7 @@ fi
 
 LFO_STATUS="Disattivo"; [[ "$USE_LFO" -eq 1 ]] && LFO_STATUS="Attivo"
 ITD_STATUS="Attivo"; [[ "$DISABLE_ITD" -eq 1 ]] && ITD_STATUS="Disattivo"
+section "CONFIGURAZIONE"
 info "Preset:  ${DISTANCE_MODE^^}"
 info "LFO:     ${LFO_STATUS}"
 info "ITD:     ${ITD_STATUS}"
@@ -264,9 +267,9 @@ ITD_WHISPER="adelay=delays=0|18S:all=0"
 ITD_NEAR="adelay=delays=0|10S:all=0"
 ITD_CENTER=""
 
-# LFO Breathing Effect (V2: tremolo + flanger)
-# V1 usava pan= con sin(t) — non supportato da ffmpeg (pan accetta solo coefficienti statici).
-# V2 usa tremolo (modulazione ampiezza lenta, 0.12 Hz = ~1 respiro ogni 8 sec)
+# LFO Breathing Effect: tremolo + flanger
+# Il filtro pan accetta coefficienti statici; la modulazione usa tremolo e flanger.
+# Tremolo: modulazione ampiezza lenta, 0.12 Hz = ~1 respiro ogni 8 sec
 # + flanger (micro-modulazione fase per effetto "movimento" della sorgente).
 # Il risultato e' un leggero "respiro" nell'immagine stereo senza artefatti.
 LFO_PART="tremolo=f=0.12:d=0.06,flanger=delay=2:depth=1.5:regen=0:width=40:speed=0.15:shape=sinusoidal:phase=50"
@@ -314,6 +317,7 @@ verify_audio_candidate() {
   VERIFY_FAILURE_KIND=""
   VERIFY_OUTPUT_TRUE_PEAK=""
   VERIFY_REASON=""
+  section "VERIFICA TRUE PEAK"
   info "Verifica True Peak post-codec sull'intera traccia audio"
   VERIFY_OUTPUT_TRUE_PEAK="$(measure_encoded_true_peak "$1")" || {
     VERIFY_REASON="misura True Peak post-codec fallita o non conclusiva"
@@ -346,6 +350,7 @@ encode_audio_candidate() {
   [[ -n "$A_LANG" && "${A_LANG,,}" != "und" ]] && cmd+=(-metadata:s:a:0 "language=$A_LANG")
   [[ "$OUT_CODEC" != "flac" ]] && cmd+=(-b:a:0 "$OUT_BITRATE")
   cmd+=("$output_file")
+  printf '==> Elaborazione in corso...\n' >&2
   "${cmd[@]}"
 }
 
@@ -367,6 +372,7 @@ mux_verified_audio() {
     [[ "$KEEP_ORIGINAL" == "si" ]] && cmd+=(-metadata:s:a:1 "language=$A_LANG")
   fi
   cmd+=("$output_file")
+  printf '==> Elaborazione in corso...\n' >&2
   "${cmd[@]}"
 }
 
@@ -379,6 +385,7 @@ process_verified_audio() {
     err "Impossibile riservare la directory temporanea"
     return 1
   }
+  section "ELABORAZIONE"
   info "Temporanei: $work_dir"
   first_candidate="$work_dir/audio.mka"
   candidate="$first_candidate"
@@ -407,6 +414,7 @@ process_verified_audio() {
     err "Nessun altro encode; output finale invariato. Temporanei: $work_dir"
     return 1
   fi
+  printf '\n'
   info "True Peak verificato: mux finale unico"
   if ! mux_verified_audio "$mux_file" "$candidate"; then
     err "Mux fallito; candidato con True Peak verificato e temporanei conservati: $work_dir"
@@ -419,7 +427,9 @@ process_verified_audio() {
   # Soltanto file di questa esecuzione; mai pulizia ricorsiva o su nomi condivisi.
   rm -f -- "$first_candidate" "$work_dir/audio.retry.mka" || warn "Pulizia audio incompleta: $work_dir"
   rmdir -- "$work_dir" || warn "Directory temporanea conservata: $work_dir"
-  ok "Creato (True Peak verificato, trim finale -${trim} dB): $OUT_FILE"
+  printf '\n'
+  info "Verifica: True Peak ${VERIFY_OUTPUT_TRUE_PEAK} dBTP | Trim finale: -${trim} dB"
+  ok "Creato: $OUT_FILE"
   return 0
 }
 
@@ -438,6 +448,7 @@ SKIP_COUNT=0
 for CUR_FILE in "$@"; do
   [[ -f "$CUR_FILE" ]] || { warn "File '$CUR_FILE' non trovato. Salto."; ((SKIP_COUNT+=1)); continue; }
 
+  section "SORGENTE"
   info "Elaborazione: $CUR_FILE"
 
   # ── Selezione stream score-based ─────────────────────────────────────────────
@@ -500,12 +511,14 @@ for CUR_FILE in "$@"; do
 
 done
 
+section "RIEPILOGO"
+info "Riusciti: $OK_COUNT | Falliti: $ERR_COUNT | Saltati: $SKIP_COUNT"
 if (( ERR_COUNT > 0 )); then
-  err "Elaborazione completata con errori: OK=$OK_COUNT, FALLITI=$ERR_COUNT, SALTATI=$SKIP_COUNT"
+  err "Elaborazione completata con errori."
   exit 1
 fi
 if (( OK_COUNT == 0 )); then
-  warn "Nessun file elaborato: SALTATI=$SKIP_COUNT"
+  warn "Nessun file elaborato."
   exit 0
 fi
-ok "Elaborazione completata: OK=$OK_COUNT, FALLITI=0, SALTATI=$SKIP_COUNT"
+ok "Elaborazione completata."

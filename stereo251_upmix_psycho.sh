@@ -2,7 +2,7 @@
 set -uo pipefail
 
 # ╭──────────────────────────────────────────────────────────────────────────────────────────╮
-# │   stereo251_upmix_psycho.sh - (Stable) Novembre 2026                                     │
+# │   stereo251_upmix_psycho.sh - (Stabile) Novembre 2026                                    │
 # │   By Sandro (D@mocle77) Sabbioni                                                         │
 # │                                                                                          │
 # │   Motore di upmix offline da Stereo a 5.1 (EAC3/AC3),                                    │
@@ -28,6 +28,8 @@ info(){ echo -e "${C_INFO} $*"; }
 warn(){ echo -e "${C_WARN} $*"; }
 err(){  echo -e "${C_ERR}  $*"; }
 ok(){   echo -e "${C_OK}  $*"; }
+# Sezioni console: stessa palette dell'analyzer, separate da una riga vuota.
+section(){ printf '\n%b \033[1;36m%s\033[0m\n' "$C_INFO" "$*"; }
 
 for _bin in ffmpeg ffprobe awk mktemp grep; do
   command -v "$_bin" &>/dev/null || { err "$_bin non trovato nel PATH"; exit 1; }
@@ -127,6 +129,7 @@ fi
 BITRATE="${BITRATE_KBPS}k"
 unset _br_num _br_sfx _br_multiplier MAX_BITRATE_KBPS
 
+section "CONFIGURAZIONE"
 info "Upmix Mode:     ${MODE^^}"
 info "Codec target:   ${OUT_CODEC^^} @ ${BITRATE}"
 
@@ -220,14 +223,10 @@ fi
 FILTERED_FILES=()
 for f in "${FILES[@]}"; do
   case "$f" in
+    *_UPMIX_5.1_TO51.mkv|*_UPMIX_5.1_QUAD.mkv|\
     *_UPMIX_5.1_MODERN.mkv|*_UPMIX_5.1_VINTAGE.mkv|\
-    *_UPMIX_5.1_PSY160_MODERN.mkv|*_UPMIX_5.1_PSY160_VINTAGE.mkv|\
-    *_UPMIX_5.1_V5_MODERN.mkv|*_UPMIX_5.1_V5_VINTAGE.mkv|\
-    *_UPMIX_5.1_V6_MODERN.mkv|*_UPMIX_5.1_V6_VINTAGE.mkv|\
-    *_UPMIX_5.1_V7_MODERN.mkv|*_UPMIX_5.1_V7_VINTAGE.mkv|\
-    *_UPMIX_5.1_V8_TO51.mkv|*_UPMIX_5.1_V8_QUAD.mkv|\
-    *_UPMIX_5.1_V9_TO51.mkv|*_UPMIX_5.1_V9_QUAD.mkv|\
-    *_UPMIX_5.1_V10_TO51.mkv|*_UPMIX_5.1_V10_QUAD.mkv)
+    *_UPMIX_5.1_*_MODERN.mkv|*_UPMIX_5.1_*_VINTAGE.mkv|\
+    *_UPMIX_5.1_*_TO51.mkv|*_UPMIX_5.1_*_QUAD.mkv)
       info "Skip output gia' upmixato: $f"
       continue
       ;;
@@ -241,7 +240,7 @@ FILES=("${FILTERED_FILES[@]}")
 (( ${#FILES[@]} == 0 )) && { err "Nessun file trovato da processare."; exit 1; }
 
 # ────────────────────────────────────────────────────────────────────────────────
-# Configurazione preset V10
+# Configurazione preset
 # Defaults interni: non serve esportare variabili prima del lancio.
 # Le variabili sono comunque sovrascrivibili dall'ambiente per debug avanzato.
 # ────────────────────────────────────────────────────────────────────────────────
@@ -316,6 +315,7 @@ for _filter in "${REQUIRED_FILTERS[@]}"; do
 done
 unset FILTER_LIST REQUIRED_FILTERS _filter
 
+section "PARAMETRI UPMIX"
 info "Front vol:      ${FRONT_VOL}"
 info "Center:         mix ${FC_MIX}, HP ${FC_HP}Hz, LP ${FC_LP}Hz, vol ${FC_VOL}"
 info "LFE synth:      vol ${LFE_VOL}"
@@ -479,6 +479,7 @@ verify_audio_candidate() {
   VERIFY_FAILURE_KIND=""
   VERIFY_OUTPUT_TRUE_PEAK=""
   VERIFY_REASON=""
+  section "VERIFICA TRUE PEAK"
   info "Verifica True Peak post-codec sull'intera traccia audio"
   VERIFY_OUTPUT_TRUE_PEAK="$(measure_encoded_true_peak "$1")" || {
     VERIFY_REASON="misura True Peak post-codec fallita o non conclusiva"
@@ -510,6 +511,7 @@ encode_audio_candidate() {
     -avoid_negative_ts disabled)
   [[ -n "$A_LANG" && "${A_LANG,,}" != "und" ]] && cmd+=(-metadata:s:a:0 "language=$A_LANG")
   cmd+=("$output_file")
+  printf '==> Elaborazione in corso...\n' >&2
   "${cmd[@]}"
 }
 
@@ -531,6 +533,7 @@ mux_verified_audio() {
     [[ "$KEEP_ORIGINAL" == "si" ]] && cmd+=(-metadata:s:a:1 "language=$A_LANG")
   fi
   cmd+=("$output_file")
+  printf '==> Elaborazione in corso...\n' >&2
   "${cmd[@]}"
 }
 
@@ -543,6 +546,7 @@ process_verified_audio() {
     err "Impossibile riservare la directory temporanea"
     return 1
   }
+  section "ELABORAZIONE"
   info "Temporanei: $work_dir"
   first_candidate="$work_dir/audio.mka"
   candidate="$first_candidate"
@@ -571,6 +575,7 @@ process_verified_audio() {
     err "Nessun altro encode; output finale invariato. Temporanei: $work_dir"
     return 1
   fi
+  printf '\n'
   info "True Peak verificato: mux finale unico"
   if ! mux_verified_audio "$mux_file" "$candidate"; then
     err "Mux fallito; candidato con True Peak verificato e temporanei conservati: $work_dir"
@@ -583,7 +588,9 @@ process_verified_audio() {
   # Soltanto file di questa esecuzione; mai pulizia ricorsiva o su nomi condivisi.
   rm -f -- "$first_candidate" "$work_dir/audio.retry.mka" || warn "Pulizia audio incompleta: $work_dir"
   rmdir -- "$work_dir" || warn "Directory temporanea conservata: $work_dir"
-  ok "Creato (True Peak verificato, trim finale -${trim} dB): $OUT_FILE"
+  printf '\n'
+  info "Verifica: True Peak ${VERIFY_OUTPUT_TRUE_PEAK} dBTP | Trim finale: -${trim} dB"
+  ok "Creato: $OUT_FILE"
   return 0
 }
 
@@ -599,6 +606,7 @@ ERR_COUNT=0
 SKIP_COUNT=0
 
 for CUR_FILE in "${FILES[@]}"; do
+  section "SORGENTE"
   info "Elaborazione: $CUR_FILE"
   # Seleziona lo stream audio stereo migliore (score-based)
   if PROBE_RESULT=$(pick_best_stereo_stream "$CUR_FILE"); then
@@ -637,7 +645,7 @@ for CUR_FILE in "${FILES[@]}"; do
     UPMIX_FILTER="$(build_quad_filter)"
   fi
 
-  OUT_FILE="${CUR_FILE%.*}_UPMIX_5.1_V10_${MODE^^}.mkv"
+  OUT_FILE="${CUR_FILE%.*}_UPMIX_5.1_${MODE^^}.mkv"
 
   # Controllo sovrascrittura
   if [[ -f "$OUT_FILE" ]]; then
@@ -659,12 +667,14 @@ for CUR_FILE in "${FILES[@]}"; do
 
 done
 
+section "RIEPILOGO"
+info "Riusciti: $OK_COUNT | Falliti: $ERR_COUNT | Saltati: $SKIP_COUNT"
 if (( ERR_COUNT > 0 )); then
-  err "Elaborazione completata con errori: OK=$OK_COUNT, FALLITI=$ERR_COUNT, SALTATI=$SKIP_COUNT"
+  err "Elaborazione completata con errori."
   exit 1
 fi
 if (( OK_COUNT == 0 )); then
-  warn "Nessun file elaborato: SALTATI=$SKIP_COUNT"
+  warn "Nessun file elaborato."
   exit 0
 fi
-ok "Elaborazione completata: OK=$OK_COUNT, FALLITI=0, SALTATI=$SKIP_COUNT"
+ok "Elaborazione completata."
