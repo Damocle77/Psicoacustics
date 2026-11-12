@@ -50,19 +50,38 @@ done
 
 # Il PID resta nella shell principale, anche durante la misura audio.
 ANALYZER_TMPDIR="$(mktemp -d)" || { err "Impossibile creare i temporanei"; exit 1; }
+ANALYZER_OWNER_PID="$BASHPID"
+ANALYZER_KEEP_TMP=0
 ANALYZER_FFMPEG_PID=""
 BATCH_TMP=""
 cleanup_analyzer() {
+  # $$ non cambia nelle subshell; BASHPID identifica il proprietario reale.
+  [[ "$BASHPID" == "$ANALYZER_OWNER_PID" ]] || return 0
   if [[ -n "$ANALYZER_FFMPEG_PID" ]]; then
     kill "$ANALYZER_FFMPEG_PID" 2>/dev/null || true
     wait "$ANALYZER_FFMPEG_PID" 2>/dev/null || true
   fi
   [[ -z "$BATCH_TMP" ]] || rm -f -- "$BATCH_TMP"
-  rm -rf -- "$ANALYZER_TMPDIR"
+  if (( ANALYZER_KEEP_TMP )); then
+    warn "Temporanei conservati per la diagnosi: $ANALYZER_TMPDIR" >&2
+  else
+    rm -rf -- "$ANALYZER_TMPDIR"
+  fi
 }
 trap cleanup_analyzer EXIT
 trap 'warn "Analisi interrotta; batch non aggiornato."; exit 130' INT
 trap 'warn "Analisi terminata; batch non aggiornato."; exit 143' TERM
+
+measurement_failed() {
+  ANALYZER_KEEP_TMP=1
+  warn "$1" >&2
+  if [[ -s "$2" ]]; then
+    warn "Ultime righe del log FFmpeg ($2):" >&2
+    tail -n 20 -- "$2" >&2
+  elif [[ ! -f "$2" ]]; then
+    warn "Log temporaneo scomparso: $2. Verificare pulizie esterne della directory temporanea." >&2
+  fi
+}
 
 usage() {
   cat <<'USAGE'
@@ -1089,7 +1108,10 @@ measure_classifier_metrics() {
       ;;
   esac
   log_file=$(mktemp -p "$ANALYZER_TMPDIR") || return 1
-  progress_file=$(mktemp -p "$ANALYZER_TMPDIR") || return 1
+  progress_file=$(mktemp -p "$ANALYZER_TMPDIR") || {
+    rm -f -- "$log_file"
+    return 1
+  }
 
   # framelog=verbose sopprime le righe periodiche di ebur128 al normale livello
   # info, conservando il summary finale. Gli astats terminano in anullsink:
@@ -1131,25 +1153,32 @@ measure_classifier_metrics() {
   fi
 
   if (( ffmpeg_rc != 0 )); then
-    rm -f -- "$log_file" "$progress_file"
+    measurement_failed "FFmpeg terminato con codice $ffmpeg_rc." "$log_file"
+    return 1
+  fi
+  if [[ ! -s "$log_file" ]]; then
+    measurement_failed "Log FFmpeg assente o vuoto dopo la decodifica." "$log_file"
     return 1
   fi
 
   local lfe_metrics bass_metrics temporal_metrics
   lfe_metrics="$(measure_lfe_windows "$log_file")" || {
-    rm -f -- "$log_file" "$progress_file"
+    measurement_failed "Lettura delle finestre LFE fallita." "$log_file"
     return 1
   }
   bass_metrics="$(measure_bass_windows "$log_file")" || {
-    rm -f -- "$log_file" "$progress_file"
+    measurement_failed "Lettura delle finestre bassi fallita." "$log_file"
     return 1
   }
   temporal_metrics="$(measure_surround_windows "$log_file")" || {
-    rm -f -- "$log_file" "$progress_file"
+    measurement_failed "Lettura delle finestre surround fallita." "$log_file"
     return 1
   }
   # Evita di copiare tutte le finestre nella variabile e nei parser storici.
-  probe="$(awk '!index($0,"[ametadata@lfe_windows ") && !index($0,"[ametadata@bass_ref ") && !index($0,"[ametadata@sur_windows ")' "$log_file")"
+  probe="$(awk '!index($0,"[ametadata@lfe_windows ") && !index($0,"[ametadata@bass_ref ") && !index($0,"[ametadata@sur_windows ")' "$log_file")" || {
+    measurement_failed "Lettura del riepilogo FFmpeg fallita." "$log_file"
+    return 1
+  }
   rm -f -- "$log_file" "$progress_file"
   probe="${probe//$'\r'/}"
 
