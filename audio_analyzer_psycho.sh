@@ -18,7 +18,7 @@ set -uo pipefail
 # │     - Width    = RMS(SIDE) - RMS(MID)                                           │
 # │                                                                                 │
 # │   sicurezza -> evidenza temporale -> SONAR -> WIDE -> AURA -> AEGIS.            │
-# │   Campione insufficiente/contraddittorio -> INCONCLUSIVE, nessun comando.       │
+# │   Campione insufficiente/disaccordo irrisolto -> INCONCLUSIVE, nessun comando. │
 # │   Voce debole/mascherata e provenienza Atmos restano diagnostiche.              │
 # │   Le misure RMS dei canali vengono raccolte in un solo passaggio FFmpeg.        │
 # │   Decodifica AC3/EAC3 con DRC Dolby disattivata, come nel processore.           │
@@ -549,6 +549,8 @@ classify_preset() {
     -v domvoicegate="$DOMINANT_VOICE_DELTA_GATE" '
     function finite(v) {return v ~ /^-?[0-9]+([.][0-9]+)?$/}
     function abs(v) {return v<0?-v:v}
+    # Confronti dei rapporti alla precisione delle metriche serializzate.
+    function db_gap(a,b) {return sprintf("%.6f",abs(a-b))+0}
     function veto(label) {
       if (veto_count<2 && length(veto_text)+length(label)+(veto_shown?2:0)<=44) {
         veto_text=veto_text (veto_shown?", ":"") label;
@@ -560,7 +562,7 @@ classify_preset() {
       activity=$1; active=$2; p10=$3; p50=$4; p90=$5; aw=$6; corr=$7; persistence=$8;
       valid=$10; seconds=$13; bilateral=$14; corrn=$16;
       preset="INCONCLUSIVE"; confidence="BASSA"; alt="-"; mode="INCONCLUSIVE";
-      measurement_confidence="BASSA"; temporal_assessment="INSUFFICIENT"; boundary_resolved=0; median_resolved=0;
+      measurement_confidence="BASSA"; temporal_assessment="INSUFFICIENT"; boundary_resolved=0; mixed_resolved=0;
       reason="evidenza temporale insufficiente: finestre valide=" valid ", secondi=" seconds;
       if (valid>=minn && seconds>=mins && finite(active) && finite(p10) && finite(p50) && finite(p90)) {
         # Affidabilita del campione e disponibilita delle statistiche: non
@@ -571,11 +573,13 @@ classify_preset() {
               bilateral>=highn && $15>=highs && corrn>=highn && $17>=highs)
             measurement_confidence="ALTA";
         }
-        central_conflict=(abs(active-p50)>median_agreement);
+        central_conflict=(db_gap(active,p50)>median_agreement);
         # Tolleranza gia prevista per le decisioni vicine alle soglie.
         # Il confronto include la precisione di serializzazione (sei decimali).
         near_aura_boundary=(!central_conflict && abs(active-ag)<=margin+0.000001 &&
           abs(p50-ag)<=margin+0.000001 && abs(active-p50)<=margin+0.000001);
+        global_supports_active=(finite(ds) && ((active<ag && ds<ag) || (active>=ag && ds>=ag)));
+        active_borderline=(active>=ag && active<=ag+margin+0.000001);
         temporal_assessment=(p90-p10>=variability?"VARIABLE_COHERENT":"STABLE");
         confidence="MEDIA";
         narrow=(w<globalwg && (aw=="-inf" || (finite(aw) && aw<wg)) &&
@@ -594,13 +598,25 @@ classify_preset() {
           # Pareggio deterministico: la media energetica aggregata decide il lato.
           preset=(active<ag?"AURA":"AEGIS"); reason="energia vicina alla soglia AURA/AEGIS";
         } else if (measurement_confidence=="ALTA" && !central_conflict &&
-                   active>=ag && active<=ag+margin+0.000001 &&
-                   p50<ag-margin && p50>=sg && abs(active-ds)<agreement) {
-          # Aggregato appena sul lato AEGIS, mediana nella fascia moderata:
-          # scelta empirica AURA con alternativa, mantenendo il disaccordo.
-          preset="AURA"; median_resolved=1;
-          reason="mediana AURA con aggregato vicino al confine AEGIS: ActiveDeltaSur=" active ", P50=" p50;
-        } else {confidence="BASSA"; reason="energia aggregata e mediana discordanti oltre il margine borderline: ActiveDeltaSur=" active ", P50=" p50;}
+                   active>=sg && p50>=sg && finite(ds) && db_gap(active,ds)<agreement &&
+                   (global_supports_active || active_borderline)) {
+          # Un solo criterio per entrambi i versi del disaccordo AURA/AEGIS.
+          # AEGIS richiede aggregato oltre il margine e conferma globale.
+          # Nel margine superiore resta la scelta empirica AURA gia prevista.
+          preset=(active<=ag+margin+0.000001?"AURA":"AEGIS"); mixed_resolved=1;
+          reason="disaccordo AURA/AEGIS risolto con " preset ": ActiveDeltaSur=" active ", DeltaSur=" ds ", P50=" p50;
+          if (active_borderline) reason=reason "; aggregato nel margine superiore della soglia AURA";
+          else reason=reason "; rapporto globale conferma la fascia energetica attiva";
+        } else {
+          confidence="BASSA";
+          reason="disaccordo AURA/AEGIS non risolto: ActiveDeltaSur=" active ", DeltaSur=" ds ", P50=" p50;
+          if (measurement_confidence!="ALTA") reason=reason "; campione non ALTA";
+          if (central_conflict) reason=reason "; scarto aggregato/mediana oltre " median_agreement " dB";
+          if (active<sg || p50<sg) reason=reason "; riferimento energetico nella fascia severa";
+          if (!finite(ds)) reason=reason "; rapporto globale non disponibile";
+          else if (db_gap(active,ds)>=agreement) reason=reason "; scarto globale/attivo oltre il limite ammesso";
+          else if (!global_supports_active && !active_borderline) reason=reason "; globale non conferma la fascia energetica attiva";
+        }
         if (preset!="INCONCLUSIVE") {
           mode=(preset=="SONAR"?"IMMERSIVE_RECOVERY":"CONSERVATIVE");
           if ((preset=="AURA" || preset=="AEGIS") && near_aura_boundary) {
@@ -615,14 +631,14 @@ classify_preset() {
             (preset=="AEGIS" && p10<ag-margin && (central_conflict || p50<ag+margin)));
           unstable=(p90-p10>=variability && distribution_conflict && !boundary_resolved);
           if (!boundary_resolved && valid>=highn && seconds>=highs && $11>=highratio && !unstable &&
-              abs(active-ds)<agreement && bilateral>=minn && corrn>=minn) confidence="ALTA";
+              db_gap(active,ds)<agreement && bilateral>=minn && corrn>=minn) confidence="ALTA";
           if (!boundary_resolved && activity<rare && preset=="AEGIS" && ds<ag) confidence="MEDIA";
           if (unstable) {
             # Code in fasce diverse: VARIABLE se il centro concorda; MIXED
             # per riferimenti discordanti. Nessuna etichetta giudica il mix.
             confidence="BASSA"; temporal_assessment=(central_conflict?"MIXED":"VARIABLE");
             if (central_conflict) reason=reason "; distribuzione temporale ampia con centro energetico discordante";
-            else if (preset=="AURA" && median_resolved) reason=reason "; distribuzione ampia; scelta dalla mediana con aggregato vicino alla soglia";
+            else if (mixed_resolved) reason=reason "; distribuzione ampia con riferimenti AURA/AEGIS discordanti";
             else if (preset=="AURA") reason=reason "; P10/P90 attraversano fasce energetiche severe o equilibrate; aggregato e mediana indicano AURA";
             else if (preset=="SONAR") reason=reason "; deficit surround severo con eventi piu presenti nella coda P90";
             else reason=reason "; distribuzione temporale attraversa il confine AURA/AEGIS con mediana vicina alla soglia";
@@ -631,7 +647,7 @@ classify_preset() {
             confidence="BASSA"; temporal_assessment="MIXED";
             reason=reason "; ActiveDeltaSur e P50 discordanti oltre " median_agreement " dB";
           }
-          if (abs(active-ds)>=agreement) {
+          if (db_gap(active,ds)>=agreement) {
             if (!(activity<rare && preset=="AEGIS" && active>=ag && p50>=ag)) {
               confidence="BASSA"; temporal_assessment="MIXED";
             }
@@ -652,8 +668,8 @@ classify_preset() {
           if (!narrow && (w<globalwg || aw=="-inf" || (finite(aw) && aw<wg))) {
             confidence="BASSA"; reason=reason "; indizi di width non confermati dalla persistenza";
           }
-          if (median_resolved) {
-            confidence="BASSA"; temporal_assessment="MIXED"; alt="AEGIS";
+          if (mixed_resolved) {
+            confidence="BASSA"; temporal_assessment="MIXED"; alt=(preset=="AURA"?"AEGIS":"AURA");
           }
         } else temporal_assessment="MIXED";
       }

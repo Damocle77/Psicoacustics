@@ -590,11 +590,31 @@ build_filter_complex() {
   printf '%s\n%s\n%s\n%s\n%s\n' "$input_graph" "$VOICE_BLOCK" "$SUR_BLOCK" "$psycho_graph" "$output_graph"
 }
 
+# Aggiorna una sola riga, anche con FFmpeg nativo Windows sotto MSYS2.
+# Il protocollo -progress resta separato da avvisi ed errori su stderr.
+show_processing_progress() {
+  local key value media_time="--:--:--" speed="N/A"
+  local start_seconds=$SECONDS elapsed_seconds
+  while IFS='=' read -r key value; do
+    value="${value//$'\r'/}"
+    case "$key" in
+      out_time) media_time="${value%%.*}" ;;
+      speed) speed="${value// /}" ;;
+      progress)
+        elapsed_seconds=$((SECONDS - start_seconds))
+        printf '\r\033[K==> Elaborazione: %s | velocita: %s | elapsed: %02d:%02d:%02d' \
+          "$media_time" "$speed" "$((elapsed_seconds / 3600))" \
+          "$((elapsed_seconds / 60 % 60))" "$((elapsed_seconds % 60))" >&2
+        ;;
+    esac
+  done
+}
+
 # Codifica la traccia DSP e copia gli altri stream nello stesso processo FFmpeg.
 # Il contenitore MKV temporaneo passa il controllo di formato prima della pubblicazione.
 encode_and_mux_output() {
-  local output_file="$1" filter_complex="$2" orig_title
-  local -a cmd=(ffmpeg -hide_banner -nostdin -stats -xerror -loglevel warning -y)
+  local output_file="$1" filter_complex="$2" orig_title encode_rc
+  local -a cmd=(ffmpeg -hide_banner -nostdin -nostats -progress pipe:1 -xerror -loglevel warning -y)
 
   cmd+=(
     "${INPUT_DECODER_OPTS[@]}" -i "$CUR_FILE"
@@ -618,7 +638,11 @@ encode_and_mux_output() {
 
   cmd+=( "$output_file" )
   printf '==> Elaborazione in corso...\n' >&2
-  "${cmd[@]}"
+  # Mantiene visibili i messaggi FFmpeg, senza il giallo di Guessed Channel Layout.
+  AV_LOG_FORCE_NOCOLOR=1 "${cmd[@]}" | show_processing_progress
+  encode_rc=$?
+  printf '\n' >&2
+  return "$encode_rc"
 }
 
 # Controllo strutturale della traccia DSP primaria nel candidato MKV.
@@ -789,7 +813,7 @@ for CUR_FILE in "${FILES[@]}"; do
         if command -v stty >/dev/null 2>&1; then
           stty icrnl -igncr -inlcr <&"$CONFIRM_FD" 2>/dev/null || true
         fi
-        echo -ne "${C_WARN} Il file '$OUT_FILE' esiste già. Sovrascrivere? [s/n/t] (s=sì, n=no, t=tutti): "
+        echo -ne "${C_WARN} Il file '$OUT_FILE' esiste già. Sovrascrivere? [s/n/t]: "
         ans=""
         if ! read -r ans <&"$CONFIRM_FD"; then
           exec {CONFIRM_FD}<&-

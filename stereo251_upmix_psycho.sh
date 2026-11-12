@@ -141,7 +141,7 @@ confirm_overwrite() {
     warn "TTY non disponibile e '$target' esiste gia' -> skip automatico."
     return 1
   fi
-  echo -ne "${C_WARN} Il file '$target' esiste. Sovrascrivere? [s/n/t] (s=si, n=no, t=tutti): "
+  echo -ne "${C_WARN} Il file '$target' esiste. Sovrascrivere? [s/n/t]: "
   if ! read -r ans < /dev/tty; then
     warn "Impossibile leggere da /dev/tty -> skip automatico."
     return 1
