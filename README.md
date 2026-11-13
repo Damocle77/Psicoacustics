@@ -539,7 +539,7 @@ In WIDE resta il **highshelf a 3500 Hz, +0,1 dB, Q 0,8** dopo gli `amix` SL/SR: 
 
 Restano invariati i delay diretti (**0 ms** in AEGIS/SONAR, **1 ms** in WIDE/AURA), tutti i valori di volume e i rami di presenza, HEIGHT, riflessione tardiva, decorrelazione e ambienza. La decorrelazione finale mantiene la catena e i parametri esistenti. Nessuna modifica a FL/FR, FC, LFE, limiter o controlli di pubblicazione.
 
-Guadagno nominale FC uniforme a **+3,0 dB** per AEGIS, SONAR, WIDE e AURA; VOICEITA passa da **+4,2 a +4,0 dB**. La modifica rende più coerente la presenza vocale tra i preset cinematografici, mantenendo VOICEITA dedicato ai dialoghi. Equalizzazione e limiter restano invariati.
+Guadagno nominale FC uniforme a **+3,7 dB** per AEGIS, SONAR, WIDE e AURA: **+0,7 dB** rispetto alla taratura precedente di +3,0 dB. VOICEITA resta a **+4,0 dB**. Equalizzazione e limiter restano invariati; sui picchi i limiter possono contenere parte dell'aumento.
 
 ### VOICEITA — priorità ai dialoghi italiani
 

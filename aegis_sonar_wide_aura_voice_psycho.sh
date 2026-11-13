@@ -378,21 +378,22 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 # EQ della voce per i preset surround, mirato all'intelligibilità.
+# Taratura FC: +0.7 dB sui preset spaziali; VOICEITA resta a +4.0 dB.
 # Il gain precede i limiter FC e master: sui passaggi forti la dinamica può ridursi.
 read -r -d '' VOICE_EQ_BASE <<'EOF' || true
 [FC]highpass=f=20:t=q:w=0.707,equalizer=f=150:t=q:w=1.1:g=0.2,equalizer=f=450:t=q:w=1.2:g=-0.6,equalizer=f=1100:t=q:w=1.4:g=0.8,equalizer=f=7200:t=q:w=2.5:g=-0.9[FC_pre];
 EOF
 read -r -d '' VOICE_DELTA_SONAR <<'EOF' || true
-[FC_pre]volume=3.0dB,equalizer=f=1650:t=q:w=1.6:g=0.9,equalizer=f=2450:t=q:w=1.3:g=1.6,equalizer=f=3800:t=q:w=2.0:g=1.0,equalizer=f=6800:t=q:w=2.0:g=-1.0,volume=0.96[FCv];
+[FC_pre]volume=3.7dB,equalizer=f=1650:t=q:w=1.6:g=0.9,equalizer=f=2450:t=q:w=1.3:g=1.6,equalizer=f=3800:t=q:w=2.0:g=1.0,equalizer=f=6800:t=q:w=2.0:g=-1.0,volume=0.96[FCv];
 EOF
 read -r -d '' VOICE_DELTA_AEGIS <<'EOF' || true
-[FC_pre]volume=3.0dB,equalizer=f=1650:t=q:w=1.6:g=0.9,equalizer=f=2450:t=q:w=1.3:g=1.5,equalizer=f=3800:t=q:w=2.0:g=1.0,equalizer=f=6800:t=q:w=2.0:g=-1.0,volume=0.96[FCv];
+[FC_pre]volume=3.7dB,equalizer=f=1650:t=q:w=1.6:g=0.9,equalizer=f=2450:t=q:w=1.3:g=1.5,equalizer=f=3800:t=q:w=2.0:g=1.0,equalizer=f=6800:t=q:w=2.0:g=-1.0,volume=0.96[FCv];
 EOF
 read -r -d '' VOICE_DELTA_WIDE <<'EOF' || true
-[FC_pre]volume=3.0dB,equalizer=f=1650:t=q:w=1.6:g=0.9,equalizer=f=2450:t=q:w=1.3:g=1.6,equalizer=f=3800:t=q:w=2.0:g=1.0,equalizer=f=6800:t=q:w=2.0:g=-0.9,volume=0.96[FCv];
+[FC_pre]volume=3.7dB,equalizer=f=1650:t=q:w=1.6:g=0.9,equalizer=f=2450:t=q:w=1.3:g=1.6,equalizer=f=3800:t=q:w=2.0:g=1.0,equalizer=f=6800:t=q:w=2.0:g=-0.9,volume=0.96[FCv];
 EOF
 read -r -d '' VOICE_DELTA_AURA <<'EOF' || true
-[FC_pre]volume=3.0dB,equalizer=f=1650:t=q:w=1.6:g=0.8,equalizer=f=2450:t=q:w=1.3:g=1.4,equalizer=f=3800:t=q:w=2.0:g=0.9,equalizer=f=6800:t=q:w=2.0:g=-1.0,volume=0.96[FCv];
+[FC_pre]volume=3.7dB,equalizer=f=1650:t=q:w=1.6:g=0.8,equalizer=f=2450:t=q:w=1.3:g=1.4,equalizer=f=3800:t=q:w=2.0:g=0.9,equalizer=f=6800:t=q:w=2.0:g=-1.0,volume=0.96[FCv];
 EOF
 # VOICEITA: priorità ai dialoghi italiani con riduzione delle medio-basse e presenza moderata.
 # Catena FC autonoma; non sommare VOICE_EQ_BASE. Taratura fissa da valutare all'ascolto.

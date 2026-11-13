@@ -503,7 +503,7 @@ WIDE retains its separate **3500 Hz high shelf, +0.1 dB, Q 0.8** after the SL/SR
 
 Direct delays remain **0 ms** in AEGIS/SONAR and **1 ms** in WIDE/AURA. Presence, HEIGHT, late-reflection, decorrelation and ambience branches retain their existing gains, filters and parameters. Voice EQ and limiters are also part of the DSP chain.
 
-Nominal FC gain is now **+3.0 dB** across AEGIS, SONAR, WIDE and AURA; VOICEITA is reduced from **+4.2 to +4.0 dB**. This makes vocal presence more consistent across the cinema presets while keeping VOICEITA dedicated to dialogue. Equalization and limiters remain unchanged.
+Nominal FC gain is **+3.7 dB** across AEGIS, SONAR, WIDE and AURA: **+0.7 dB** relative to the previous +3.0 dB tuning. VOICEITA remains at **+4.0 dB**. Equalization and limiters remain unchanged; limiters may contain part of the increase on peaks.
 
 ### VOICEITA — Italian dialogue priority
 
